@@ -1,0 +1,23 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #0096C7;
+  --color-secondary: #F72585;
+  --color-accent: #FFB703;
+  --color-success: #10B981;
+  --color-warning: #F59E0B;
+  --color-danger: #EF4444;
+  --color-dark: #1D3557;
+  --color-light: #F8F9FA;
+
+  --font-sans: 'Inter', 'system-ui', 'sans-serif';
+}
+
+@layer base {
+  body {
+    /* v4 usage for applying classes in CSS might need @apply or just use classes in HTML. 
+       @apply works in v4. */
+    @apply bg-light text-gray-900 font-sans antialiased;
+  }
+}
