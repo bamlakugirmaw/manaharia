@@ -16,7 +16,7 @@ export default function Payment() {
         navigate('/');
         return null;
     }
-
+  
     const paymentMethods = [
         {
             id: 'telebirr',
