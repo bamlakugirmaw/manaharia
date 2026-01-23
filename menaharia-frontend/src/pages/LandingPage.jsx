@@ -250,7 +250,11 @@ export default function LandingPage() {
                     </div>
 
                     <div className="text-center">
-                        <Button variant="outline" className="px-10 py-6 rounded-2xl border-2 border-primary text-primary font-black text-lg hover:bg-primary hover:text-white transition-all">
+                        <Button
+                            onClick={() => navigate('/routes')}
+                            variant="outline"
+                            className="px-10 py-6 rounded-2xl border-2 border-primary text-primary font-black text-lg hover:bg-primary hover:text-white transition-all"
+                        >
                             View All Routes <ArrowRight className="ml-2" size={20} />
                         </Button>
                     </div>
@@ -372,7 +376,10 @@ export default function LandingPage() {
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 group-hover:opacity-80 transition-opacity" />
 
                                 <div className="absolute bottom-8 left-8">
-                                    <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md p-6 rounded-[2rem] border border-white/10 group-hover:bg-primary/90 transition-colors">
+                                    <div
+                                        onClick={() => navigate('/destinations')}
+                                        className="flex items-center gap-2 bg-black/40 backdrop-blur-md p-6 rounded-[2rem] border border-white/10 group-hover:bg-primary/90 transition-colors cursor-pointer"
+                                    >
                                         <MapPin className="text-orange-400 group-hover:text-white" size={24} />
                                         <div>
                                             <h4 className="text-2xl font-black text-white">{dest.name}</h4>

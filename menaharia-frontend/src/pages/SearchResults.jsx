@@ -2,10 +2,9 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import TripCard from '../components/tickets/TripCard';
 import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
 import { Card } from '../components/ui/Card';
-import { Filter, ArrowLeft, Bus } from 'lucide-react';
-import { TRIPS } from '../data/mock-db';
+import { Filter, ArrowLeft, Bus, Check } from 'lucide-react';
+import { TRIPS, OPERATORS } from '../data/mock-db';
 
 export default function SearchResults() {
     const [searchParams] = useSearchParams();
@@ -13,9 +12,23 @@ export default function SearchResults() {
     const [trips, setTrips] = useState([]);
     const [loading, setLoading] = useState(true);
 
+    // Filter states
+    const [selectedTime, setSelectedTime] = useState('');
+    const [selectedOperator, setSelectedOperator] = useState('');
+
     const from = searchParams.get('from');
     const to = searchParams.get('to');
     const date = searchParams.get('date');
+
+    const handleTimeSelect = (time) => {
+        if (selectedTime === time) setSelectedTime('');
+        else setSelectedTime(time);
+    };
+
+    const handleOperatorSelect = (opId) => {
+        if (selectedOperator === opId) setSelectedOperator('');
+        else setSelectedOperator(opId);
+    };
 
     useEffect(() => {
         // Simulate API fetch delay
@@ -24,15 +37,37 @@ export default function SearchResults() {
             let filtered = TRIPS;
             if (from) filtered = filtered.filter(t => t.from === from);
             if (to) filtered = filtered.filter(t => t.to === to);
+
+            // Apply Time Filter
+            if (selectedTime) {
+                filtered = filtered.filter(t => {
+                    const hour = parseInt(t.departureTime.split(':')[0]);
+                    if (selectedTime === 'Before 6:00 AM') return hour < 6;
+                    if (selectedTime === '6:00 AM - 12:00 PM') return hour >= 6 && hour < 12;
+                    if (selectedTime === 'After 12:00 PM') return hour >= 12;
+                    return true;
+                });
+            }
+
+            // Apply Operator Filter
+            if (selectedOperator) {
+                filtered = filtered.filter(t => t.operatorId === selectedOperator);
+            }
+
             // Date filter ignored for demo to show results always
             setTrips(filtered);
             setLoading(false);
         }, 500);
-    }, [from, to, date]);
+    }, [from, to, date, selectedTime, selectedOperator]);
 
     const handleSelectTrip = (tripId) => {
         // Navigate to seat selection page
         navigate(`/booking/seats/${tripId}`);
+    };
+
+    const clearFilters = () => {
+        setSelectedTime('');
+        setSelectedOperator('');
     };
 
     return (
@@ -53,14 +88,16 @@ export default function SearchResults() {
                             {trips.length} Buses Available
                         </p>
                     </div>
-                    <Button variant="outline" className="h-11 px-6 rounded-xl border-gray-200 font-bold text-gray-600 gap-2 hover:bg-gray-50">
-                        <Filter size={18} /> Filters
-                    </Button>
+                    {(selectedTime || selectedOperator) && (
+                        <Button variant="ghost" onClick={clearFilters} className="text-red-500 text-xs font-bold hover:bg-red-50">
+                            Clear Filters
+                        </Button>
+                    )}
                 </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-12">
-                {/* Filters Sidebar (Mock) */}
+                {/* Filters Sidebar */}
                 <div className="hidden lg:block space-y-6">
                     <Card className="p-6 space-y-8 bg-white border-none shadow-[0_8px_30px_rgba(0,0,0,0.02)] rounded-[2.5rem]">
                         <div>
@@ -68,10 +105,13 @@ export default function SearchResults() {
                             <div className="space-y-4">
                                 {['Before 6:00 AM', '6:00 AM - 12:00 PM', 'After 12:00 PM'].map(time => (
                                     <label key={time} className="flex items-center gap-3 text-xs font-bold text-gray-500 hover:text-primary transition-colors cursor-pointer group">
-                                        <div className="w-5 h-5 rounded-lg border-2 border-gray-100 group-hover:border-primary/30 transition-all flex items-center justify-center bg-gray-50/50">
-                                            <div className="w-2.5 h-2.5 rounded-md bg-primary opacity-0 group-hover:opacity-10 scale-50 group-hover:scale-100 transition-all" />
+                                        <div
+                                            className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center ${selectedTime === time ? 'border-primary bg-primary' : 'border-gray-100 bg-gray-50/50 group-hover:border-primary/30'}`}
+                                            onClick={() => handleTimeSelect(time)}
+                                        >
+                                            {selectedTime === time && <Check size={12} className="text-white" strokeWidth={4} />}
                                         </div>
-                                        {time}
+                                        <span onClick={() => handleTimeSelect(time)}>{time}</span>
                                     </label>
                                 ))}
                             </div>
@@ -82,12 +122,15 @@ export default function SearchResults() {
                         <div>
                             <h3 className="text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400 mb-6">Operators</h3>
                             <div className="space-y-4">
-                                {['Selam Bus', 'Sky Bus', 'Golden Bus', 'Ethio Bus'].map(op => (
-                                    <label key={op} className="flex items-center gap-3 text-xs font-bold text-gray-500 hover:text-primary transition-colors cursor-pointer group">
-                                        <div className="w-5 h-5 rounded-lg border-2 border-gray-100 group-hover:border-primary/30 transition-all flex items-center justify-center bg-gray-50/50">
-                                            <div className="w-2.5 h-2.5 rounded-md bg-primary opacity-0 group-hover:opacity-10 scale-50 group-hover:scale-100 transition-all" />
+                                {OPERATORS.map(op => (
+                                    <label key={op.id} className="flex items-center gap-3 text-xs font-bold text-gray-500 hover:text-primary transition-colors cursor-pointer group">
+                                        <div
+                                            className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center ${selectedOperator === op.id ? 'border-primary bg-primary' : 'border-gray-100 bg-gray-50/50 group-hover:border-primary/30'}`}
+                                            onClick={() => handleOperatorSelect(op.id)}
+                                        >
+                                            {selectedOperator === op.id && <Check size={12} className="text-white" strokeWidth={4} />}
                                         </div>
-                                        {op}
+                                        <span onClick={() => handleOperatorSelect(op.id)}>{op.name}</span>
                                     </label>
                                 ))}
                             </div>
@@ -116,8 +159,11 @@ export default function SearchResults() {
                             </div>
                             <h3 className="text-xl font-extrabold text-gray-900">No trips found</h3>
                             <p className="text-gray-400 mt-2 text-[11px] font-bold uppercase tracking-wider">Try changing your search criteria</p>
-                            <Button className="mt-8 h-12 px-8 rounded-xl font-bold bg-gray-900 text-white hover:bg-black transition-all" onClick={() => navigate('/')}>
-                                Clear Search
+                            <Button className="mt-8 h-12 px-8 rounded-xl font-bold bg-gray-900 text-white hover:bg-black transition-all" onClick={() => {
+                                clearFilters();
+                                navigate('/');
+                            }}>
+                                Clear Filters
                             </Button>
                         </div>
                     )}

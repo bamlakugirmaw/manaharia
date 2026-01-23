@@ -4,9 +4,9 @@ import { Logo } from '../ui/Logo';
 
 export default function Footer() {
     return (
-        <footer className="bg-[#086a94] text-white pt-20 pb-10">
+        <footer className="bg-[#086a94] text-white pt-12 pb-6">
             <div className="max-w-7xl mx-auto px-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-16 mb-16">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-8">
                     {/* Brand Column */}
                     <div className="space-y-6">
                         <Logo light />
@@ -70,7 +70,7 @@ export default function Footer() {
                     </div>
                 </div>
 
-                <div className="border-t border-white/10 pt-10 text-[13px] font-bold text-white/60 tracking-tight">
+                <div className="border-t border-white/10 pt-6 text-[13px] font-bold text-white/60 tracking-tight">
                     <p>&copy; {new Date().getFullYear()} Menaharia. All rights reserved. | Designed with excellence for travelers.</p>
                 </div>
             </div>

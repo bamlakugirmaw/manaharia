@@ -112,9 +112,6 @@ export default function AdminUserManagement() {
                                             >
                                                 Details
                                             </Button>
-                                            <Button variant="ghost" size="icon" className="text-gray-400 hover:text-gray-600">
-                                                <MoreHorizontal size={16} />
-                                            </Button>
                                         </div>
                                     </td>
                                 </tr>

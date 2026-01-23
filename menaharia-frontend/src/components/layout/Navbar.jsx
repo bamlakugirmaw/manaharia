@@ -1,6 +1,6 @@
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { Button } from '../ui/Button';
-import { Phone, LayoutDashboard, Menu, X, LogOut, User } from 'lucide-react';
+import { Phone, LifeBuoy, Menu, X, LogOut, User } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { cn } from '../../lib/utils';
@@ -60,15 +60,10 @@ export default function Navbar() {
 
                     {/* Right Action Buttons */}
                     <div className="hidden md:flex items-center gap-6">
-                        <Link to={getDashboardPath()} className="text-gray-600 hover:text-primary flex items-center gap-1.5 text-sm font-semibold transition-colors">
-                            <LayoutDashboard size={18} />
-                            Dashboard
-                        </Link>
-                        <div className="h-4 w-px bg-gray-200"></div>
-                        <a href="tel:+251911234567" className="text-gray-600 hover:text-primary flex items-center gap-1.5 text-sm font-semibold transition-colors">
+                        <Link to="/support" className="text-gray-600 hover:text-primary flex items-center gap-1.5 text-sm font-semibold transition-colors">
                             <Phone size={18} />
                             Support
-                        </a>
+                        </Link>
 
                         {isAuthenticated ? (
                             <div className="flex items-center gap-4 ml-2 border-l pl-6 border-gray-100">
@@ -134,9 +129,7 @@ export default function Navbar() {
                             </Link>
                         ))}
                         <div className="border-t border-gray-100 my-2 pt-2">
-                            <Link to={getDashboardPath()} className="block px-3 py-2 text-base font-medium text-gray-600 hover:text-primary" onClick={() => setIsMobileMenuOpen(false)}>
-                                Dashboard
-                            </Link>
+
                             {isAuthenticated ? (
                                 <button
                                     onClick={handleLogout}

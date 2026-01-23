@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { Search, Filter, User, Ticket, Calendar, MoreVertical } from 'lucide-react';
+import { Search, Filter, User, Ticket, Calendar, MoreHorizontal } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import DetailModal, { ModalDataRow } from '../../components/admin/DetailModal';
 
 const MOCK_BOOKINGS = [
     { id: 'BKG-1023', passenger: 'Abebe Kebede', email: 'abebe@example.com', trip: 'Addis Ababa → Bahir Dar', date: 'Dec 15, 2025', seat: '12A', amount: 'ETB 1,200', status: 'confirmed' },
@@ -14,6 +15,8 @@ const MOCK_BOOKINGS = [
 export default function AdminBookings() {
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+    const [selectedBooking, setSelectedBooking] = useState(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
 
     const filteredBookings = MOCK_BOOKINGS.filter(booking => {
         const matchesSearch =
@@ -25,6 +28,11 @@ export default function AdminBookings() {
 
         return matchesSearch && matchesStatus;
     });
+
+    const handleViewBooking = (booking) => {
+        setSelectedBooking(booking);
+        setIsModalOpen(true);
+    };
 
     return (
         <div className="space-y-6">
@@ -125,8 +133,8 @@ export default function AdminBookings() {
                                         </Badge>
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <Button variant="ghost" size="icon" className="text-gray-400 hover:text-gray-600">
-                                            <MoreVertical size={16} />
+                                        <Button variant="ghost" size="icon" className="text-gray-400 hover:text-gray-600" onClick={() => handleViewBooking(booking)}>
+                                            <MoreHorizontal size={16} />
                                         </Button>
                                     </td>
                                 </tr>
@@ -142,6 +150,41 @@ export default function AdminBookings() {
                     </table>
                 </div>
             </div>
+
+            {/* Booking Detail Modal */}
+            {selectedBooking && (
+                <DetailModal
+                    isOpen={isModalOpen}
+                    onClose={() => setIsModalOpen(false)}
+                    title={`Booking Details #${selectedBooking.id}`}
+                    footer={
+                        <div className="flex gap-2">
+                            <Button variant="outline" onClick={() => setIsModalOpen(false)}>Close</Button>
+                            <Button variant="destructive">Cancel Booking</Button>
+                        </div>
+                    }
+                >
+                    <div className="space-y-6">
+                        <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
+                            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
+                                {selectedBooking.passenger.charAt(0)}
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-gray-900">{selectedBooking.passenger}</h3>
+                                <p className="text-sm text-gray-500">{selectedBooking.email}</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <ModalDataRow label="Trip" value={selectedBooking.trip} icon={Ticket} />
+                            <ModalDataRow label="Travel Date" value={selectedBooking.date} icon={Calendar} />
+                            <ModalDataRow label="Seat Number" value={selectedBooking.seat} />
+                            <ModalDataRow label="Payment Status" value={selectedBooking.status} />
+                            <ModalDataRow label="Amount Paid" value={selectedBooking.amount} />
+                        </div>
+                    </div>
+                </DetailModal>
+            )}
         </div>
     );
 }

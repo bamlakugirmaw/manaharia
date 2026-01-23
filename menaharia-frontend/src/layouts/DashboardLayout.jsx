@@ -4,6 +4,7 @@ import Navbar from '../components/layout/Navbar';
 import { Logo } from '../components/ui/Logo';
 import { LayoutDashboard, Ticket, User, LogOut, Settings, History, CreditCard, Bus, Calendar as CalendarIcon, Map, Shield, Users, Activity } from 'lucide-react';
 import { Button } from '../components/ui/Button';
+import { useAuth } from '../contexts/AuthContext';
 
 // Sidebar Items for Traveller
 const TRAVELLER_NAV = [
@@ -21,6 +22,7 @@ const OPERATOR_NAV = [
     { name: 'Trip Scheduling', href: '/operator/schedules', icon: CalendarIcon },
     { name: 'Bookings', href: '/operator/bookings', icon: Ticket },
     { name: 'Revenue Reports', href: '/operator/reports', icon: CreditCard },
+    { name: 'Disputes', href: '/operator/disputes', icon: Shield },
     { name: 'Payout History', href: '/operator/payouts', icon: History },
     { name: 'Operator Profile', href: '/operator/settings', icon: User },
 ];
@@ -32,13 +34,19 @@ const ADMIN_NAV = [
     { name: 'Manage Users', href: '/admin/users', icon: Users },
     { name: 'All Trips', href: '/admin/trips', icon: Map },
     { name: 'All Bookings', href: '/admin/bookings', icon: Ticket },
-    { name: 'Disputes', href: '/admin/disputes', icon: Shield },
     { name: 'Payment Logs', href: '/admin/payments', icon: CreditCard },
     { name: 'System Logs', href: '/admin/logs', icon: Activity },
 ];
 
 export default function DashboardLayout({ children }) {
     const location = useLocation();
+    const navigate = useNavigate();
+    const { logout } = useAuth();
+
+    const handleLogout = () => {
+        logout();
+        navigate('/');
+    };
 
     // Determine Nav Items based on path
     const isOperator = location.pathname.startsWith('/operator');
@@ -107,7 +115,11 @@ export default function DashboardLayout({ children }) {
                     </div>
 
                     <div className="mt-auto p-6 border-t border-gray-50">
-                        <Button variant="ghost" className="w-full justify-start text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-2xl h-12 px-5 font-bold">
+                        <Button
+                            variant="ghost"
+                            className="w-full justify-start text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-2xl h-12 px-5 font-bold"
+                            onClick={handleLogout}
+                        >
                             <LogOut className="mr-3 h-5 w-5" /> Sign Out
                         </Button>
                     </div>

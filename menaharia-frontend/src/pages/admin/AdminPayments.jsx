@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { Search, Filter, CreditCard, Wallet, Landmark, Download, MoreHorizontal } from 'lucide-react';
+import { Search, Filter, CreditCard, Wallet, Landmark, Download, MoreHorizontal, User, Calendar } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import DetailModal, { ModalDataRow } from '../../components/admin/DetailModal';
 
 const MOCK_PAYMENTS = [
     { id: 'PAY-8821', user: 'Abebe Kebede', amount: 'ETB 1,700', method: 'Telebirr', date: 'Dec 15, 2025, 10:30 AM', status: 'completed' },
@@ -14,6 +15,8 @@ const MOCK_PAYMENTS = [
 export default function AdminPayments() {
     const [searchQuery, setSearchQuery] = useState('');
     const [methodFilter, setMethodFilter] = useState('all');
+    const [selectedPayment, setSelectedPayment] = useState(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
 
     const filteredPayments = MOCK_PAYMENTS.filter(payment => {
         const matchesSearch =
@@ -32,6 +35,11 @@ export default function AdminPayments() {
             case 'Chapa': return <CreditCard size={14} className="text-green-500" />;
             default: return <CreditCard size={14} className="text-gray-500" />;
         }
+    };
+
+    const handleViewPayment = (payment) => {
+        setSelectedPayment(payment);
+        setIsModalOpen(true);
     };
 
     return (
@@ -123,7 +131,7 @@ export default function AdminPayments() {
                                         </Badge>
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <Button variant="ghost" size="icon" className="text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <Button variant="ghost" size="icon" className="text-gray-400 hover:text-gray-600" onClick={() => handleViewPayment(payment)}>
                                             <MoreHorizontal size={16} />
                                         </Button>
                                     </td>
@@ -140,6 +148,32 @@ export default function AdminPayments() {
                     </table>
                 </div>
             </div>
+
+            {/* Payment Details Modal */}
+            {selectedPayment && (
+                <DetailModal
+                    isOpen={isModalOpen}
+                    onClose={() => setIsModalOpen(false)}
+                    title={`Transaction ${selectedPayment.id}`}
+                    footer={
+                        <Button variant="outline" onClick={() => setIsModalOpen(false)}>Close</Button>
+                    }
+                >
+                    <div className="space-y-6">
+                        <div className="p-6 bg-green-50 rounded-2xl text-center border border-green-100">
+                            <span className="block text-3xl font-bold text-green-700 mb-1">{selectedPayment.amount}</span>
+                            <span className="text-xs font-bold uppercase text-green-600 tracking-widest">Successful Payment</span>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-2">
+                            <ModalDataRow label="Paid By" value={selectedPayment.user} icon={User} />
+                            <ModalDataRow label="Payment Method" value={selectedPayment.method} icon={Wallet} />
+                            <ModalDataRow label="Transaction Time" value={selectedPayment.date} icon={Calendar} />
+                            <ModalDataRow label="Reference ID" value={selectedPayment.id} />
+                        </div>
+                    </div>
+                </DetailModal>
+            )}
         </div>
     );
 }

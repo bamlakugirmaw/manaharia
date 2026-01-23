@@ -42,33 +42,43 @@ export default function Destinations() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 py-12">
-            <div className="container mx-auto px-4 max-w-6xl">
-                {/* Header */}
-                <div className="mb-10">
-                    <h1 className="text-3xl font-extrabold tracking-tight text-gray-900">Popular Destinations</h1>
-                    <p className="text-gray-400 text-xs font-bold mt-2 uppercase tracking-wider">Discover amazing cities across Ethiopia</p>
+        <div className="min-h-screen bg-gray-50 pb-20">
+            {/* Hero Search Section */}
+            <div className="bg-gradient-to-br from-primary via-primary/90 to-secondary px-4 pt-20 pb-24 text-center rounded-b-[3rem] relative overflow-hidden">
+                {/* Background Pattern */}
+                <div className="absolute inset-0 opacity-10">
+                    <div className="absolute inset-0" style={{
+                        backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)',
+                        backgroundSize: '40px 40px'
+                    }} />
                 </div>
 
-                {/* Search Bar */}
-                <div className="mb-8">
-                    <div className="relative">
-                        <Search className="absolute left-6 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <div className="relative max-w-2xl mx-auto space-y-6">
+                    <h1 className="text-3xl md:text-5xl font-black text-white tracking-tight">
+                        Explore Destinations
+                    </h1>
+                    <p className="text-lg text-white/90 font-medium max-w-xl mx-auto">
+                        Discover amazing cities across Ethiopia. From historical wonders to vibrant metropolises.
+                    </p>
+
+                    <div className="relative max-w-xl mx-auto mt-8">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input
                             type="text"
                             placeholder="Search destinations..."
+                            className="w-full pl-12 pr-4 py-4 rounded-2xl border-none shadow-xl focus:ring-4 focus:ring-white/20 outline-none text-gray-800 placeholder:text-gray-400 font-medium transition-all"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full h-14 pl-14 pr-6 bg-white border border-gray-200 rounded-2xl focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all text-base"
                         />
                     </div>
                 </div>
+            </div>
 
-                {/* Destinations Grid */}
+            {/* Destinations Grid */}
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-12 relative z-10">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredDestinations.map((destination) => (
                         <Card key={destination.id} className="bg-white border-none shadow-[0_2px_20px_rgba(0,0,0,0.04)] rounded-3xl overflow-hidden hover:shadow-[0_8px_30px_rgba(0,0,0,0.08)] transition-all duration-300 group">
-                            {/* Destination Image */}
                             {/* Destination Image */}
                             <div className="relative h-48 overflow-hidden group">
                                 <img
@@ -130,7 +140,7 @@ export default function Destinations() {
 
                 {/* Empty State */}
                 {filteredDestinations.length === 0 && (
-                    <div className="text-center py-20">
+                    <div className="text-center py-20 bg-white rounded-3xl shadow-sm">
                         <MapPin className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                         <h3 className="text-xl font-extrabold text-gray-900 mb-2">No destinations found</h3>
                         <p className="text-gray-400 text-xs font-bold uppercase tracking-wider">Try adjusting your search query</p>

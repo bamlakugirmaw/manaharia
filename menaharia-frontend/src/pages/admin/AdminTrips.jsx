@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { Search, Filter, Calendar, MapPin, Bus } from 'lucide-react';
+import { Search, Filter, Calendar, MapPin, Bus, X, MoreHorizontal } from 'lucide-react';
+import { Card } from '../../components/ui/Card';
+import { Input } from '../../components/ui/Input';
+import DetailModal, { ModalDataRow } from '../../components/admin/DetailModal';
 import { cn } from '../../lib/utils';
 
 const MOCK_TRIPS = [
@@ -15,8 +18,15 @@ const MOCK_TRIPS = [
 export default function AdminTrips() {
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+    const [trips, setTrips] = useState(MOCK_TRIPS);
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [selectedTrip, setSelectedTrip] = useState(null);
+    const [isManageModalOpen, setIsManageModalOpen] = useState(false);
 
-    const filteredTrips = MOCK_TRIPS.filter(trip => {
+    // Create Trip Form State
+    const [newTrip, setNewTrip] = useState({ route: '', operator: '', date: '', price: '' });
+
+    const filteredTrips = trips.filter(trip => {
         const matchesSearch =
             trip.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
             trip.operator.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -27,8 +37,33 @@ export default function AdminTrips() {
         return matchesSearch && matchesStatus;
     });
 
+    const handleCreateTrip = () => {
+        const trip = {
+            id: `TRIP-00${trips.length + 1}`,
+            operator: newTrip.operator || 'Selam Bus',
+            route: newTrip.route,
+            date: newTrip.date || 'Dec 25, 2025',
+            occupancy: '0%',
+            revenue: 'ETB 0',
+            status: 'scheduled'
+        };
+        setTrips([trip, ...trips]); // Add to top
+        setIsCreateModalOpen(false);
+        setNewTrip({ route: '', operator: '', date: '', price: '' });
+    };
+
+    const handleManage = (trip) => {
+        setSelectedTrip(trip);
+        setIsManageModalOpen(true);
+    };
+
+    const updateStatus = (status) => {
+        setTrips(trips.map(t => t.id === selectedTrip.id ? { ...t, status } : t));
+        setSelectedTrip({ ...selectedTrip, status });
+    };
+
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 relative">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold">All Trips</h1>
@@ -36,7 +71,7 @@ export default function AdminTrips() {
                 </div>
                 <div className="flex gap-2">
                     <Button variant="outline" size="sm" className="bg-white">Export CSV</Button>
-                    <Button size="sm">Create New Trip</Button>
+                    <Button size="sm" onClick={() => setIsCreateModalOpen(true)}>Create New Trip</Button>
                 </div>
             </div>
 
@@ -141,8 +176,13 @@ export default function AdminTrips() {
                                         </Badge>
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity">
-                                            Manage
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleManage(trip)}
+                                            className="text-gray-400 hover:text-gray-600"
+                                        >
+                                            <MoreHorizontal size={16} />
                                         </Button>
                                     </td>
                                 </tr>
@@ -158,6 +198,87 @@ export default function AdminTrips() {
                     </table>
                 </div>
             </div>
+
+            {/* Create Trip Modal */}
+            {isCreateModalOpen && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <Card className="w-full max-w-md bg-white p-6 relative animate-in fade-in zoom-in duration-200">
+                        <button
+                            onClick={() => setIsCreateModalOpen(false)}
+                            className="absolute right-4 top-4 text-gray-400 hover:text-gray-600"
+                        >
+                            <X size={20} />
+                        </button>
+                        <h2 className="text-xl font-bold mb-1">Create New Trip</h2>
+                        <p className="text-sm text-gray-500 mb-6">Schedule a new trip on the network.</p>
+
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-700">Route</label>
+                                <Input
+                                    placeholder="e.g. Addis Ababa - Bahir Dar"
+                                    value={newTrip.route}
+                                    onChange={(e) => setNewTrip({ ...newTrip, route: e.target.value })}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-700">Operator</label>
+                                <Input
+                                    placeholder="e.g. Selam Bus"
+                                    value={newTrip.operator}
+                                    onChange={(e) => setNewTrip({ ...newTrip, operator: e.target.value })}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-700">Date</label>
+                                <Input
+                                    type="date"
+                                    value={newTrip.date}
+                                    onChange={(e) => setNewTrip({ ...newTrip, date: e.target.value })}
+                                />
+                            </div>
+                            <Button className="w-full mt-2" onClick={handleCreateTrip}>Schedule Trip</Button>
+                        </div>
+                    </Card>
+                </div>
+            )}
+
+            {/* Manage Trip Modal */}
+            {selectedTrip && (
+                <DetailModal
+                    isOpen={isManageModalOpen}
+                    onClose={() => setIsManageModalOpen(false)}
+                    title={`Manage Trip ${selectedTrip.id}`}
+                    footer={
+                        <Button variant="outline" onClick={() => setIsManageModalOpen(false)}>Close</Button>
+                    }
+                >
+                    <div className="space-y-6">
+                        <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                            <h3 className="font-bold text-lg mb-1">{selectedTrip.route}</h3>
+                            <div className="flex items-center gap-2 text-sm text-gray-500">
+                                <Bus size={14} /> {selectedTrip.operator}
+                                <span className="text-gray-300">|</span>
+                                <Calendar size={14} /> {selectedTrip.date}
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Update Status</h4>
+                            <div className="flex gap-2">
+                                <Button size="sm" variant={selectedTrip.status === 'scheduled' ? 'default' : 'outline'} onClick={() => updateStatus('scheduled')}>Scheduled</Button>
+                                <Button size="sm" variant={selectedTrip.status === 'completed' ? 'success' : 'outline'} onClick={() => updateStatus('completed')}>Completed</Button>
+                                <Button size="sm" variant={selectedTrip.status === 'cancelled' ? 'destructive' : 'outline'} onClick={() => updateStatus('cancelled')}>Cancelled</Button>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <ModalDataRow label="Revenue" value={selectedTrip.revenue} />
+                            <ModalDataRow label="Occupancy" value={selectedTrip.occupancy} />
+                        </div>
+                    </div>
+                </DetailModal>
+            )}
         </div>
     );
 }

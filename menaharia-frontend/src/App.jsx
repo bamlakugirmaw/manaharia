@@ -23,10 +23,16 @@ import DestinationDetail from './pages/DestinationDetail';
 import Help from './pages/Help';
 import FAQ from './pages/FAQ';
 import ContactSupport from './pages/ContactSupport';
+import SupportPage from './pages/SupportPage';
 
+import UserUpcoming from './pages/dashboard/UserUpcoming';
+import UserPayments from './pages/dashboard/UserPayments';
 import UserOverview from './pages/dashboard/UserOverview';
 import UserBookings from './pages/dashboard/UserBookings';
 import UserProfile from './pages/dashboard/UserProfile';
+
+import OperatorRevenue from './pages/operator/OperatorRevenue';
+import OperatorPayouts from './pages/operator/OperatorPayouts';
 
 import OperatorOverview from './pages/operator/OperatorOverview';
 import ScheduleManagement from './pages/operator/ScheduleManagement';
@@ -34,6 +40,7 @@ import BookingManagement from './pages/operator/BookingManagement';
 import FleetManagement from './pages/operator/FleetManagement';
 import OperatorRoutes from './pages/operator/OperatorRoutes';
 import OperatorSettings from './pages/operator/OperatorSettings';
+import OperatorDisputes from './pages/operator/OperatorDisputes';
 
 import AdminSystemOverview from './pages/admin/AdminSystemOverview';
 import AdminUserManagement from './pages/admin/AdminUserManagement';
@@ -42,7 +49,6 @@ import AdminLogs from './pages/admin/AdminLogs';
 import AdminSettings from './pages/admin/AdminSettings';
 import AdminTrips from './pages/admin/AdminTrips';
 import AdminBookings from './pages/admin/AdminBookings';
-import AdminDisputes from './pages/admin/AdminDisputes';
 import AdminPayments from './pages/admin/AdminPayments';
 
 function App() {
@@ -72,6 +78,7 @@ function App() {
           <Route path="/help" element={<MainLayout><Help /></MainLayout>} />
           <Route path="/faq" element={<MainLayout><FAQ /></MainLayout>} />
           <Route path="/contact" element={<MainLayout><ContactSupport /></MainLayout>} />
+          <Route path="/support" element={<MainLayout><SupportPage /></MainLayout>} />
 
           {/* Booking Flow */}
           <Route path="/booking/seats/:tripId" element={<MainLayout><SeatSelection /></MainLayout>} />
@@ -83,8 +90,10 @@ function App() {
           <Route path="/traveller" element={<ProtectedRoute allowedRoles={['traveller']}><Navigate to="/traveller/dashboard" replace /></ProtectedRoute>} />
           <Route path="/traveller/dashboard" element={<ProtectedRoute allowedRoles={['traveller']}><DashboardLayout><UserOverview /></DashboardLayout></ProtectedRoute>} />
           <Route path="/traveller/bookings" element={<ProtectedRoute allowedRoles={['traveller']}><DashboardLayout><UserBookings /></DashboardLayout></ProtectedRoute>} />
-          <Route path="/traveller/upcoming" element={<ProtectedRoute allowedRoles={['traveller']}><DashboardLayout><UserOverview /></DashboardLayout></ProtectedRoute>} />
+          <Route path="/traveller/upcoming" element={<ProtectedRoute allowedRoles={['traveller']}><DashboardLayout><UserUpcoming /></DashboardLayout></ProtectedRoute>} />
+          <Route path="/traveller/payments" element={<ProtectedRoute allowedRoles={['traveller']}><DashboardLayout><UserPayments /></DashboardLayout></ProtectedRoute>} />
           <Route path="/traveller/profile" element={<ProtectedRoute allowedRoles={['traveller']}><DashboardLayout><UserProfile /></DashboardLayout></ProtectedRoute>} />
+
 
           {/* Operator Dashboard Routes */}
           <Route path="/operator" element={<ProtectedRoute allowedRoles={['operator']}><Navigate to="/operator/dashboard" replace /></ProtectedRoute>} />
@@ -93,6 +102,9 @@ function App() {
           <Route path="/operator/bookings" element={<ProtectedRoute allowedRoles={['operator']}><DashboardLayout><BookingManagement /></DashboardLayout></ProtectedRoute>} />
           <Route path="/operator/fleet" element={<ProtectedRoute allowedRoles={['operator']}><DashboardLayout><FleetManagement /></DashboardLayout></ProtectedRoute>} />
           <Route path="/operator/routes" element={<ProtectedRoute allowedRoles={['operator']}><DashboardLayout><OperatorRoutes /></DashboardLayout></ProtectedRoute>} />
+          <Route path="/operator/reports" element={<ProtectedRoute allowedRoles={['operator']}><DashboardLayout><OperatorRevenue /></DashboardLayout></ProtectedRoute>} />
+          <Route path="/operator/payouts" element={<ProtectedRoute allowedRoles={['operator']}><DashboardLayout><OperatorPayouts /></DashboardLayout></ProtectedRoute>} />
+          <Route path="/operator/disputes" element={<ProtectedRoute allowedRoles={['operator']}><DashboardLayout><OperatorDisputes /></DashboardLayout></ProtectedRoute>} />
           <Route path="/operator/settings" element={<ProtectedRoute allowedRoles={['operator']}><DashboardLayout><OperatorSettings /></DashboardLayout></ProtectedRoute>} />
           <Route path="/operator/*" element={<ProtectedRoute allowedRoles={['operator']}><DashboardLayout><OperatorOverview /></DashboardLayout></ProtectedRoute>} />
 
@@ -103,7 +115,6 @@ function App() {
           <Route path="/admin/operators" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminOperatorManagement /></DashboardLayout></ProtectedRoute>} />
           <Route path="/admin/trips" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminTrips /></DashboardLayout></ProtectedRoute>} />
           <Route path="/admin/bookings" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminBookings /></DashboardLayout></ProtectedRoute>} />
-          <Route path="/admin/disputes" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminDisputes /></DashboardLayout></ProtectedRoute>} />
           <Route path="/admin/payments" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminPayments /></DashboardLayout></ProtectedRoute>} />
           <Route path="/admin/logs" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminLogs /></DashboardLayout></ProtectedRoute>} />
           <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminSettings /></DashboardLayout></ProtectedRoute>} />

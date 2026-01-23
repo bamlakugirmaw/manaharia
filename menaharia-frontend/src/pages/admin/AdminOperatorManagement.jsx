@@ -2,13 +2,15 @@ import { useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Card } from '../../components/ui/Card';
-import { Search, Filter, Bus, MoreHorizontal, Building2, Calendar, ShieldCheck, MapPin, Phone, Mail } from 'lucide-react';
+import { Search, Filter, Bus, MoreHorizontal, Building2, Calendar, ShieldCheck, MapPin, Phone, Mail, X } from 'lucide-react';
+import { Input } from '../../components/ui/Input'; // Ensure Input component is available
 import DetailModal, { ModalDataRow } from '../../components/admin/DetailModal';
 
 const MOCK_OPERATORS = [
     {
         id: 'OP-001',
         name: 'Selam Bus Transport',
+        logo: '/images/selam_bus.jpg',
         license: 'LIC-2024-00123',
         buses: 12,
         revenue: 'ETB 943,000',
@@ -21,6 +23,7 @@ const MOCK_OPERATORS = [
     {
         id: 'OP-002',
         name: 'Sky Bus Services',
+        logo: '/images/sky_bus.jpg',
         license: 'LIC-2024-00456',
         buses: 8,
         revenue: 'ETB 678,000',
@@ -33,6 +36,7 @@ const MOCK_OPERATORS = [
     {
         id: 'OP-003',
         name: 'Golden Bus',
+        logo: '/images/abay_bus.jpg', // Using Abay bus as placeholder for Golden Bus
         license: 'LIC-2024-00789',
         buses: 5,
         revenue: 'ETB 234,000',
@@ -47,26 +51,53 @@ const MOCK_OPERATORS = [
 export default function AdminOperatorManagement() {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedOp, setSelectedOp] = useState(null);
-    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [operators, setOperators] = useState(MOCK_OPERATORS);
+    const [newOperator, setNewOperator] = useState({
+        name: '',
+        contactName: '',
+        email: '',
+        phone: ''
+    });
 
-    const filteredOperators = MOCK_OPERATORS.filter(op =>
+    const filteredOperators = operators.filter(op =>
         op.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         op.id.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     const handleViewDetails = (op) => {
         setSelectedOp(op);
-        setIsModalOpen(true);
+        setIsDetailModalOpen(true);
+    };
+
+    const handleAddOperator = () => {
+        const op = {
+            id: `OP-00${operators.length + 1}`,
+            name: newOperator.name,
+            logo: '/images/sky_bus.jpg', // Default logo
+            license: `LIC-2024-0099${operators.length}`,
+            buses: 0,
+            revenue: 'ETB 0',
+            status: 'pending',
+            joined: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            contactName: newOperator.contactName,
+            phone: newOperator.phone,
+            email: newOperator.email
+        };
+        setOperators([...operators, op]);
+        setIsAddModalOpen(false);
+        setNewOperator({ name: '', contactName: '', email: '', phone: '' });
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 relative">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold">Bus Operators</h1>
                     <p className="text-gray-500 text-sm">Manage transportation partners and their fleet credentials.</p>
                 </div>
-                <Button size="sm">Add New Operator</Button>
+                <Button size="sm" onClick={() => setIsAddModalOpen(true)}>Add New Operator</Button>
             </div>
 
             {/* Search and Filters */}
@@ -105,8 +136,12 @@ export default function AdminOperatorManagement() {
                             {filteredOperators.map((op) => (
                                 <tr key={op.id} className="hover:bg-gray-50 transition-colors group">
                                     <td className="px-6 py-4">
-                                        <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
-                                            <Building2 size={20} />
+                                        <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 overflow-hidden">
+                                            {op.logo ? (
+                                                <img src={op.logo} alt={op.name} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <Building2 size={20} />
+                                            )}
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 text-sm font-semibold text-gray-900">
@@ -144,9 +179,6 @@ export default function AdminOperatorManagement() {
                                             >
                                                 View Profile
                                             </Button>
-                                            <Button variant="ghost" size="icon" className="text-gray-400">
-                                                <MoreHorizontal size={16} />
-                                            </Button>
                                         </div>
                                     </td>
                                 </tr>
@@ -159,20 +191,24 @@ export default function AdminOperatorManagement() {
             {/* Operator Details Modal */}
             {selectedOp && (
                 <DetailModal
-                    isOpen={isModalOpen}
-                    onClose={() => setIsModalOpen(false)}
+                    isOpen={isDetailModalOpen}
+                    onClose={() => setIsDetailModalOpen(false)}
                     title="Operator Profile"
                     footer={
                         <div className="flex gap-2">
-                            <Button variant="outline" onClick={() => setIsModalOpen(false)}>Close</Button>
+                            <Button variant="outline" onClick={() => setIsDetailModalOpen(false)}>Close</Button>
                             <Button className="bg-primary hover:bg-primary/90 text-white">Edit Operator</Button>
                         </div>
                     }
                 >
                     <div className="space-y-6">
                         <div className="flex items-center gap-4 p-5 bg-purple-50/50 border border-purple-100 rounded-2xl">
-                            <div className="w-16 h-16 rounded-2xl bg-white shadow-sm flex items-center justify-center text-purple-600">
-                                <Bus size={32} />
+                            <div className="w-16 h-16 rounded-2xl bg-white shadow-sm flex items-center justify-center text-purple-600 overflow-hidden">
+                                {selectedOp.logo ? (
+                                    <img src={selectedOp.logo} alt={selectedOp.name} className="w-full h-full object-cover" />
+                                ) : (
+                                    <Bus size={32} />
+                                )}
                             </div>
                             <div>
                                 <h3 className="text-xl font-bold text-gray-900">{selectedOp.name}</h3>
@@ -216,6 +252,64 @@ export default function AdminOperatorManagement() {
                         </div>
                     </div>
                 </DetailModal>
+            )}
+
+            {/* Add Operator Modal */}
+            {isAddModalOpen && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <Card className="w-full max-w-md bg-white p-6 relative animate-in fade-in zoom-in duration-200">
+                        <button
+                            onClick={() => setIsAddModalOpen(false)}
+                            className="absolute right-4 top-4 text-gray-400 hover:text-gray-600"
+                        >
+                            <X size={20} />
+                        </button>
+
+                        <h2 className="text-xl font-bold mb-1">Onboard New Operator</h2>
+                        <p className="text-sm text-gray-500 mb-6">Enter company details to register a new transport partner.</p>
+
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-700">Company Name</label>
+                                <Input
+                                    placeholder="e.g. Lion Bus Share Company"
+                                    value={newOperator.name}
+                                    onChange={(e) => setNewOperator({ ...newOperator, name: e.target.value })}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-700">Contact Person</label>
+                                <Input
+                                    placeholder="Full Name"
+                                    value={newOperator.contactName}
+                                    onChange={(e) => setNewOperator({ ...newOperator, contactName: e.target.value })}
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">Phone</label>
+                                    <Input
+                                        placeholder="+251..."
+                                        value={newOperator.phone}
+                                        onChange={(e) => setNewOperator({ ...newOperator, phone: e.target.value })}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">Email</label>
+                                    <Input
+                                        placeholder="company@mail.com"
+                                        value={newOperator.email}
+                                        onChange={(e) => setNewOperator({ ...newOperator, email: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+
+                            <Button className="w-full mt-6" onClick={handleAddOperator}>
+                                Register Operator
+                            </Button>
+                        </div>
+                    </Card>
+                </div>
             )}
         </div>
     );
