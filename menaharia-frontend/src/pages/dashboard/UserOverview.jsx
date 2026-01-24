@@ -55,7 +55,7 @@ export default function UserOverview() {
                 <Card className="p-0 overflow-hidden border border-gray-100 shadow-sm">
                     <div className="p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                         <div className="flex items-start gap-4">
-                            <img src="/images/selam_bus.jpg" className="w-16 h-16 rounded-lg object-cover" alt="Bus" />
+                            <img src="/images/Enhanced_Bus_Images/Selam_Bus1.jpg" className="w-16 h-16 rounded-lg object-cover" alt="Bus" />
                             <div>
                                 <h3 className="font-bold text-lg">Selam Bus</h3>
                                 <div className="text-sm text-gray-500 mb-2">Addis Ababa → Bahir Dar</div>
@@ -79,7 +79,7 @@ export default function UserOverview() {
                 <Card className="p-0 overflow-hidden border border-gray-100 shadow-sm">
                     <div className="p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                         <div className="flex items-start gap-4">
-                            <img src="/images/sky_bus.jpg" className="w-16 h-16 rounded-lg object-cover" alt="Bus" />
+                            <img src="/images/Enhanced_Bus_Images/Sky_Bus.jpg" className="w-16 h-16 rounded-lg object-cover" alt="Bus" />
                             <div>
                                 <h3 className="font-bold text-lg">Sky Bus</h3>
                                 <div className="text-sm text-gray-500 mb-2">Bahir Dar → Addis Ababa</div>

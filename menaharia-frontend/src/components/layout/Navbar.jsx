@@ -67,12 +67,12 @@ export default function Navbar() {
 
                         {isAuthenticated ? (
                             <div className="flex items-center gap-4 ml-2 border-l pl-6 border-gray-100">
-                                <div className="flex items-center gap-3">
+                                <button onClick={() => navigate(getDashboardPath())} className="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer">
                                     <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary border border-primary/20">
                                         <User size={18} />
                                     </div>
                                     <span className="text-sm font-bold text-gray-800 hidden lg:block">{user.name}</span>
-                                </div>
+                                </button>
                                 <Button variant="ghost" size="icon" onClick={handleLogout} className="text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all h-9 w-9">
                                     <LogOut size={20} />
                                 </Button>
@@ -108,15 +108,21 @@ export default function Navbar() {
                 <div className="md:hidden bg-white border-t border-gray-100 animate-in slide-in-from-top duration-200">
                     <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
                         {isAuthenticated && (
-                            <div className="px-3 py-4 border-b border-gray-50 flex items-center gap-3 mb-2">
+                            <button
+                                onClick={() => {
+                                    navigate(getDashboardPath());
+                                    setIsMobileMenuOpen(false);
+                                }}
+                                className="px-3 py-4 border-b border-gray-50 flex items-center gap-3 mb-2 w-full hover:bg-gray-50 transition-colors cursor-pointer"
+                            >
                                 <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                                     <User size={20} />
                                 </div>
-                                <div>
+                                <div className="text-left">
                                     <p className="font-bold text-gray-900">{user.name}</p>
                                     <p className="text-xs text-gray-500 capitalize">{user.role}</p>
                                 </div>
-                            </div>
+                            </button>
                         )}
                         {navLinks.map((link) => (
                             <Link

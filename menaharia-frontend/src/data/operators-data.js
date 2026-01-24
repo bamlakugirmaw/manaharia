@@ -4,7 +4,7 @@ export const OPERATORS = [
     {
         id: 'selam-bus',
         name: 'Selam Bus',
-        logo: '/images/selam_bus.jpg',
+        logo: '/images/Enhanced_Bus_Images/Selam_Bus1.jpg',
         contact: {
             phone: '+251 11 234 5678',
             email: 'info@selambus.et',
@@ -28,7 +28,7 @@ export const OPERATORS = [
     {
         id: 'sky-bus',
         name: 'Sky Bus',
-        logo: '/images/sky_bus.jpg',
+        logo: '/images/Enhanced_Bus_Images/Sky_Bus.jpg',
         contact: {
             phone: '+251 11 345 6789',
             email: 'contact@skybus.et',
@@ -50,7 +50,7 @@ export const OPERATORS = [
     {
         id: 'walia-bus',
         name: 'Walia Bus',
-        logo: '/images/abay_bus.jpg',
+        logo: '/images/Enhanced_Bus_Images/Walia_Bus.jpg',
         contact: {
             phone: '+251 11 456 7890',
             email: 'service@waliabus.et',
@@ -71,7 +71,7 @@ export const OPERATORS = [
     {
         id: 'zemen-bus',
         name: 'Zemen Bus',
-        logo: '/images/zemen_bus.jpg',
+        logo: '/images/Enhanced_Bus_Images/Zemen_Bus.jpg',
         contact: {
             phone: '+251 11 567 8901',
             email: 'info@zemenbus.et',
@@ -93,7 +93,7 @@ export const OPERATORS = [
     {
         id: 'sheger-bus',
         name: 'Sheger Bus',
-        logo: '/images/selam_bus.jpg',
+        logo: '/images/Enhanced_Bus_Images/Selam_Bus2.jpg',
         contact: {
             phone: '+251 11 678 9012',
             email: 'contact@shegerbus.et',
@@ -114,7 +114,7 @@ export const OPERATORS = [
     {
         id: 'abay-bus',
         name: 'Abay Bus',
-        logo: '/images/abay_bus.jpg',
+        logo: '/images/Enhanced_Bus_Images/Abay_Bus.jpg',
         contact: {
             phone: '+251 11 789 0123',
             email: 'service@abaybus.et',
@@ -133,12 +133,12 @@ export const OPERATORS = [
         ]
     },
     {
-        id: 'limalimo-bus',
-        name: 'Limalimo Bus',
-        logo: '/images/zemen_bus.jpg',
+        id: 'golden-bus',
+        name: 'Golden Bus',
+        logo: '/images/Enhanced_Bus_Images/Golden_Bus.jpg',
         contact: {
             phone: '+251 11 890 1234',
-            email: 'info@limalimobus.et',
+            email: 'info@goldenbus.et',
             address: 'Mexico Square, Addis Ababa'
         },
         established: 2015,
@@ -147,7 +147,7 @@ export const OPERATORS = [
         routesServed: ['Addis Ababa → Axum', 'Addis Ababa → Lalibela', 'Mekelle → Axum'],
         startingPrice: 680,
         badges: ['Verified Operator', 'QR Ticketing'],
-        about: 'Limalimo Bus focuses on northern heritage routes, connecting travelers to Ethiopia\'s historic sites with premium service.',
+        about: 'Golden Bus focuses on northern heritage routes, connecting travelers to Ethiopia\'s historic sites with premium service.',
         safetyInfo: 'Premium safety standards. Well-maintained luxury fleet with modern amenities.',
         upcomingTrips: [
             // No matching trips in current mock data
@@ -156,7 +156,7 @@ export const OPERATORS = [
     {
         id: 'ethio-bus',
         name: 'Ethio Bus',
-        logo: '/images/ethio_bus.jpg',
+        logo: '/images/Enhanced_Bus_Images/Ethio_Bus.jpg',
         contact: {
             phone: '+251 11 900 1234',
             email: 'contact@ethiobus.et',

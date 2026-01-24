@@ -49,11 +49,6 @@ export default function AdminPayments() {
                     <h1 className="text-2xl font-bold">Payment Transactions</h1>
                     <p className="text-gray-500 text-sm">Monitor all platform payments and settlement statuses.</p>
                 </div>
-                <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="bg-white">
-                        <Download size={16} className="mr-2" /> Export JSON
-                    </Button>
-                </div>
             </div>
 
             {/* Filters */}

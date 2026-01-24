@@ -20,9 +20,9 @@ const TRAFFIC_DATA = [
 ];
 
 const TOP_OPERATORS = [
-    { id: 1, name: 'Selam Bus', revenue: 'ETB 1.2M', growth: '+12%', logo: '/images/selam_bus.jpg' },
-    { id: 2, name: 'Sky Bus', revenue: 'ETB 950k', growth: '+8%', logo: '/images/sky_bus.jpg' },
-    { id: 3, name: 'Golden Bus', revenue: 'ETB 620k', growth: '+15%', logo: '/images/abay_bus.jpg' },
+    { id: 1, name: 'Selam Bus', revenue: 'ETB 1.2M', growth: '+12%', logo: '/images/Enhanced_Bus_Images/Selam_Bus1.jpg' },
+    { id: 2, name: 'Sky Bus', revenue: 'ETB 950k', growth: '+8%', logo: '/images/Enhanced_Bus_Images/Sky_Bus.jpg' },
+    { id: 3, name: 'Golden Bus', revenue: 'ETB 620k', growth: '+15%', logo: '/images/Enhanced_Bus_Images/Golden_Bus.jpg' },
 ];
 
 const RECENT_PAYMENTS = [

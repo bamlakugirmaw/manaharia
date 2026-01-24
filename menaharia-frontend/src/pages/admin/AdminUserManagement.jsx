@@ -35,7 +35,6 @@ export default function AdminUserManagement() {
                     <h1 className="text-2xl font-bold">Manage Users</h1>
                     <p className="text-gray-500 text-sm">Review, block, or manage permissions for all registered travellers.</p>
                 </div>
-                <Button size="sm">Export Users List</Button>
             </div>
 
             <div className="relative w-full">

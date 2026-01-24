@@ -37,9 +37,6 @@ export default function OperatorRevenue() {
                     <h1 className="text-2xl font-bold">Revenue Analytics</h1>
                     <p className="text-gray-500">Detailed financial performance and route analysis</p>
                 </div>
-                <Button variant="outline" className="flex items-center gap-2">
-                    <Download size={16} /> Export Report
-                </Button>
             </div>
 
             {/* Key Metrics Grid */}

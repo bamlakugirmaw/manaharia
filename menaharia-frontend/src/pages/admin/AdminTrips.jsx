@@ -69,10 +69,7 @@ export default function AdminTrips() {
                     <h1 className="text-2xl font-bold">All Trips</h1>
                     <p className="text-gray-500 text-sm">Monitor and manage all scheduled and completed bus trips.</p>
                 </div>
-                <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="bg-white">Export CSV</Button>
-                    <Button size="sm" onClick={() => setIsCreateModalOpen(true)}>Create New Trip</Button>
-                </div>
+                <Button size="sm" onClick={() => setIsCreateModalOpen(true)}>Create New Trip</Button>
             </div>
 
             {/* Filters Bar */}

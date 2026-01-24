@@ -10,7 +10,7 @@ const MOCK_OPERATORS = [
     {
         id: 'OP-001',
         name: 'Selam Bus Transport',
-        logo: '/images/selam_bus.jpg',
+        logo: '/images/Enhanced_Bus_Images/Selam_Bus1.jpg',
         license: 'LIC-2024-00123',
         buses: 12,
         revenue: 'ETB 943,000',
@@ -23,7 +23,7 @@ const MOCK_OPERATORS = [
     {
         id: 'OP-002',
         name: 'Sky Bus Services',
-        logo: '/images/sky_bus.jpg',
+        logo: '/images/Enhanced_Bus_Images/Sky_Bus.jpg',
         license: 'LIC-2024-00456',
         buses: 8,
         revenue: 'ETB 678,000',
@@ -36,7 +36,7 @@ const MOCK_OPERATORS = [
     {
         id: 'OP-003',
         name: 'Golden Bus',
-        logo: '/images/abay_bus.jpg', // Using Abay bus as placeholder for Golden Bus
+        logo: '/images/Enhanced_Bus_Images/Golden_Bus.jpg',
         license: 'LIC-2024-00789',
         buses: 5,
         revenue: 'ETB 234,000',
@@ -75,7 +75,7 @@ export default function AdminOperatorManagement() {
         const op = {
             id: `OP-00${operators.length + 1}`,
             name: newOperator.name,
-            logo: '/images/sky_bus.jpg', // Default logo
+            logo: '/images/Enhanced_Bus_Images/Sky_Bus.jpg', // Default logo
             license: `LIC-2024-0099${operators.length}`,
             buses: 0,
             revenue: 'ETB 0',
@@ -112,9 +112,6 @@ export default function AdminOperatorManagement() {
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
                 </div>
-                <Button variant="outline" size="sm" className="flex items-center gap-2">
-                    <Filter size={16} /> Advanced Filters
-                </Button>
             </div>
 
             {/* Operators Table */}

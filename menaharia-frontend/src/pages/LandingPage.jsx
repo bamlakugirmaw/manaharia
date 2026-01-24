@@ -21,28 +21,32 @@ export default function LandingPage() {
     };
 
     const popularRoutes = [
-        { id: 1, from: 'Addis Ababa', to: 'Dire Dawa', time: '8h 30m', price: '450', image: '/images/sky_bus.jpg' },
-        { id: 2, from: 'Addis Ababa', to: 'Bahir Dar', time: '9h 15m', price: '520', image: '/images/selam_bus.jpg' },
-        { id: 3, from: 'Addis Ababa', to: 'Mekelle', time: '12h 00m', price: '680', image: '/images/ethio_bus.jpg' },
-        { id: 4, from: 'Dire Dawa', to: 'Hawassa', time: '7h 45m', price: '390', image: '/images/abay_bus.jpg' },
+        { id: 1, from: 'Addis Ababa', to: 'Dire Dawa', time: '8h 30m', price: '450', image: '/images/Enhanced_Bus_Images/Sky_Bus.jpg' },
+        { id: 2, from: 'Addis Ababa', to: 'Bahir Dar', time: '9h 15m', price: '520', image: '/images/Enhanced_Bus_Images/Selam_Bus1.jpg' },
+        { id: 3, from: 'Addis Ababa', to: 'Mekelle', time: '12h 00m', price: '680', image: '/images/Enhanced_Bus_Images/Ethio_Bus.jpg' },
+        { id: 4, from: 'Dire Dawa', to: 'Hawassa', time: '7h 45m', price: '390', image: '/images/Enhanced_Bus_Images/Abay_Bus.jpg' },
     ];
 
+
     const destinations = [
-        { name: 'Addis Ababa', routes: 45, image: '/images/destinations/addis_ababa.jpg', span: 'col-span-2 row-span-2' },
-        { name: 'Bahir Dar', routes: 28, image: '/images/destinations/bahir_dar.jpg', span: 'col-span-1 row-span-1' },
-        { name: 'Gondar', routes: 22, image: '/images/destinations/gondar.jpg', span: 'col-span-1 row-span-1' },
+        { name: 'Addis Ababa', routes: 45, image: '/images/destinations/addis_ababa.jpg' },
+        { name: 'Bahir Dar', routes: 28, image: '/images/destinations/bahir_dar.jpg' },
+        { name: 'Gondar', routes: 22, image: '/images/destinations/gondar.jpg' },
+        { name: 'Jimma', routes: 32, image: '/images/destinations/jimma.jpg' },
+        { name: 'Mekelle', routes: 26, image: '/images/destinations/mekelle.jpg' },
+        { name: 'Hawassa', routes: 19, image: '/images/destinations/hawassa.jpg' },
     ];
 
     const HERO_IMAGES = [
-        "/images/ethio_bus.jpg",
-        "/images/selam_bus.jpg",
-        "/images/zemen_bus.jpg"
+        "/images/Enhanced_Bus_Images/Ethio_Bus.jpg",
+        "/images/Enhanced_Bus_Images/Selam_Bus1.jpg",
+        "/images/Enhanced_Bus_Images/Zemen_Bus.jpg"
     ];
 
     const OPERATORS = [
-        { name: "Limalimo Bus", image: "/images/zemen_bus.jpg" },
-        { name: "Selam Bus", image: "/images/selam_bus.jpg" },
-        { name: "Abay Bus", image: "/images/abay_bus.jpg" }
+        { name: "Golden Bus", image: "/images/Enhanced_Bus_Images/Golden_Bus.jpg" },
+        { name: "Selam Bus", image: "/images/Enhanced_Bus_Images/Selam_Bus1.jpg" },
+        { name: "Abay Bus", image: "/images/Enhanced_Bus_Images/Abay_Bus.jpg" }
     ];
 
     const [heroIndex, setHeroIndex] = useState(0);
@@ -366,25 +370,67 @@ export default function LandingPage() {
                         <p className="text-gray-500 text-lg max-w-2xl mx-auto">From bustling cities to serene landscapes, discover amazing places across the region</p>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 grid-rows-2 gap-8 h-[700px]">
-                        {destinations.map((dest, idx) => (
-                            <div key={idx} className={cn(
-                                "group relative overflow-hidden rounded-[2.5rem] shadow-xl hover:shadow-2xl transition-all",
-                                dest.span
-                            )}>
-                                <img src={dest.image} alt={dest.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 group-hover:opacity-80 transition-opacity" />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Left side - Large Addis Ababa card */}
+                        <div className="group relative overflow-hidden rounded-[2rem] shadow-xl hover:shadow-2xl transition-all h-[500px]">
+                            <img src={destinations[0].image} alt={destinations[0].name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
 
-                                <div className="absolute bottom-8 left-8">
+                            <div className="absolute bottom-8 left-8">
+                                <div
+                                    onClick={() => navigate('/destinations')}
+                                    className="cursor-pointer bg-black/30 backdrop-blur-md rounded-2xl border border-white/20 p-6 pr-10 hover:bg-black/40 transition-all"
+                                >
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <MapPin className="text-orange-400" size={20} />
+                                        <h4 className="text-3xl font-black text-white">{destinations[0].name}</h4>
+                                    </div>
+                                    <p className="text-white/80 text-sm font-medium pl-7">{destinations[0].routes} routes available</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Right side - Two stacked cards */}
+                        <div className="grid grid-rows-2 gap-6 h-[500px]">
+                            {destinations.slice(1, 3).map((dest, idx) => (
+                                <div key={idx} className="group relative overflow-hidden rounded-[2rem] shadow-xl hover:shadow-2xl transition-all h-full">
+                                    <img src={dest.image} alt={dest.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+
+                                    <div className="absolute bottom-6 left-6">
+                                        <div
+                                            onClick={() => navigate('/destinations')}
+                                            className="cursor-pointer bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 p-5 hover:bg-white/20 transition-all"
+                                        >
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <MapPin className="text-orange-400" size={16} />
+                                                <h4 className="text-2xl font-black text-white">{dest.name}</h4>
+                                            </div>
+                                            <p className="text-white/70 text-xs font-medium pl-6">{dest.routes} routes</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Bottom row - Three equal cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+                        {destinations.slice(3, 6).map((dest, idx) => (
+                            <div key={idx} className="group relative overflow-hidden rounded-[2rem] shadow-xl hover:shadow-2xl transition-all h-[240px]">
+                                <img src={dest.image} alt={dest.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+
+                                <div className="absolute bottom-6 left-6">
                                     <div
                                         onClick={() => navigate('/destinations')}
-                                        className="flex items-center gap-2 bg-black/40 backdrop-blur-md p-6 rounded-[2rem] border border-white/10 group-hover:bg-primary/90 transition-colors cursor-pointer"
+                                        className="cursor-pointer bg-black/40 backdrop-blur-md rounded-2xl border border-white/20 p-4 hover:bg-black/50 transition-all"
                                     >
-                                        <MapPin className="text-orange-400 group-hover:text-white" size={24} />
-                                        <div>
-                                            <h4 className="text-2xl font-black text-white">{dest.name}</h4>
-                                            <p className="text-white/70 text-sm font-bold group-hover:text-white/90">{dest.routes} routes available</p>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <MapPin className="text-orange-400" size={14} />
+                                            <h4 className="text-xl font-black text-white">{dest.name}</h4>
                                         </div>
+                                        <p className="text-white/70 text-xs font-medium pl-5 leading-tight">{dest.routes}<br />routes</p>
                                     </div>
                                 </div>
                             </div>

@@ -13,7 +13,7 @@ export default function UserUpcoming() {
         {
             id: 'MEN-2025-001',
             operator: 'Selam Bus',
-            image: '/images/selam_bus.jpg',
+            image: '/images/Enhanced_Bus_Images/Selam_Bus1.jpg',
             from: 'Addis Ababa',
             to: 'Bahir Dar',
             date: 'Dec 15, 2025',
@@ -25,7 +25,7 @@ export default function UserUpcoming() {
         {
             id: 'MEN-2025-002',
             operator: 'Sky Bus',
-            image: '/images/sky_bus.jpg',
+            image: '/images/Enhanced_Bus_Images/Sky_Bus.jpg',
             from: 'Bahir Dar',
             to: 'Addis Ababa',
             date: 'Dec 20, 2025',
@@ -37,7 +37,7 @@ export default function UserUpcoming() {
         {
             id: 'MEN-2025-003',
             operator: 'Abay Bus',
-            image: '/images/abay_bus.jpg', // Placeholder
+            image: '/images/Enhanced_Bus_Images/Abay_Bus.jpg', // Placeholder
             from: 'Addis Ababa',
             to: 'Hawassa',
             date: 'Jan 10, 2026',

@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Eye } from 'lucide-react';
@@ -30,11 +31,13 @@ const MOCK_BOOKINGS = [
 ];
 
 export default function UserBookings() {
+    const navigate = useNavigate();
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <h1 className="text-2xl font-bold">My Bookings</h1>
-                <Button>Book New Trip</Button>
+                <Button onClick={() => navigate('/search')}>Book New Trip</Button>
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">

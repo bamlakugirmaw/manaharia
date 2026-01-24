@@ -56,11 +56,11 @@ export const DESTINATIONS = [
 ];
 
 export const OPERATORS = [
-    { id: "op-1", name: "Selam Bus", rating: 4.8, image: "/images/selam_bus.jpg" },
-    { id: "op-2", name: "Sky Bus", rating: 4.7, image: "/images/sky_bus.jpg" },
-    { id: "op-3", name: "Abay Bus", rating: 4.5, image: "/images/abay_bus.jpg" },
-    { id: "op-4", name: "Golden Bus", rating: 4.6, image: "/images/sky_bus.jpg" }, // Fallback to sky bus style
-    { id: "op-5", name: "Ethio Bus", rating: 4.3, image: "/images/ethio_bus.jpg" },
+    { id: "op-1", name: "Selam Bus", rating: 4.8, image: "/images/Enhanced_Bus_Images/Selam_Bus1.jpg" },
+    { id: "op-2", name: "Sky Bus", rating: 4.7, image: "/images/Enhanced_Bus_Images/Sky_Bus.jpg" },
+    { id: "op-3", name: "Abay Bus", rating: 4.5, image: "/images/Enhanced_Bus_Images/Abay_Bus.jpg" },
+    { id: "op-4", name: "Golden Bus", rating: 4.6, image: "/images/Enhanced_Bus_Images/Golden_Bus.jpg" },
+    { id: "op-5", name: "Ethio Bus", rating: 4.3, image: "/images/Enhanced_Bus_Images/Ethio_Bus.jpg" },
 ];
 
 export const TRIPS = [

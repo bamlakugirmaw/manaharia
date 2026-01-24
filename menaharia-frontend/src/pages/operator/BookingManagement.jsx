@@ -98,17 +98,6 @@ export default function BookingManagement() {
                         }
                     </p>
                 </div>
-                <div className="flex gap-2">
-                    <Button variant="outline" className="gap-2">
-                        <Printer size={16} /> Print
-                    </Button>
-                    <Button variant="outline" className="gap-2">
-                        <Download size={16} /> Export
-                    </Button>
-                    <Button className="gap-2">
-                        <UserPlus size={16} /> Add Passenger
-                    </Button>
-                </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -193,9 +182,6 @@ export default function BookingManagement() {
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                 />
                             </div>
-                            <Button variant="outline" className="gap-2">
-                                <Filter size={16} /> Filter Status
-                            </Button>
                         </div>
 
                         <div className="overflow-x-auto rounded-lg border border-gray-100">

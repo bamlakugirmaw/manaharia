@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Search, Filter, AlertTriangle, CheckCircle, Info, XCircle } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
+import { cn } from '../../lib/utils';
 
 const MOCK_LOGS = [
     { id: 'LOG-9921', event: 'New User Registration', details: 'User account created for bekele@gmail.com', level: 'info', time: '2 mins ago', ip: '197.156.x.x' },
@@ -12,16 +14,21 @@ const MOCK_LOGS = [
 ];
 
 export default function AdminLogs() {
+    const [levelFilter, setLevelFilter] = useState('all');
+
+    const filteredLogs = MOCK_LOGS.filter(log => {
+        if (levelFilter === 'error') {
+            return log.level === 'error';
+        }
+        return true; // 'all' shows everything
+    });
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <div>
                     <h1 className="text-2xl font-bold">System Logs</h1>
                     <p className="text-gray-500">Monitor platform activity and troubleshoot issues.</p>
-                </div>
-                <div className="flex gap-2">
-                    <Button variant="outline">Export Logs</Button>
-                    <Button variant="outline">Log Settings</Button>
                 </div>
             </div>
 
@@ -35,11 +42,32 @@ export default function AdminLogs() {
                             className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                         />
                     </div>
-                    <Button variant="outline" size="icon"><Filter size={18} /></Button>
                 </div>
                 <div className="flex gap-2">
-                    <Badge variant="outline" className="cursor-pointer hover:bg-gray-100">All Levels</Badge>
-                    <Badge variant="outline" className="cursor-pointer text-red-600 border-red-200 hover:bg-red-50">Errors Only</Badge>
+                    <Badge
+                        variant="outline"
+                        className={cn(
+                            "cursor-pointer transition-colors",
+                            levelFilter === 'all'
+                                ? "bg-primary text-white border-primary"
+                                : "hover:bg-gray-100"
+                        )}
+                        onClick={() => setLevelFilter('all')}
+                    >
+                        All Levels
+                    </Badge>
+                    <Badge
+                        variant="outline"
+                        className={cn(
+                            "cursor-pointer transition-colors",
+                            levelFilter === 'error'
+                                ? "bg-red-600 text-white border-red-600"
+                                : "text-red-600 border-red-200 hover:bg-red-50"
+                        )}
+                        onClick={() => setLevelFilter('error')}
+                    >
+                        Errors Only
+                    </Badge>
                 </div>
             </Card>
 
@@ -55,7 +83,7 @@ export default function AdminLogs() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                        {MOCK_LOGS.map((log) => (
+                        {filteredLogs.map((log) => (
                             <tr key={log.id} className="hover:bg-gray-50 transition-colors">
                                 <td className="px-6 py-4">
                                     {log.level === 'info' && <Badge variant="secondary" className="font-bold text-[10px] uppercase tracking-widest px-2 py-0.5"><Info size={10} className="mr-1" /> Info</Badge>}
@@ -69,6 +97,13 @@ export default function AdminLogs() {
                                 <td className="px-6 py-4 text-right font-mono text-[10px] font-bold text-gray-400 uppercase tracking-tighter">{log.ip}</td>
                             </tr>
                         ))}
+                        {filteredLogs.length === 0 && (
+                            <tr>
+                                <td colSpan="5" className="px-6 py-12 text-center text-gray-500">
+                                    No logs found matching your filter.
+                                </td>
+                            </tr>
+                        )}
                     </tbody>
                 </table>
             </div>
