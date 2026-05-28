@@ -30,8 +30,6 @@ const ADMIN_NAV = [
     { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
     { name: 'Manage Operators', href: '/admin/operators', icon: Bus },
     { name: 'Manage Users', href: '/admin/users', icon: Users },
-    { name: 'All Trips', href: '/admin/trips', icon: Map },
-    { name: 'All Bookings', href: '/admin/bookings', icon: Ticket },
     { name: 'Payment Logs', href: '/admin/payments', icon: CreditCard },
     { name: 'System Logs', href: '/admin/logs', icon: Activity },
 ];

@@ -84,7 +84,6 @@ export default function AdminPayments() {
                                 <th className="px-6 py-4 font-bold">Method</th>
                                 <th className="px-6 py-4 font-bold">Date & Time</th>
                                 <th className="px-6 py-4 font-bold">Status</th>
-                                <th className="px-6 py-4 font-bold text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
@@ -119,16 +118,11 @@ export default function AdminPayments() {
                                             {payment.status}
                                         </Badge>
                                     </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <Button variant="ghost" size="icon" className="text-gray-400 hover:text-gray-600" onClick={() => handleViewPayment(payment)}>
-                                            <MoreHorizontal size={16} />
-                                        </Button>
-                                    </td>
                                 </tr>
                             ))}
                             {filteredPayments.length === 0 && (
                                 <tr>
-                                    <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
+                                    <td colSpan="6" className="px-6 py-12 text-center text-gray-500">
                                         No transactions found matching your criteria.
                                     </td>
                                 </tr>

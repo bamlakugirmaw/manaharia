@@ -6,10 +6,10 @@ import { Plus, Bus, Settings, AlertTriangle, X } from 'lucide-react';
 import { Input } from '../../components/ui/Input'; // Assuming Input component exists
 
 const MOCK_FLEET = [
-    { id: 'BUS-101', plate: '3-12345', model: 'Yutong ZK6122', type: 'Luxury', seats: 45, status: 'Active', driver: 'Abebe K.' },
+    { id: 'BUS-101', plate: '3-12345', model: 'Yutong ZK6122', type: 'Standard', seats: 45, status: 'Active', driver: 'Abebe K.' },
     { id: 'BUS-102', plate: '3-67890', model: 'Higer KLQ6129', type: 'Standard', seats: 50, status: 'Active', driver: 'Kebede B.' },
     { id: 'BUS-103', plate: '3-11223', model: 'King Long XMQ', type: 'Standard', seats: 50, status: 'Maintenance', driver: '--' },
-    { id: 'BUS-104', plate: '3-44556', model: 'Yutong ZK6122', type: 'Luxury', seats: 45, status: 'Garage', driver: '--' },
+    { id: 'BUS-104', plate: '3-44556', model: 'Yutong ZK6122', type: 'Standard', seats: 45, status: 'Garage', driver: '--' },
     { id: 'BUS-105', plate: '3-99887', model: 'Higer KLQ6129', type: 'Standard', seats: 50, status: 'Active', driver: 'Mulugeta T.' },
 ];
 
@@ -19,24 +19,36 @@ export default function FleetManagement() {
     const [newBus, setNewBus] = useState({
         plate: '',
         model: '',
-        type: 'Standard',
         seats: '',
         driver: ''
     });
+    const [editingBus, setEditingBus] = useState(null);
 
     const handleAddBus = () => {
         const bus = {
             id: `BUS-${100 + fleet.length + 1}`,
             plate: newBus.plate,
             model: newBus.model,
-            type: newBus.type,
+            type: 'Standard',
             seats: parseInt(newBus.seats) || 0,
             status: 'Active',
             driver: newBus.driver || '--'
         };
         setFleet([...fleet, bus]);
         setIsModalOpen(false);
-        setNewBus({ plate: '', model: '', type: 'Standard', seats: '', driver: '' });
+        setNewBus({ plate: '', model: '', seats: '', driver: '' });
+    };
+
+    const handleSaveEdit = () => {
+        setFleet(fleet.map(b => b.id === editingBus.id ? {
+            ...b,
+            plate: editingBus.plate,
+            model: editingBus.model,
+            seats: parseInt(editingBus.seats) || 0,
+            driver: editingBus.driver || '--',
+            status: editingBus.status
+        } : b));
+        setEditingBus(null);
     };
 
     return (
@@ -103,8 +115,8 @@ export default function FleetManagement() {
                                 <span className="text-gray-700">{bus.model}</span>
                             </div>
                             <div className="flex justify-between items-center">
-                                <span className="text-gray-400">Type</span>
-                                <span className="text-gray-700">{bus.type} ({bus.seats} seats)</span>
+                                <span className="text-gray-400">Capacity</span>
+                                <span className="text-gray-900 font-bold">{bus.seats} seats</span>
                             </div>
                             <div className="flex justify-between items-center">
                                 <span className="text-gray-400">Current Driver</span>
@@ -112,8 +124,13 @@ export default function FleetManagement() {
                             </div>
 
                             <div className="pt-3 flex gap-2">
-                                <Button variant="ghost" className="h-8 text-[10px] font-bold bg-gray-50 text-gray-600 hover:bg-primary hover:text-white rounded-lg transition-colors flex-1">Edit Details</Button>
-                                <Button variant="ghost" className="h-8 text-[10px] font-bold bg-gray-50 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors flex-1">Service History</Button>
+                                <Button 
+                                    variant="ghost" 
+                                    className="h-8 text-[10px] font-bold bg-gray-50 text-gray-600 hover:bg-primary hover:text-white rounded-lg transition-colors w-full"
+                                    onClick={() => setEditingBus(bus)}
+                                >
+                                    Edit Details
+                                </Button>
                             </div>
                         </div>
                     </Card>
@@ -153,20 +170,6 @@ export default function FleetManagement() {
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium text-gray-700">Type</label>
-                                    <select
-                                        className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                                        value={newBus.type}
-                                        onChange={(e) => setNewBus({ ...newBus, type: e.target.value })}
-                                    >
-                                        <option>Standard</option>
-                                        <option>Luxury</option>
-                                        <option>VIP</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
                                     <label className="text-sm font-medium text-gray-700">Seats</label>
                                     <Input
                                         type="number"
@@ -175,18 +178,88 @@ export default function FleetManagement() {
                                         onChange={(e) => setNewBus({ ...newBus, seats: e.target.value })}
                                     />
                                 </div>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-700">Driver</label>
+                                <Input
+                                    placeholder="Optional"
+                                    value={newBus.driver}
+                                    onChange={(e) => setNewBus({ ...newBus, driver: e.target.value })}
+                                />
+                            </div>
+
+                            <Button className="w-full mt-6 bg-primary" onClick={handleAddBus}>
+                                Add Vehicle
+                            </Button>
+                        </div>
+                    </Card>
+                </div>
+            )}
+            {/* Edit Bus Modal */}
+            {editingBus && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <Card className="w-full max-w-md bg-white p-6 relative animate-in fade-in zoom-in duration-200">
+                        <button
+                            onClick={() => setEditingBus(null)}
+                            className="absolute right-4 top-4 text-gray-400 hover:text-gray-600"
+                        >
+                            <X size={20} />
+                        </button>
+
+                        <h2 className="text-xl font-bold mb-1">Edit Bus Details</h2>
+                        <p className="text-sm text-gray-500 mb-6">Modify details for vehicle {editingBus.id}.</p>
+
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-700">Plate Number</label>
+                                <Input
+                                    placeholder="e.g. 3-12345"
+                                    value={editingBus.plate}
+                                    onChange={(e) => setEditingBus({ ...editingBus, plate: e.target.value })}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-700">Model</label>
+                                <Input
+                                    placeholder="e.g. Yutong"
+                                    value={editingBus.model}
+                                    onChange={(e) => setEditingBus({ ...editingBus, model: e.target.value })}
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">Seats</label>
+                                    <Input
+                                        type="number"
+                                        placeholder="e.g. 45"
+                                        value={editingBus.seats}
+                                        onChange={(e) => setEditingBus({ ...editingBus, seats: e.target.value })}
+                                    />
+                                </div>
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-gray-700">Driver</label>
                                     <Input
                                         placeholder="Optional"
-                                        value={newBus.driver}
-                                        onChange={(e) => setNewBus({ ...newBus, driver: e.target.value })}
+                                        value={editingBus.driver}
+                                        onChange={(e) => setEditingBus({ ...editingBus, driver: e.target.value })}
                                     />
                                 </div>
                             </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-700">Status</label>
+                                <select
+                                    className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                    value={editingBus.status}
+                                    onChange={(e) => setEditingBus({ ...editingBus, status: e.target.value })}
+                                >
+                                    <option>Active</option>
+                                    <option>Maintenance</option>
+                                    <option>Garage</option>
+                                </select>
+                            </div>
 
-                            <Button className="w-full mt-6" onClick={handleAddBus}>
-                                Add Vehicle
+                            <Button className="w-full mt-6 bg-primary" onClick={handleSaveEdit}>
+                                Save Changes
                             </Button>
                         </div>
                     </Card>

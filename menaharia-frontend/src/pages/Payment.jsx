@@ -5,6 +5,96 @@ import { Button } from '../components/ui/Button';
 import { CreditCard, Smartphone, Wallet, ArrowRight } from 'lucide-react';
 import ProgressStepper from '../components/booking/ProgressStepper';
 import BookingSummary from '../components/booking/BookingSummary';
+import { TRIPS, OPERATORS } from '../data/mock-db';
+
+const MOCK_BOOKINGS = [
+    {
+        id: 'MEN-2025-12-15-A3B4',
+        ticketId: 'TKT-2025-A3B4',
+        operator: 'Selam Bus',
+        operatorId: 'OP-001',
+        busName: 'Selam Coach',
+        busPlate: '3-AA-55678',
+        route: 'Addis Ababa → Bahir Dar',
+        from: 'Addis Ababa',
+        to: 'Bahir Dar',
+        departure: '08:00 AM',
+        arrival: '04:30 PM',
+        seatNumber: '3-A',
+        date: 'Dec 15, 2025',
+        bookingDate: 'Dec 10, 2025',
+        passengerName: 'Abebe Kebede',
+        passengerPhone: '+251 911 234 567',
+        status: 'confirmed',
+        paymentStatus: 'Paid',
+        amount: 1700,
+        driverContact: '+251 922 111 222',
+    },
+    {
+        id: 'MEN-2025-12-20-B5C6',
+        ticketId: 'TKT-2025-B5C6',
+        operator: 'Sky Bus',
+        operatorId: 'OP-002',
+        busName: 'Sky Express',
+        busPlate: '4-AA-32901',
+        route: 'Bahir Dar → Addis Ababa',
+        from: 'Bahir Dar',
+        to: 'Addis Ababa',
+        departure: '02:00 PM',
+        arrival: '10:30 PM',
+        seatNumber: '5-C',
+        date: 'Dec 20, 2025',
+        bookingDate: 'Dec 18, 2025',
+        passengerName: 'Abebe Kebede',
+        passengerPhone: '+251 911 234 567',
+        status: 'confirmed',
+        paymentStatus: 'Paid',
+        amount: 900,
+        driverContact: '+251 933 444 555',
+    },
+    {
+        id: 'MEN-2025-11-10-X9Y2',
+        ticketId: 'TKT-2025-X9Y2',
+        operator: 'Golden Bus',
+        operatorId: 'OP-003',
+        busName: 'Golden Star Coach',
+        busPlate: '2-AA-11234',
+        route: 'Addis Ababa → Mekelle',
+        from: 'Addis Ababa',
+        to: 'Mekelle',
+        departure: '06:00 AM',
+        arrival: '06:00 PM',
+        seatNumber: '7-B',
+        date: 'Nov 10, 2025',
+        bookingDate: 'Nov 05, 2025',
+        passengerName: 'Abebe Kebede',
+        passengerPhone: '+251 911 234 567',
+        status: 'completed',
+        paymentStatus: 'Paid',
+        amount: 2100,
+        driverContact: null,
+    },
+];
+
+const formatTime12h = (time24) => {
+    if (!time24) return '';
+    const [hoursStr, minutesStr] = time24.split(':');
+    const hours = parseInt(hoursStr, 10);
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12;
+    return `${displayHours.toString().padStart(2, '0')}:${minutesStr} ${ampm}`;
+};
+
+const formatDate = (dateStr) => {
+    if (!dateStr) return '';
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    const year = parts[0];
+    const monthIdx = parseInt(parts[1], 10) - 1;
+    const day = parseInt(parts[2], 10);
+    return `${months[monthIdx]} ${day}, ${year}`;
+};
 
 export default function Payment() {
     const location = useLocation();
@@ -38,6 +128,62 @@ export default function Payment() {
             const dateStr = now.toISOString().split('T')[0];
             const randomId = Math.random().toString(36).substring(2, 6).toUpperCase();
             const bookingId = `MEN-${dateStr}-${randomId}`;
+
+            // Create booking records and store them in localStorage
+            try {
+                const trip = TRIPS.find(t => t.id === tripId);
+                const operator = OPERATORS.find(op => op.id === trip?.operatorId);
+                const operatorName = operator ? operator.name : 'Unknown Operator';
+                const busName = `${operatorName} Coach`;
+                const route = trip ? `${trip.from} → ${trip.to}` : '';
+
+                const newBookings = (selectedSeats || []).map((seat) => {
+                    const suffix = selectedSeats.length > 1 ? `-${seat}` : '';
+                    const seatBookingId = `${bookingId}${suffix}`;
+                    const seatTicketId = `TKT-${dateStr.replace(/-/g, '')}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+
+                    return {
+                        id: seatBookingId,
+                        ticketId: seatTicketId,
+                        operator: operatorName,
+                        operatorId: trip?.operatorId || 'OP-001',
+                        busName: busName,
+                        busPlate: `3-AA-${Math.floor(10000 + Math.random() * 90000)}`,
+                        route: route,
+                        from: trip?.from || '',
+                        to: trip?.to || '',
+                        departure: formatTime12h(trip?.departureTime),
+                        arrival: formatTime12h(trip?.arrivalTime),
+                        seatNumber: seat,
+                        date: formatDate(trip?.date),
+                        bookingDate: formatDate(dateStr),
+                        passengerName: passengerDetails?.fullName || 'Abebe Kebede',
+                        passengerPhone: passengerDetails?.phone || '+251 911 234 567',
+                        status: 'confirmed',
+                        paymentStatus: 'Paid',
+                        amount: trip?.price || 0,
+                        driverContact: '+251 922 111 222',
+                    };
+                });
+
+                let currentBookings = [];
+                const local = localStorage.getItem('userBookings');
+                if (local) {
+                    try {
+                        currentBookings = JSON.parse(local);
+                    } catch (e) {
+                        console.error(e);
+                        currentBookings = [...MOCK_BOOKINGS];
+                    }
+                } else {
+                    currentBookings = [...MOCK_BOOKINGS];
+                }
+
+                const updatedBookings = [...newBookings, ...currentBookings];
+                localStorage.setItem('userBookings', JSON.stringify(updatedBookings));
+            } catch (err) {
+                console.error('Error saving booking to localStorage:', err);
+            }
 
             navigate(`/booking/ticket/${bookingId}`, {
                 state: {

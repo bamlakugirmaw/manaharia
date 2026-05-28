@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
-import { Download, Search, Filter, Calendar, CreditCard, ChevronDown } from 'lucide-react';
+import { Download, Search, Filter, Calendar, CreditCard, ChevronDown, X, Receipt } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 export default function OperatorPayouts() {
@@ -12,6 +12,7 @@ export default function OperatorPayouts() {
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [selectedStart, setSelectedStart] = useState({ month: 'may', day: 12 });
     const [selectedEnd, setSelectedEnd] = useState({ month: 'june', day: 20 });
+    const [selectedPayout, setSelectedPayout] = useState(null);
 
     // Mock payout data
     const payouts = [
@@ -354,7 +355,12 @@ export default function OperatorPayouts() {
                                             </Badge>
                                         </td>
                                         <td className="px-6 py-4 text-right">
-                                            <Button variant="ghost" size="sm" className="text-primary hover:bg-blue-50">
+                                            <Button 
+                                                variant="ghost" 
+                                                size="sm" 
+                                                className="text-primary hover:bg-blue-50"
+                                                onClick={() => setSelectedPayout(payout)}
+                                            >
                                                 Details
                                             </Button>
                                         </td>
@@ -382,6 +388,86 @@ export default function OperatorPayouts() {
                     </div>
                 </div>
             </Card>
+            {selectedPayout && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div 
+                        className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-gray-100 animate-in fade-in zoom-in-95 duration-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Header */}
+                        <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-6">
+                            <div className="flex items-center gap-2">
+                                <Receipt className="text-gray-400" size={20} />
+                                <h3 className="font-bold text-lg text-gray-900">Payout Details</h3>
+                            </div>
+                            <button 
+                                onClick={() => setSelectedPayout(null)} 
+                                className="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-lg transition-colors"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Amount & Status Badge */}
+                        <div className="text-center py-6 bg-gray-50 rounded-2xl mb-6 flex flex-col items-center justify-center">
+                            <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">Total Payout Amount</p>
+                            <h4 className="text-3xl font-extrabold text-gray-900 mb-3">ETB {selectedPayout.amount.toLocaleString()}</h4>
+                            <Badge className={`
+                                ${selectedPayout.status === 'Completed' ? 'bg-green-100 text-green-700' :
+                                    selectedPayout.status === 'Processing' ? 'bg-blue-100 text-blue-700' :
+                                        'bg-orange-100 text-orange-700'}
+                            `}>
+                                {selectedPayout.status}
+                            </Badge>
+                        </div>
+
+                        {/* Grid Details */}
+                        <div className="space-y-4 text-sm mb-6">
+                            <div className="flex justify-between items-center py-1">
+                                <span className="text-gray-400 font-medium">Payout ID</span>
+                                <span className="font-mono font-bold text-gray-900">{selectedPayout.id}</span>
+                            </div>
+                            <div className="flex justify-between items-center py-1">
+                                <span className="text-gray-400 font-medium">Date Initiated</span>
+                                <span className="font-semibold text-gray-800">{selectedPayout.date}</span>
+                            </div>
+                            <div className="flex justify-between items-center py-1">
+                                <span className="text-gray-400 font-medium">Transfer Method</span>
+                                <span className="font-semibold text-gray-800">{selectedPayout.method}</span>
+                            </div>
+                            <div className="flex justify-between items-center py-1">
+                                <span className="text-gray-400 font-medium">Bank/Wallet Provider</span>
+                                <span className="font-semibold text-gray-800">{selectedPayout.bank}</span>
+                            </div>
+                            <div className="flex justify-between items-center py-1">
+                                <span className="text-gray-400 font-medium">Account Details</span>
+                                <span className="font-semibold text-gray-800">{selectedPayout.account}</span>
+                            </div>
+                            <div className="flex justify-between items-center py-1">
+                                <span className="text-gray-400 font-medium">Transaction Reference</span>
+                                <span className="font-mono text-gray-600 text-xs">TXN-{selectedPayout.id.split('-')[2] || '9834710'}</span>
+                            </div>
+                        </div>
+
+                        {/* Footer Buttons */}
+                        <div className="flex gap-3">
+                            <Button 
+                                variant="outline" 
+                                className="flex-1 flex items-center justify-center gap-2 py-2.5 font-bold text-xs"
+                                onClick={() => setSelectedPayout(null)}
+                            >
+                                Close
+                            </Button>
+                            <Button 
+                                className="flex-1 bg-primary hover:bg-primary/95 text-white flex items-center justify-center gap-2 py-2.5 font-bold text-xs shadow-sm"
+                                onClick={() => alert("Downloading payout details receipt...")}
+                            >
+                                <Download size={14} /> Download Receipt
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

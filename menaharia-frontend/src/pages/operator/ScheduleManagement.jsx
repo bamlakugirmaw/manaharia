@@ -6,9 +6,9 @@ import { Badge } from '../../components/ui/Badge';
 import { Plus, Edit2, Trash2, Search, Filter } from 'lucide-react';
 
 const MOCK_SCHEDULES = [
-    { id: 1, route: 'Addis Ababa - Bahir Dar', date: '2025-12-15', time: '06:00 AM', bus: 'Bus 101 (Luxury)', price: 1700, status: 'Active', seats: 45, booked: 20 },
-    { id: 2, route: 'Bahir Dar - Addis Ababa', date: '2025-12-16', time: '06:00 AM', bus: 'Bus 102 (Standard)', price: 900, status: 'Active', seats: 50, booked: 50 },
-    { id: 3, route: 'Addis Ababa - Hawassa', date: '2025-12-15', time: '01:00 PM', bus: 'Bus 105 (Standard)', price: 800, status: 'Cancelled', seats: 50, booked: 0 },
+    { id: 1, route: 'Addis Ababa - Bahir Dar', date: '2025-12-15', time: '06:00 AM', bus: 'Bus 101', price: 1700, status: 'Active', seats: 45, booked: 20 },
+    { id: 2, route: 'Bahir Dar - Addis Ababa', date: '2025-12-16', time: '06:00 AM', bus: 'Bus 102', price: 900, status: 'Active', seats: 50, booked: 50 },
+    { id: 3, route: 'Addis Ababa - Hawassa', date: '2025-12-15', time: '01:00 PM', bus: 'Bus 105', price: 800, status: 'Cancelled', seats: 50, booked: 0 },
 ];
 
 export default function ScheduleManagement() {
@@ -76,7 +76,6 @@ export default function ScheduleManagement() {
                             <th className="px-6 py-4">Date & Time</th>
                             <th className="px-6 py-4">Bus Details</th>
                             <th className="px-6 py-4">Price (ETB)</th>
-                            <th className="px-6 py-4">Availability</th>
                             <th className="px-6 py-4">Status</th>
                             <th className="px-6 py-4 text-right">Actions</th>
                         </tr>
@@ -91,17 +90,7 @@ export default function ScheduleManagement() {
                                 </td>
                                 <td className="px-6 py-4 font-medium text-xs">{item.bus}</td>
                                 <td className="px-6 py-4 font-bold text-gray-900">{item.price.toLocaleString()}</td>
-                                <td className="px-6 py-4">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-16 bg-gray-100 rounded-full h-1">
-                                            <div
-                                                className="bg-primary h-1 rounded-full"
-                                                style={{ width: `${(item.booked / item.seats) * 100}%` }}
-                                            />
-                                        </div>
-                                        <span className="text-[10px] text-gray-400 font-bold">{item.seats - item.booked} left</span>
-                                    </div>
-                                </td>
+
                                 <td className="px-6 py-4">
                                     <Badge variant={item.status === 'Active' ? 'success' : 'destructive'} className="text-[9px] uppercase tracking-wider font-bold">
                                         {item.status}
@@ -147,8 +136,8 @@ export default function ScheduleManagement() {
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Select Bus</label>
                         <select className="w-full rounded-md border border-gray-300 p-2 text-sm focus:ring-primary focus:border-primary">
-                            <option>Bus 101 (Luxury - 45 Seats)</option>
-                            <option>Bus 102 (Standard - 50 Seats)</option>
+                            <option>Bus 101 (45 Seats)</option>
+                            <option>Bus 102 (50 Seats)</option>
                         </select>
                     </div>
 

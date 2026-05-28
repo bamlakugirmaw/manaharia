@@ -308,13 +308,36 @@ export default function LandingPage() {
                         </div>
                     </div>
 
-                    <div className="mt-24 text-center">
-                        <Button
-                            onClick={() => navigate('/search')}
-                            className="px-12 py-7 rounded-3xl bg-gradient-to-r from-orange-400 to-pink-500 font-black text-xl shadow-2xl shadow-orange-500/30 hover:scale-105 active:scale-95 transition-all outline-none border-none"
-                        >
-                            Start Booking Now <Search className="ml-3" size={24} />
-                        </Button>
+                    {/* Journey Call-to-Action Banner */}
+                    <div 
+                        className="mt-24 max-w-5xl mx-auto rounded-[2.5rem] border border-slate-100 p-8 md:p-14 shadow-[0_15px_40px_rgba(0,0,0,0.02)] grid grid-cols-1 md:grid-cols-12 gap-8 relative overflow-hidden bg-cover bg-center md:bg-[right_center]"
+                        style={{ backgroundImage: "url('/images/cta_banner_bg.png')" }}
+                    >
+                        {/* Soft ambient overlay to ensure maximum contrast */}
+                        <div className="absolute inset-0 bg-gradient-to-r from-white/40 via-white/10 to-transparent pointer-events-none" />
+
+                        {/* Text and Button content on the left 7 columns to clear the bus on the right */}
+                        <div className="md:col-span-7 flex flex-col justify-center space-y-6 text-center md:text-left z-10 relative">
+                            <div className="space-y-2">
+                                <h3 className="text-3xl md:text-[38px] font-black text-indigo-950 tracking-tight leading-tight">
+                                    Ready to start your journey?
+                                </h3>
+                                <p className="text-sm md:text-base font-bold text-slate-600">
+                                    Book bus tickets across Ethiopia in minutes.
+                                </p>
+                            </div>
+                            <div className="flex justify-center md:justify-start">
+                                <Button
+                                    onClick={() => navigate('/routes')}
+                                    className="h-14 px-10 rounded-full bg-gradient-to-r from-orange-400 to-pink-500 font-extrabold text-base tracking-wide shadow-lg shadow-pink-500/25 hover:scale-105 active:scale-95 transition-all outline-none border-none flex items-center justify-center gap-2 w-full sm:w-auto"
+                                >
+                                    Start Booking Now <ArrowRight className="ml-2 w-5 h-5 shrink-0" />
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Empty spacer column on the right 5 columns for the bus graphic */}
+                        <div className="hidden md:block md:col-span-5" />
                     </div>
                 </div>
             </section>

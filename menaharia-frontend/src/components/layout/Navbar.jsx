@@ -14,7 +14,7 @@ export default function Navbar() {
     const location = useLocation();
 
     const navLinks = [
-        { name: 'Routes', href: '/routes' },
+        { name: 'Routes', href: '/search' },
         { name: 'Operators', href: '/operators' },
         { name: 'Destinations', href: '/destinations' },
         { name: 'Help', href: '/help' },

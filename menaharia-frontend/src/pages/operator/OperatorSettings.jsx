@@ -1,11 +1,11 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Building, Phone, Mail, CreditCard, Lock, Upload, Check } from 'lucide-react';
 
 export default function OperatorSettings() {
     const fileInputRef = useRef(null);
-    const [logo, setLogo] = useState(null);
+    const [logo, setLogo] = useState(() => localStorage.getItem('operatorLogo') || null);
     
     // States for actions
     const [savingProfile, setSavingProfile] = useState(false);
@@ -21,12 +21,19 @@ export default function OperatorSettings() {
     const handleLogoUpload = (e) => {
         const file = e.target.files?.[0];
         if (file) {
-            setLogo(URL.createObjectURL(file));
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const base64data = reader.result;
+                setLogo(base64data);
+                localStorage.setItem('operatorLogo', base64data);
+            };
+            reader.readAsDataURL(file);
         }
     };
 
     const handleLogoRemove = () => {
         setLogo(null);
+        localStorage.removeItem('operatorLogo');
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
@@ -66,11 +73,8 @@ export default function OperatorSettings() {
 
     return (
         <div className="space-y-8 max-w-4xl mx-auto">
-            <div>
-                <h1 className="text-2xl font-bold">Company Profile & Settings</h1>
-                <p className="text-gray-500">Manage your organization details and preferences.</p>
-            </div>
-
+            {/* Header text removed as per request */}
+            
             {/* Profile Header */}
             <Card className="p-6 border-none shadow-sm flex flex-col md:flex-row items-center gap-6">
                 <div className="w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center text-primary text-2xl font-bold border-4 border-white shadow-sm overflow-hidden">

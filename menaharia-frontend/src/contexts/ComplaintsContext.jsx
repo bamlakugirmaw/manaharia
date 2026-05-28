@@ -46,7 +46,7 @@ const INITIAL_COMPLAINTS = [
     {
         id: 'CMP-002',
         tripId: 'MEN-2025-12-15-A3B4',
-        busName: 'Selam VIP Coach',
+        busName: 'Selam Coach',
         operatorName: 'Selam Bus',
         operatorId: 'OP-001',
         seatNumber: '3-A',
@@ -63,7 +63,7 @@ const INITIAL_COMPLAINTS = [
                 id: 1,
                 sender: 'user',
                 senderName: 'Abebe Kebede',
-                text: 'AC is not working properly on this VIP bus. Please resolve.',
+                text: 'AC is not working properly on this bus. Please resolve.',
                 time: '10:30 AM',
             }
         ]

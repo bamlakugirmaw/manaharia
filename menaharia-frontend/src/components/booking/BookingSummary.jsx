@@ -1,5 +1,5 @@
 import React from 'react';
-import { MapPin, Calendar, Clock, AlertCircle } from 'lucide-react';
+import { MapPin, Calendar, Clock, ShieldCheck } from 'lucide-react';
 import { TRIPS, OPERATORS } from '../../data/mock-db';
 
 export default function BookingSummary({ tripId, selectedSeats = [], showEncryption = false }) {
@@ -23,25 +23,24 @@ export default function BookingSummary({ tripId, selectedSeats = [], showEncrypt
     const total = subtotal + serviceFee + processingFee;
 
     return (
-        <div className="bg-white rounded-2xl shadow-sm p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-6">Booking Summary</h3>
+        <div className="bg-white rounded-[2rem] border border-slate-100 shadow-[0_8px_30px_rgba(0,0,0,0.02)] p-8">
+            <h3 className="text-2xl font-black text-indigo-950 mb-6 tracking-tight">Booking Summary</h3>
 
             {/* Operator Info */}
-            <div className="mb-6">
-                <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-bold text-base text-gray-900">{operator?.name || 'Selam Bus'}</h4>
-                    <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded">VIP</span>
+            <div className="mb-6 space-y-4">
+                <div>
+                    <h4 className="font-black text-lg text-slate-800">{operator?.name || 'Sky Bus'}</h4>
                 </div>
 
                 {/* Route */}
-                <div className="flex items-start gap-2 text-sm text-gray-600 mb-2">
-                    <MapPin className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                <div className="flex items-start gap-3 text-sm font-semibold text-slate-600">
+                    <MapPin className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
                     <span>Route: {trip.from} → {trip.to}</span>
                 </div>
 
                 {/* Date */}
-                <div className="flex items-start gap-2 text-sm text-gray-600 mb-2">
-                    <Calendar className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                <div className="flex items-start gap-3 text-sm font-semibold text-slate-600">
+                    <Calendar className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
                     <span>Date: {new Date(trip.date).toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
@@ -50,68 +49,78 @@ export default function BookingSummary({ tripId, selectedSeats = [], showEncrypt
                 </div>
 
                 {/* Departure Time */}
-                <div className="flex items-start gap-2 text-sm text-gray-600">
-                    <Clock className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                <div className="flex items-start gap-3 text-sm font-semibold text-slate-600">
+                    <Clock className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
                     <span>Departure: {trip.departureTime}</span>
                 </div>
             </div>
 
+            <div className="border-t border-slate-100 my-6" />
+
             {/* Selected Seats */}
             <div className="mb-6">
-                <div className="flex items-center gap-2 mb-3">
-                    <div className="w-5 h-5 bg-[#0EA5E9] rounded flex items-center justify-center">
-                        <span className="text-white text-xs font-bold">{seatsToDisplay.length}</span>
+                <div className="flex items-center gap-3 mb-4">
+                    <div className="w-7 h-7 bg-blue-600 text-white rounded-lg flex items-center justify-center font-black text-xs shadow-md shadow-blue-600/10">
+                        {seatsToDisplay.length}
                     </div>
-                    <h5 className="font-bold text-base text-gray-900">Selected Seats</h5>
+                    <h5 className="font-black text-base text-indigo-950">Selected Seats</h5>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-3">
                     {seatsToDisplay.map((seat, index) => (
-                        <div key={index} className="flex justify-between items-center bg-gray-50 rounded-lg p-3">
-                            <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 bg-[#0EA5E9] text-white rounded-lg flex items-center justify-center font-bold text-xs">
+                        <div key={index} className="flex justify-between items-center border border-slate-100 bg-[#F8FAFC]/60 rounded-2xl p-4">
+                            <div className="flex items-center">
+                                <div className="w-10 h-10 bg-blue-600 text-white rounded-xl flex items-center justify-center font-black text-xs shadow-md shadow-blue-600/10">
                                     {seat}
                                 </div>
-                                <span className="text-sm font-medium text-gray-700">Seat {seat}</span>
+                                <span className="text-sm font-extrabold text-slate-700 ml-3">Seat {seat}</span>
                             </div>
-                            <span className="font-bold text-sm text-gray-900">ETB<br />{pricePerSeat}</span>
+                            <div className="text-right">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">ETB</span>
+                                <span className="text-sm font-black text-slate-800 block">{pricePerSeat}</span>
+                            </div>
                         </div>
                     ))}
                 </div>
             </div>
 
-            {/* Price Breakdown */}
-            <div className="border-t border-gray-200 pt-4 mb-4">
-                <div className="space-y-2 mb-3">
-                    <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Subtotal ({seatsToDisplay.length} {seatsToDisplay.length === 1 ? 'seat' : 'seats'})</span>
-                        <span className="font-semibold text-gray-900">ETB {subtotal}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Service Fee</span>
-                        <span className="font-semibold text-[#0EA5E9]">Free</span>
-                    </div>
-                </div>
+            <div className="border-t border-slate-100 my-6" />
 
-                {/* Total */}
-                <div className="border-t border-gray-200 pt-3">
-                    <div className="flex justify-between items-center">
-                        <span className="font-bold text-base text-gray-900">Total Amount</span>
-                        <div className="text-right">
-                            <div className="text-2xl font-bold text-gray-900">{total}</div>
-                            <div className="text-xs text-gray-500">ETB</div>
-                        </div>
-                    </div>
+            {/* Price Breakdown */}
+            <div className="space-y-4 mb-6">
+                <div className="flex justify-between items-center text-sm">
+                    <span className="text-slate-400 font-bold text-xs uppercase tracking-wider">Subtotal ({seatsToDisplay.length} seat{seatsToDisplay.length > 1 ? 's' : ''})</span>
+                    <span className="font-black text-slate-800">ETB {subtotal}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                    <span className="text-slate-400 font-bold text-xs uppercase tracking-wider">Service Fee</span>
+                    <span className="font-black text-emerald-600">Free</span>
+                </div>
+            </div>
+
+            <div className="border-t border-slate-100 my-6" />
+
+            {/* Total */}
+            <div className="flex justify-between items-center mb-6">
+                <span className="font-black text-base text-indigo-950">Total Amount</span>
+                <div className="flex items-baseline">
+                    <span className="text-sm font-bold text-blue-600 mr-2">ETB</span>
+                    <span className="text-3xl font-black text-blue-600">{total}</span>
                 </div>
             </div>
 
             {/* Cancellation Policy */}
-            <div className="bg-gray-50 rounded-lg p-3">
-                <div className="flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
-                    <div className="text-xs text-gray-600">
-                        <p className="font-semibold mb-1">Cancellation Policy</p>
-                        <p>Free cancellation up to 24 hours before departure. 50% refund within 24 hours.</p>
-                    </div>
+            <div className="bg-[#F8FAFC] border border-slate-100 rounded-2xl p-5 flex items-start gap-4">
+                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200/40">
+                    <ShieldCheck className="w-5 h-5 text-slate-500" />
+                </div>
+                <div>
+                    <h4 className="font-extrabold text-sm text-indigo-950 mb-1">Cancellation Policy</h4>
+                    <p className="text-xs text-slate-500 leading-relaxed font-semibold">
+                        Free cancellation up to 24 hours before departure.
+                    </p>
+                    <p className="text-xs text-slate-500 leading-relaxed font-semibold mt-0.5">
+                        50% refund within 24 hours.
+                    </p>
                 </div>
             </div>
         </div>

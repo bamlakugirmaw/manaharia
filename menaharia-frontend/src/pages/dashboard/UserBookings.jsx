@@ -18,7 +18,7 @@ const MOCK_BOOKINGS = [
         ticketId: 'TKT-2025-A3B4',
         operator: 'Selam Bus',
         operatorId: 'OP-001',
-        busName: 'Selam VIP Coach',
+        busName: 'Selam Coach',
         busPlate: '3-AA-55678',
         route: 'Addis Ababa → Bahir Dar',
         from: 'Addis Ababa',
@@ -122,6 +122,19 @@ function InfoTile({ icon: Icon, label, value, accent }) {
 export default function UserBookings() {
     const navigate = useNavigate();
     const { complaints, addComplaint, addMessage } = useComplaints();
+
+    const [bookings, setBookings] = useState(() => {
+        const local = localStorage.getItem('userBookings');
+        if (local) {
+            try {
+                return JSON.parse(local);
+            } catch (e) {
+                console.error(e);
+            }
+        }
+        localStorage.setItem('userBookings', JSON.stringify(MOCK_BOOKINGS));
+        return MOCK_BOOKINGS;
+    });
 
     const [selectedBooking, setSelectedBooking] = useState(null);
     const [showChat, setShowChat] = useState(false);
@@ -256,7 +269,7 @@ export default function UserBookings() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                        {MOCK_BOOKINGS.map(booking => (
+                        {bookings.map(booking => (
                             <tr key={booking.id} className="hover:bg-gray-50 transition-colors">
                                 <td className="px-6 py-4 font-mono text-gray-500 text-xs">{booking.id}</td>
                                 <td className="px-6 py-4 font-medium">{booking.operator}</td>

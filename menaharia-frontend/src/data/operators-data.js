@@ -19,10 +19,10 @@ export const OPERATORS = [
         about: 'Selam Bus is one of Ethiopia\'s most trusted transport operators, serving passengers since 1998. We pride ourselves on punctuality, comfort, and safety.',
         safetyInfo: 'All our buses undergo regular maintenance checks. Our drivers are professionally trained and certified.',
         upcomingTrips: [
-            { id: 'trip-1', route: 'Addis Ababa → Bahir Dar', departure: '06:00', busType: 'VIP', seatsLeft: 12, price: 800 },
+            { id: 'trip-1', route: 'Addis Ababa → Bahir Dar', departure: '06:00', busType: 'Standard', seatsLeft: 12, price: 800 },
             { id: 'trip-6', route: 'Addis Ababa → Jimma', departure: '07:00', busType: 'Standard', seatsLeft: 20, price: 550 },
             { id: 'trip-8', route: 'Addis Ababa → Hawassa', departure: '06:30', busType: 'Standard', seatsLeft: 18, price: 450 },
-            { id: 'trip-10', route: 'Bahir Dar → Addis Ababa', departure: '06:00', busType: 'VIP', seatsLeft: 20, price: 800 }
+            { id: 'trip-10', route: 'Bahir Dar → Addis Ababa', departure: '06:00', busType: 'Standard', seatsLeft: 20, price: 800 }
         ]
     },
     {
@@ -44,7 +44,7 @@ export const OPERATORS = [
         safetyInfo: 'GPS-tracked buses with emergency response systems. All drivers undergo annual safety training.',
         upcomingTrips: [
             { id: 'trip-2', route: 'Addis Ababa → Bahir Dar', departure: '09:30', busType: 'Standard', seatsLeft: 8, price: 650 },
-            { id: 'trip-9', route: 'Addis Ababa → Hawassa', departure: '08:00', busType: 'VIP', seatsLeft: 7, price: 500 }
+            { id: 'trip-9', route: 'Addis Ababa → Hawassa', departure: '08:00', busType: 'Standard', seatsLeft: 7, price: 500 }
         ]
     },
     {
@@ -86,8 +86,8 @@ export const OPERATORS = [
         about: 'Zemen Bus has been serving southern routes for over 20 years. Known for reliability and comfortable journeys.',
         safetyInfo: 'All buses equipped with seat belts and first aid kits. Regular driver training programs.',
         upcomingTrips: [
-            { id: 'trip-3', route: 'Addis Ababa → Bahir Dar', departure: '10:00', busType: 'Luxury', seatsLeft: 2, price: 900 },
-            { id: 'trip-7', route: 'Addis Ababa → Jimma', departure: '08:30', busType: 'VIP', seatsLeft: 10, price: 600 }
+            { id: 'trip-3', route: 'Addis Ababa → Bahir Dar', departure: '10:00', busType: 'Standard', seatsLeft: 2, price: 900 },
+            { id: 'trip-7', route: 'Addis Ababa → Jimma', departure: '08:30', busType: 'Standard', seatsLeft: 10, price: 600 }
         ]
     },
     {
@@ -108,7 +108,7 @@ export const OPERATORS = [
         about: 'Sheger Bus offers affordable travel options with a focus on customer satisfaction. Modern fleet with competitive pricing.',
         safetyInfo: 'Comprehensive insurance coverage. Regular vehicle maintenance and safety inspections.',
         upcomingTrips: [
-            { id: 'trip-4', route: 'Addis Ababa → Mekelle', departure: '05:00', busType: 'VIP', seatsLeft: 5, price: 1200 }
+            { id: 'trip-4', route: 'Addis Ababa → Mekelle', departure: '05:00', busType: 'Standard', seatsLeft: 5, price: 1200 }
         ]
     },
     {
@@ -148,7 +148,7 @@ export const OPERATORS = [
         startingPrice: 680,
         badges: ['Verified Operator', 'QR Ticketing'],
         about: 'Golden Bus focuses on northern heritage routes, connecting travelers to Ethiopia\'s historic sites with premium service.',
-        safetyInfo: 'Premium safety standards. Well-maintained luxury fleet with modern amenities.',
+        safetyInfo: 'Premium safety standards. Well-maintained fleet with modern amenities.',
         upcomingTrips: [
             // No matching trips in current mock data
         ]

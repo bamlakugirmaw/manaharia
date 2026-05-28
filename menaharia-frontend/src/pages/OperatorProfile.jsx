@@ -85,7 +85,6 @@ export default function OperatorProfile() {
                                             <tr>
                                                 <th className="text-left py-4 px-6 text-xs font-black text-gray-600 uppercase tracking-wider">Route</th>
                                                 <th className="text-left py-4 px-6 text-xs font-black text-gray-600 uppercase tracking-wider">Departure</th>
-                                                <th className="text-left py-4 px-6 text-xs font-black text-gray-600 uppercase tracking-wider">Bus Type</th>
                                                 <th className="text-left py-4 px-6 text-xs font-black text-gray-600 uppercase tracking-wider">Seats Left</th>
                                                 <th className="text-left py-4 px-6 text-xs font-black text-gray-600 uppercase tracking-wider">Price</th>
                                                 <th className="text-left py-4 px-6 text-xs font-black text-gray-600 uppercase tracking-wider">Action</th>
@@ -105,11 +104,6 @@ export default function OperatorProfile() {
                                                             <Clock className="w-4 h-4 text-gray-400" />
                                                             <span className="font-bold text-gray-700 text-sm">{trip.departure}</span>
                                                         </div>
-                                                    </td>
-                                                    <td className="py-4 px-6">
-                                                        <Badge className={`${getBusTypeColor(trip.busType)} px-3 py-1 text-xs font-bold`}>
-                                                            {trip.busType}
-                                                        </Badge>
                                                     </td>
                                                     <td className="py-4 px-6">
                                                         <div className="flex items-center gap-2">
@@ -148,9 +142,6 @@ export default function OperatorProfile() {
                                                     <MapPin className="w-4 h-4 text-primary flex-shrink-0" />
                                                     <span className="font-bold text-gray-900 text-sm">{trip.route}</span>
                                                 </div>
-                                                <Badge className={`${getBusTypeColor(trip.busType)} px-2 py-1 text-xs font-bold`}>
-                                                    {trip.busType}
-                                                </Badge>
                                             </div>
                                             <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
                                                 <div className="flex items-center gap-2">

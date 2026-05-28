@@ -97,19 +97,6 @@ export default function RouteDetail() {
                 {/* Filters */}
                 <div className="flex items-center gap-4 mb-6 flex-wrap">
                     <div className="flex items-center gap-2">
-                        <label className="text-xs font-bold text-gray-700">Bus Type:</label>
-                        <select
-                            value={busTypeFilter}
-                            onChange={(e) => setBusTypeFilter(e.target.value)}
-                            className="h-10 px-4 bg-white border border-gray-200 rounded-xl focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all text-sm font-medium"
-                        >
-                            <option value="all">All Types</option>
-                            <option value="Standard">Standard</option>
-                            <option value="VIP">VIP</option>
-                            <option value="Luxury">Luxury</option>
-                        </select>
-                    </div>
-                    <div className="flex items-center gap-2">
                         <label className="text-xs font-bold text-gray-700">Sort By:</label>
                         <select
                             value={sortBy}
@@ -137,7 +124,6 @@ export default function RouteDetail() {
                                 <tr>
                                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Operator</th>
                                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Departure</th>
-                                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Bus Type</th>
                                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Seats Left</th>
                                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Price</th>
                                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Action</th>
@@ -165,14 +151,7 @@ export default function RouteDetail() {
                                                     <span className="font-semibold text-gray-900">{trip.departureTime}</span>
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4">
-                                                <span className={`px-3 py-1 rounded-full text-xs font-bold ${trip.busType === 'Luxury' ? 'bg-purple-100 text-purple-700' :
-                                                    trip.busType === 'VIP' ? 'bg-blue-100 text-blue-700' :
-                                                        'bg-gray-100 text-gray-700'
-                                                    }`}>
-                                                    {trip.busType}
-                                                </span>
-                                            </td>
+
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-2">
                                                     <Users className="w-4 h-4 text-gray-400" />
@@ -219,12 +198,7 @@ export default function RouteDetail() {
                                                 <p className="text-xs text-gray-400">★ {operator?.rating}</p>
                                             </div>
                                         </div>
-                                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${trip.busType === 'Luxury' ? 'bg-purple-100 text-purple-700' :
-                                            trip.busType === 'VIP' ? 'bg-blue-100 text-blue-700' :
-                                                'bg-gray-100 text-gray-700'
-                                            }`}>
-                                            {trip.busType}
-                                        </span>
+
                                     </div>
                                     <div className="grid grid-cols-2 gap-4 mb-4">
                                         <div>

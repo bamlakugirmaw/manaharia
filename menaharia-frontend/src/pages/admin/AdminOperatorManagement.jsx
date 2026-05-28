@@ -51,7 +51,6 @@ const MOCK_OPERATORS = [
 export default function AdminOperatorManagement() {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedOp, setSelectedOp] = useState(null);
-    const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [operators, setOperators] = useState(MOCK_OPERATORS);
     const [newOperator, setNewOperator] = useState({
@@ -60,6 +59,10 @@ export default function AdminOperatorManagement() {
         email: '',
         phone: ''
     });
+    
+    // States for Edit Operator
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editOperatorData, setEditOperatorData] = useState(null);
 
     const filteredOperators = operators.filter(op =>
         op.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -68,7 +71,6 @@ export default function AdminOperatorManagement() {
 
     const handleViewDetails = (op) => {
         setSelectedOp(op);
-        setIsDetailModalOpen(true);
     };
 
     const handleAddOperator = () => {
@@ -89,6 +91,190 @@ export default function AdminOperatorManagement() {
         setIsAddModalOpen(false);
         setNewOperator({ name: '', contactName: '', email: '', phone: '' });
     };
+
+    const handleSaveEdit = () => {
+        setOperators(operators.map(op => op.id === editOperatorData.id ? editOperatorData : op));
+        setSelectedOp(editOperatorData);
+        setIsEditModalOpen(false);
+    };
+
+    if (selectedOp) {
+        return (
+            <div className="space-y-6">
+                {/* Profile Header Controls */}
+                <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                    <Button variant="ghost" onClick={() => setSelectedOp(null)} className="font-bold flex items-center gap-2">
+                        ← Back to Operators List
+                    </Button>
+                    <div className="flex gap-2">
+                        <Button 
+                            className="bg-primary hover:bg-primary/95 text-white font-bold"
+                            onClick={() => {
+                                setEditOperatorData(selectedOp);
+                                setIsEditModalOpen(true);
+                            }}
+                        >
+                            Edit Operator
+                        </Button>
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-3xl p-8 border border-gray-100 shadow-[0_8px_30px_rgba(0,0,0,0.02)] space-y-6">
+                    <div className="flex items-center gap-4 p-5 bg-purple-50/50 border border-purple-100 rounded-2xl">
+                        <div className="w-16 h-16 rounded-2xl bg-white shadow-sm flex items-center justify-center text-purple-600 overflow-hidden">
+                            {selectedOp.logo ? (
+                                <img src={selectedOp.logo} alt={selectedOp.name} className="w-full h-full object-cover" />
+                            ) : (
+                                <Bus size={32} />
+                            )}
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-bold text-gray-900">{selectedOp.name}</h3>
+                            <div className="flex items-center gap-2 mt-1">
+                                <span className="text-xs text-gray-500">ID: {selectedOp.id}</span>
+                                <span className="text-gray-300">•</span>
+                                <span className="text-xs text-blue-600 font-medium">Joined {selectedOp.joined}</span>
+                                <span className="text-gray-300">•</span>
+                                <Badge variant={selectedOp.status === 'active' ? 'success' : 'warning'} className="font-bold text-[10px] uppercase tracking-widest px-2 py-0.5">
+                                    {selectedOp.status}
+                                </Badge>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                        <div className="space-y-4">
+                            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Business Details</h4>
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center py-2 border-b border-gray-50 text-sm">
+                                    <span className="text-gray-400 font-medium">Legal Name</span>
+                                    <span className="font-semibold text-gray-800">{selectedOp.name}</span>
+                                </div>
+                                <div className="flex justify-between items-center py-2 border-b border-gray-50 text-sm">
+                                    <span className="text-gray-400 font-medium">License No</span>
+                                    <span className="font-semibold text-gray-800 font-mono">{selectedOp.license}</span>
+                                </div>
+                                <div className="flex justify-between items-center py-2 border-b border-gray-50 text-sm">
+                                    <span className="text-gray-400 font-medium">Fleet Size</span>
+                                    <span className="font-semibold text-gray-800">{selectedOp.buses} Registered Buses</span>
+                                </div>
+                                <div className="flex justify-between items-center py-2 border-b border-gray-50 text-sm">
+                                    <span className="text-gray-400 font-medium">Revenue Share</span>
+                                    <span className="font-semibold text-gray-800">10%</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="space-y-4">
+                            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Primary Contact</h4>
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center py-2 border-b border-gray-50 text-sm">
+                                    <span className="text-gray-400 font-medium">Contact Person</span>
+                                    <span className="font-semibold text-gray-800">{selectedOp.contactName}</span>
+                                </div>
+                                <div className="flex justify-between items-center py-2 border-b border-gray-50 text-sm">
+                                    <span className="text-gray-400 font-medium">Phone</span>
+                                    <span className="font-semibold text-gray-800">{selectedOp.phone}</span>
+                                </div>
+                                <div className="flex justify-between items-center py-2 border-b border-gray-50 text-sm">
+                                    <span className="text-gray-400 font-medium">Email</span>
+                                    <span className="font-semibold text-gray-800">{selectedOp.email}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-4 pt-4">
+                        <div className="p-4 bg-gray-50 rounded-xl text-center">
+                            <span className="block text-2xl font-bold text-gray-900">{selectedOp.revenue.replace('ETB ', '')}</span>
+                            <span className="text-[10px] text-gray-500 uppercase font-medium">Lifetime Revenue</span>
+                        </div>
+                        <div className="p-4 bg-gray-50 rounded-xl text-center">
+                            <span className="block text-2xl font-bold text-gray-900">{selectedOp.buses}</span>
+                            <span className="text-[10px] text-gray-500 uppercase font-medium">Active Fleet</span>
+                        </div>
+                        <div className="p-4 bg-gray-50 rounded-xl text-center">
+                            <span className="block text-2xl font-bold text-gray-900">4.8</span>
+                            <span className="text-[10px] text-gray-500 uppercase font-medium">Avg Rating</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Edit Operator Modal */}
+                {isEditModalOpen && editOperatorData && (
+                    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                        <Card className="w-full max-w-md bg-white p-6 relative animate-in fade-in zoom-in duration-200">
+                            <button
+                                onClick={() => setIsEditModalOpen(false)}
+                                className="absolute right-4 top-4 text-gray-400 hover:text-gray-600"
+                            >
+                                <X size={20} />
+                            </button>
+
+                            <h2 className="text-xl font-bold mb-1">Edit Operator Details</h2>
+                            <p className="text-sm text-gray-500 mb-6">Modify business and contact details for this operator.</p>
+
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">Company Name</label>
+                                    <Input
+                                        value={editOperatorData.name}
+                                        onChange={(e) => setEditOperatorData({ ...editOperatorData, name: e.target.value })}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">Contact Person</label>
+                                    <Input
+                                        value={editOperatorData.contactName}
+                                        onChange={(e) => setEditOperatorData({ ...editOperatorData, contactName: e.target.value })}
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-gray-700">Phone</label>
+                                        <Input
+                                            value={editOperatorData.phone}
+                                            onChange={(e) => setEditOperatorData({ ...editOperatorData, phone: e.target.value })}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-gray-700">Email</label>
+                                        <Input
+                                            value={editOperatorData.email}
+                                            onChange={(e) => setEditOperatorData({ ...editOperatorData, email: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-gray-700">License Number</label>
+                                        <Input
+                                            value={editOperatorData.license}
+                                            onChange={(e) => setEditOperatorData({ ...editOperatorData, license: e.target.value })}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-gray-700">Status</label>
+                                        <select
+                                            className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                            value={editOperatorData.status}
+                                            onChange={(e) => setEditOperatorData({ ...editOperatorData, status: e.target.value })}
+                                        >
+                                            <option value="active">active</option>
+                                            <option value="pending">pending</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <Button className="w-full mt-6 bg-primary" onClick={handleSaveEdit}>
+                                    Save Changes
+                                </Button>
+                            </div>
+                        </Card>
+                    </div>
+                )}
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6 relative">
@@ -178,72 +364,6 @@ export default function AdminOperatorManagement() {
                 </div>
             </div>
 
-            {/* Operator Details Modal */}
-            {selectedOp && (
-                <DetailModal
-                    isOpen={isDetailModalOpen}
-                    onClose={() => setIsDetailModalOpen(false)}
-                    title="Operator Profile"
-                    footer={
-                        <div className="flex gap-2">
-                            <Button variant="outline" onClick={() => setIsDetailModalOpen(false)}>Close</Button>
-                            <Button className="bg-primary hover:bg-primary/90 text-white">Edit Operator</Button>
-                        </div>
-                    }
-                >
-                    <div className="space-y-6">
-                        <div className="flex items-center gap-4 p-5 bg-purple-50/50 border border-purple-100 rounded-2xl">
-                            <div className="w-16 h-16 rounded-2xl bg-white shadow-sm flex items-center justify-center text-purple-600 overflow-hidden">
-                                {selectedOp.logo ? (
-                                    <img src={selectedOp.logo} alt={selectedOp.name} className="w-full h-full object-cover" />
-                                ) : (
-                                    <Bus size={32} />
-                                )}
-                            </div>
-                            <div>
-                                <h3 className="text-xl font-bold text-gray-900">{selectedOp.name}</h3>
-                                <div className="flex items-center gap-2 mt-1">
-                                    <span className="text-xs text-gray-500">ID: {selectedOp.id}</span>
-                                    <span className="text-gray-300">•</span>
-                                    <span className="text-xs text-blue-600 font-medium">Joined {selectedOp.joined}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-                            <div className="space-y-4">
-                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Business Details</h4>
-                                <ModalDataRow label="Legal Name" value={selectedOp.name} icon={Building2} />
-                                <ModalDataRow label="License No" value={selectedOp.license} icon={ShieldCheck} />
-                                <ModalDataRow label="Fleet Size" value={`${selectedOp.buses} Registered Buses`} icon={Bus} />
-                                <ModalDataRow label="Revenue Share" value="10%" icon={MapPin} />
-                            </div>
-                            <div className="space-y-4">
-                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Primary Contact</h4>
-                                <ModalDataRow label="Contact Person" value={selectedOp.contactName} />
-                                <ModalDataRow label="Phone" value={selectedOp.phone} icon={Phone} />
-                                <ModalDataRow label="Email" value={selectedOp.email} icon={Mail} />
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-4 pt-4">
-                            <div className="p-4 bg-gray-50 rounded-xl text-center">
-                                <span className="block text-2xl font-bold text-gray-900">{selectedOp.revenue.replace('ETB ', '')}</span>
-                                <span className="text-[10px] text-gray-500 uppercase font-medium">Lifetime Revenue</span>
-                            </div>
-                            <div className="p-4 bg-gray-50 rounded-xl text-center">
-                                <span className="block text-2xl font-bold text-gray-900">{selectedOp.buses}</span>
-                                <span className="text-[10px] text-gray-500 uppercase font-medium">Active Fleet</span>
-                            </div>
-                            <div className="p-4 bg-gray-50 rounded-xl text-center">
-                                <span className="block text-2xl font-bold text-gray-900">4.8</span>
-                                <span className="text-[10px] text-gray-500 uppercase font-medium">Avg Rating</span>
-                            </div>
-                        </div>
-                    </div>
-                </DetailModal>
-            )}
-
             {/* Add Operator Modal */}
             {isAddModalOpen && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -304,4 +424,3 @@ export default function AdminOperatorManagement() {
         </div>
     );
 }
-

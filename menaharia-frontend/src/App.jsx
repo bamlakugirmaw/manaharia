@@ -111,8 +111,6 @@ function App() {
           <Route path="/admin/dashboard" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminSystemOverview /></DashboardLayout></ProtectedRoute>} />
           <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminUserManagement /></DashboardLayout></ProtectedRoute>} />
           <Route path="/admin/operators" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminOperatorManagement /></DashboardLayout></ProtectedRoute>} />
-          <Route path="/admin/trips" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminTrips /></DashboardLayout></ProtectedRoute>} />
-          <Route path="/admin/bookings" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminBookings /></DashboardLayout></ProtectedRoute>} />
           <Route path="/admin/payments" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminPayments /></DashboardLayout></ProtectedRoute>} />
           <Route path="/admin/logs" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminLogs /></DashboardLayout></ProtectedRoute>} />
           <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminSettings /></DashboardLayout></ProtectedRoute>} />
