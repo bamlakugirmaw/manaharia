@@ -3,7 +3,7 @@ import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Input } from '../../components/ui/Input';
 import { Card } from '../../components/ui/Card';
-import { Search, Download, Users, FileText, CheckCircle, XCircle, Printer, Filter, UserPlus } from 'lucide-react';
+import { Download, Users, FileText, CheckCircle, XCircle, Printer, Filter, UserPlus } from 'lucide-react';
 import { TRIPS } from '../../data/mock-db';
 import { cn } from '../../lib/utils';
 
@@ -63,14 +63,8 @@ const MOCK_MANIFEST = [
 export default function BookingManagement() {
     const [selectedTrip, setSelectedTrip] = useState(TRIPS[0]?.id || null);
     const [manifest, setManifest] = useState(MOCK_MANIFEST);
-    const [searchTerm, setSearchTerm] = useState('');
 
-    const filteredManifest = manifest.filter(p =>
-        p.tripId === selectedTrip &&
-        (p.passenger.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            p.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            p.ticketNo.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
+    const filteredManifest = manifest.filter(p => p.tripId === selectedTrip);
 
     const toggleStatus = (id) => {
         setManifest(manifest.map(p => {
@@ -168,19 +162,6 @@ export default function BookingManagement() {
                             <div className="p-3 bg-gray-50 rounded-lg text-gray-700">
                                 <div className="text-xs font-bold uppercase opacity-70 mb-1">Empty</div>
                                 <div className="text-xl font-bold">40</div>
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col md:flex-row gap-4 justify-between items-center mb-6">
-                            <div className="relative w-full md:w-96">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                                <input
-                                    type="text"
-                                    placeholder="Search passenger, ticket, or phone..."
-                                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                />
                             </div>
                         </div>
 

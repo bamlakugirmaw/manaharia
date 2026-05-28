@@ -1,12 +1,10 @@
 import { useNavigate } from 'react-router-dom';
-import { Card } from '../components/ui/Card';
+import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { Search, CreditCard, Ticket, XCircle, Building2, UserCircle, MessageCircle, Phone, Mail } from 'lucide-react';
-import { useState } from 'react';
+import { CreditCard, Ticket, XCircle, Building2, UserCircle, MessageCircle, Phone, Mail, ChevronRight, Headphones } from 'lucide-react';
 
 export default function Help() {
     const navigate = useNavigate();
-    const [searchQuery, setSearchQuery] = useState('');
 
     const categories = [
         {
@@ -21,7 +19,7 @@ export default function Help() {
             title: 'Tickets & QR Codes',
             description: 'Get help with your e-tickets and QR codes',
             icon: Ticket,
-            color: 'from-green-500 to-green-600'
+            color: 'from-emerald-500 to-emerald-600'
         },
         {
             id: 'cancellations',
@@ -50,39 +48,37 @@ export default function Help() {
         navigate(`/faq?category=${categoryId}`);
     };
 
-    const handleSearch = (e) => {
-        e.preventDefault();
-        if (searchQuery.trim()) {
-            navigate(`/faq?search=${encodeURIComponent(searchQuery)}`);
-        }
-    };
-
     return (
-        <div className="min-h-screen bg-gray-50 py-12">
-            <div className="container mx-auto px-4 max-w-6xl">
-                {/* Hero Section */}
-                <div className="text-center mb-12">
-                    <h1 className="text-4xl font-extrabold text-gray-900 mb-4">How can we help you?</h1>
-                    <p className="text-gray-500 text-lg mb-8">Search for answers or browse categories below</p>
+        <div className="min-h-screen bg-gray-50 pb-20">
+            {/* Hero Section – bg_image.png background, light theme */}
+            <div 
+                className="px-4 pt-20 pb-28 text-center rounded-b-[5rem] relative overflow-hidden mb-12"
+                style={{ 
+                    backgroundImage: `url(/images/background_image/bg_image.png)`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center center',
+                    backgroundColor: '#E8EEFF'
+                }}
+            >
+                <div className="relative z-10 max-w-2xl mx-auto space-y-4">
+                    <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-blue-500/10 text-blue-600 border border-blue-200/50 mb-2">
+                        <Headphones size={13} className="text-blue-600" />
+                        <span className="text-[10px] font-extrabold uppercase tracking-[0.15em]">Help Center</span>
+                    </div>
 
-                    {/* Search Bar */}
-                    <form onSubmit={handleSearch} className="max-w-2xl mx-auto">
-                        <div className="relative">
-                            <Search className="absolute left-6 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                            <input
-                                type="text"
-                                placeholder="Search for help..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full h-14 pl-14 pr-6 bg-white border border-gray-200 rounded-2xl focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all text-base"
-                            />
-                        </div>
-                    </form>
+                    <h1 className="text-3xl md:text-5xl font-black text-gray-900 tracking-tight leading-none">
+                        How can we help you?
+                    </h1>
+                    <p className="text-sm md:text-base text-gray-500 font-medium max-w-xl mx-auto leading-relaxed">
+                        Search for answers or browse categories below
+                    </p>
                 </div>
+            </div>
 
+            <div className="container mx-auto px-4 max-w-6xl">
                 {/* Categories Grid */}
-                <div className="mb-12">
-                    <h2 className="text-2xl font-extrabold text-gray-900 mb-6">Browse by Category</h2>
+                <div className="mb-14">
+                    <h2 className="text-xl font-black text-dark mb-6">Browse by Category</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {categories.map((category) => {
                             const Icon = category.icon;
@@ -90,58 +86,69 @@ export default function Help() {
                                 <Card
                                     key={category.id}
                                     onClick={() => handleCategoryClick(category.id)}
-                                    className="bg-white border-none shadow-[0_2px_20px_rgba(0,0,0,0.04)] rounded-3xl p-6 hover:shadow-[0_8px_30px_rgba(0,0,0,0.08)] transition-all duration-300 cursor-pointer group"
+                                    className="bg-white border border-gray-100 shadow-[0_8px_30px_rgba(0,0,0,0.015)] rounded-[2rem] p-5 hover:shadow-md hover:border-gray-200/50 transition-all duration-300 cursor-pointer group flex items-center justify-between gap-4"
                                 >
-                                    <div className={`w-14 h-14 bg-gradient-to-br ${category.color} rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
-                                        <Icon className="w-7 h-7 text-white" />
+                                    <div className="flex items-center gap-4 min-w-0">
+                                        <div className={`w-12 h-12 bg-gradient-to-br ${category.color} rounded-2xl flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform`}>
+                                            <Icon className="w-5 h-5 text-white stroke-[2.5]" />
+                                        </div>
+                                        <div className="flex flex-col min-w-0">
+                                            <h3 className="text-sm font-extrabold text-gray-900 leading-tight group-hover:text-primary transition-colors truncate">{category.title}</h3>
+                                            <p className="text-xs text-gray-400 font-medium mt-1 leading-normal">{category.description}</p>
+                                        </div>
                                     </div>
-                                    <h3 className="text-lg font-extrabold text-gray-900 mb-2">{category.title}</h3>
-                                    <p className="text-sm text-gray-500">{category.description}</p>
+                                    <div className="text-blue-500 shrink-0 group-hover:translate-x-1 transition-transform">
+                                        <ChevronRight size={18} className="stroke-[2.5]" />
+                                    </div>
                                 </Card>
                             );
                         })}
                     </div>
                 </div>
 
-                {/* Quick Links */}
-                <Card className="bg-gradient-to-br from-primary/5 to-secondary/5 border-none shadow-[0_2px_20px_rgba(0,0,0,0.04)] rounded-3xl p-8">
-                    <h2 className="text-2xl font-extrabold text-gray-900 mb-6">Still need help?</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Bottom Support Banner Card */}
+                <Card className="bg-[#F4F9FD]/60 border border-blue-50 shadow-[0_8px_30px_rgba(0,0,0,0.01)] rounded-[2.5rem] p-8 md:p-10 mb-10">
+                    <h2 className="text-xl font-extrabold text-dark mb-8">Still need help?</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12">
+                        {/* Contact Support */}
                         <div className="flex items-start gap-4">
-                            <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0">
-                                <MessageCircle className="w-6 h-6 text-primary" />
+                            <div className="w-12 h-12 bg-blue-50 border border-blue-100 rounded-2xl flex items-center justify-center shrink-0 text-blue-500 shadow-sm">
+                                <MessageCircle className="w-5 h-5 stroke-[2]" />
                             </div>
-                            <div>
-                                <h3 className="font-bold text-gray-900 mb-1">Contact Support</h3>
-                                <p className="text-sm text-gray-500 mb-3">Get help from our support team</p>
+                            <div className="flex flex-col items-start">
+                                <h3 className="text-sm font-extrabold text-gray-900 leading-tight">Contact Support</h3>
+                                <p className="text-xs text-gray-400 font-medium mt-1 leading-normal">Get help from our support team</p>
                                 <Button
                                     variant="outline"
-                                    size="sm"
                                     onClick={() => navigate('/contact')}
-                                    className="text-primary border-primary hover:bg-primary/10"
+                                    className="mt-3.5 h-9 px-4 rounded-xl border border-blue-500 hover:border-blue-600 text-blue-500 hover:text-blue-600 hover:bg-blue-50/50 font-extrabold text-[11px] transition-all shadow-none"
                                 >
                                     Contact Us
                                 </Button>
                             </div>
                         </div>
+
+                        {/* Call Us */}
                         <div className="flex items-start gap-4">
-                            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                                <Phone className="w-6 h-6 text-green-600" />
+                            <div className="w-12 h-12 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center justify-center shrink-0 text-emerald-500 shadow-sm">
+                                <Phone className="w-5 h-5 stroke-[2]" />
                             </div>
-                            <div>
-                                <h3 className="font-bold text-gray-900 mb-1">Call Us</h3>
-                                <p className="text-sm text-gray-500 mb-1">+251 911 234 567</p>
-                                <p className="text-xs text-gray-400">Mon-Fri, 8am-6pm</p>
+                            <div className="flex flex-col">
+                                <h3 className="text-sm font-extrabold text-gray-900 leading-tight">Call Us</h3>
+                                <p className="text-xs font-extrabold text-gray-700 mt-2 leading-none">+251 911 234 567</p>
+                                <p className="text-[10px] text-gray-400 font-medium mt-1.5 leading-none">Mon-Fri, 8am-6pm</p>
                             </div>
                         </div>
+
+                        {/* Email Us */}
                         <div className="flex items-start gap-4">
-                            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                                <Mail className="w-6 h-6 text-blue-600" />
+                            <div className="w-12 h-12 bg-blue-50 border border-blue-100 rounded-2xl flex items-center justify-center shrink-0 text-blue-500 shadow-sm">
+                                <Mail className="w-5 h-5 stroke-[2]" />
                             </div>
-                            <div>
-                                <h3 className="font-bold text-gray-900 mb-1">Email Us</h3>
-                                <p className="text-sm text-gray-500 mb-1">support@menaharia.et</p>
-                                <p className="text-xs text-gray-400">24-48 hour response</p>
+                            <div className="flex flex-col">
+                                <h3 className="text-sm font-extrabold text-gray-900 leading-tight">Email Us</h3>
+                                <p className="text-xs font-extrabold text-gray-700 mt-2 leading-none">support@menaharia.et</p>
+                                <p className="text-[10px] text-gray-400 font-medium mt-1.5 leading-none">24-48 hour response</p>
                             </div>
                         </div>
                     </div>

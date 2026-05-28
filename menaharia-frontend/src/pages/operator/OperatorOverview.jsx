@@ -30,16 +30,6 @@ export default function OperatorOverview() {
 
     return (
         <div className="space-y-8">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-2xl font-bold">Dashboard Overview</h1>
-                    <p className="text-gray-500">Welcome back, Selam Bus!</p>
-                </div>
-                <div className="flex gap-2">
-                    <Button variant="outline" className="gap-2"><Calendar size={16} /> Dec 2025</Button>
-                    <Button className="gap-2"><Activity size={16} /> Live Report</Button>
-                </div>
-            </div>
 
             {/* KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

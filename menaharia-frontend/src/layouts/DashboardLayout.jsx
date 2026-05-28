@@ -2,16 +2,14 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { cn } from '../lib/utils';
 import Navbar from '../components/layout/Navbar';
 import { Logo } from '../components/ui/Logo';
-import { LayoutDashboard, Ticket, User, LogOut, Settings, History, CreditCard, Bus, Calendar as CalendarIcon, Map, Shield, Users, Activity } from 'lucide-react';
+import { LayoutDashboard, Ticket, User, LogOut, Settings, History, CreditCard, Bus, Calendar as CalendarIcon, Map, Shield, Users, Activity, MessageSquare } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../contexts/AuthContext';
 
 // Sidebar Items for Traveller
 const TRAVELLER_NAV = [
-    { name: 'Dashboard', href: '/traveller/dashboard', icon: LayoutDashboard },
-    { name: 'Upcoming Trips', href: '/traveller/upcoming', icon: CalendarIcon },
     { name: 'My Bookings', href: '/traveller/bookings', icon: Ticket },
-    { name: 'Payment History', href: '/traveller/payments', icon: CreditCard },
+    { name: 'Complaints', href: '/traveller/complaints', icon: MessageSquare },
     { name: 'Profile Settings', href: '/traveller/profile', icon: User },
 ];
 
@@ -91,37 +89,38 @@ export default function DashboardLayout({ children }) {
                                         key={item.name}
                                         to={item.href}
                                         className={cn(
-                                            "flex items-center gap-3 px-4 py-3 text-sm font-semibold rounded-xl transition-all duration-300 group relative",
+                                            "flex items-center gap-3 px-4 py-3 font-semibold rounded-xl transition-all duration-300 ease-in-out group relative",
                                             isActive
-                                                ? "bg-primary text-white shadow-lg shadow-primary/20 scale-[1.02] z-10"
+                                                ? "text-primary z-10"
                                                 : "text-gray-400 hover:bg-gray-50/80 hover:text-gray-900"
-                                        )
-                                        }
+                                        )}
                                     >
                                         <div className={cn(
-                                            "w-8 h-8 rounded-lg flex items-center justify-center transition-colors",
-                                            isActive ? "bg-white/20" : "bg-gray-50 group-hover:bg-white"
+                                            "w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-300 ease-in-out",
+                                            isActive ? "bg-transparent" : "bg-gray-50 group-hover:bg-white"
                                         )}>
-                                            <item.icon size={18} className={cn(isActive ? "text-white" : "text-gray-400 group-hover:text-primary")} />
+                                            <item.icon 
+                                                size={18} 
+                                                className={cn(
+                                                    "transition-all duration-300 ease-in-out",
+                                                    isActive ? "text-primary scale-[1.2]" : "text-gray-400 group-hover:text-primary scale-100"
+                                                )} 
+                                            />
                                         </div>
-                                        {item.name}
-                                        {isActive && (
-                                            <div className="ml-auto w-1 h-1 rounded-full bg-white opacity-80" />
-                                        )}
+                                        <span className={cn(
+                                            "transition-all duration-300 ease-in-out",
+                                            isActive ? "text-[15px]" : "text-sm"
+                                        )}>
+                                            {item.name}
+                                        </span>
+                                        <div className={cn(
+                                            "ml-auto w-1.5 h-1.5 rounded-full bg-primary transition-all duration-300 ease-in-out origin-center",
+                                            isActive ? "opacity-100 scale-100" : "opacity-0 scale-0"
+                                        )} />
                                     </Link>
                                 );
                             })}
                         </nav>
-                    </div>
-
-                    <div className="mt-auto p-6 border-t border-gray-50">
-                        <Button
-                            variant="ghost"
-                            className="w-full justify-start text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-2xl h-12 px-5 font-bold"
-                            onClick={handleLogout}
-                        >
-                            <LogOut className="mr-3 h-5 w-5" /> Sign Out
-                        </Button>
                     </div>
                 </aside>
 

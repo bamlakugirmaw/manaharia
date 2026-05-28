@@ -2,8 +2,9 @@ import { useNavigate } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { TRIPS, OPERATORS } from '../data/mock-db';
-import { MapPin, TrendingUp, Users } from 'lucide-react';
+import { MapPin, TrendingUp, Users, Search } from 'lucide-react';
 import { useState } from 'react';
+import heroBg from '../assets/hero-bus-bg.png';
 
 export default function RoutesPage() {
     const navigate = useNavigate();
@@ -56,26 +57,38 @@ export default function RoutesPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 py-12">
-            <div className="container mx-auto px-4 max-w-6xl">
-                {/* Header */}
-                <div className="mb-10">
-                    <h1 className="text-3xl font-extrabold tracking-tight text-gray-900">All Routes</h1>
-                    <p className="text-gray-400 text-xs font-bold mt-2 uppercase tracking-wider">Browse all available bus routes across Ethiopia</p>
-                </div>
+        <div className="min-h-screen bg-gray-50 pb-20">
+            {/* Hero Search Section */}
+            <div
+                className="px-4 pt-20 pb-24 text-center rounded-b-[5rem] relative overflow-hidden"
+                style={{ backgroundImage: `url(${heroBg})`, backgroundSize: 'cover', backgroundPosition: 'center 55%' }}
+            >
+                {/* Subtle overlay */}
+                <div className="absolute inset-0 bg-white/30" />
 
-                {/* Search Bar */}
-                <div className="mb-8">
-                    <input
-                        type="text"
-                        placeholder="Search routes by city..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full h-14 px-6 bg-white border border-gray-200 rounded-2xl focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all text-base"
-                    />
-                </div>
+                <div className="relative max-w-2xl mx-auto space-y-6">
+                    <h1 className="text-3xl md:text-5xl font-black text-dark tracking-tight">
+                        All Routes
+                    </h1>
+                    <p className="text-lg text-dark/70 font-medium max-w-xl mx-auto">
+                        Browse all available bus routes across Ethiopia.
+                    </p>
 
-                {/* Routes Grid */}
+                    <div className="relative max-w-xl mx-auto mt-8">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input
+                            type="text"
+                            placeholder="Search routes by city..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full pl-12 pr-4 py-4 rounded-2xl border-none shadow-xl focus:ring-4 focus:ring-primary/20 outline-none text-gray-800 placeholder:text-gray-400 font-medium transition-all bg-white/90 backdrop-blur-sm"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* Routes Grid */}
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-12 relative z-10">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredRoutes.map((route, index) => (
                         <Card key={index} className="bg-white border-none shadow-[0_2px_20px_rgba(0,0,0,0.04)] rounded-3xl p-6 hover:shadow-[0_8px_30px_rgba(0,0,0,0.08)] transition-all duration-300">

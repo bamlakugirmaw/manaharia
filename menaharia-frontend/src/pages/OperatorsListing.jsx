@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { getAllOperators } from '../data/operators-data';
 import OperatorCard from '../components/operators/OperatorCard';
 import { Search } from 'lucide-react';
+import heroBg from '../assets/hero-bus-bg.png';
 
 export default function OperatorsListing() {
     const [searchTerm, setSearchTerm] = useState('');
@@ -15,20 +16,18 @@ export default function OperatorsListing() {
     return (
         <div className="min-h-screen bg-gray-50 pb-20">
             {/* Hero Search Section */}
-            <div className="bg-gradient-to-br from-primary via-primary/90 to-secondary px-4 pt-20 pb-24 text-center rounded-b-[3rem] relative overflow-hidden">
-                {/* Background Pattern */}
-                <div className="absolute inset-0 opacity-10">
-                    <div className="absolute inset-0" style={{
-                        backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)',
-                        backgroundSize: '40px 40px'
-                    }} />
-                </div>
+            <div
+                className="px-4 pt-20 pb-24 text-center rounded-b-[5rem] relative overflow-hidden"
+                style={{ backgroundImage: `url(${heroBg})`, backgroundSize: 'cover', backgroundPosition: 'center 55%' }}
+            >
+                {/* Subtle overlay */}
+                <div className="absolute inset-0 bg-white/30" />
 
                 <div className="relative max-w-2xl mx-auto space-y-6">
-                    <h1 className="text-3xl md:text-5xl font-black text-white tracking-tight">
+                    <h1 className="text-3xl md:text-5xl font-black text-dark tracking-tight">
                         Our Transport Partners
                     </h1>
-                    <p className="text-lg text-white/90 font-medium max-w-xl mx-auto">
+                    <p className="text-lg text-dark/70 font-medium max-w-xl mx-auto">
                         Travel with confidence. Choose from Ethiopia's most trusted and verified bus operators.
                     </p>
 
@@ -37,7 +36,7 @@ export default function OperatorsListing() {
                         <input
                             type="text"
                             placeholder="Search by operator name or route..."
-                            className="w-full pl-12 pr-4 py-4 rounded-2xl border-none shadow-xl focus:ring-4 focus:ring-white/20 outline-none text-gray-800 placeholder:text-gray-400 font-medium transition-all"
+                            className="w-full pl-12 pr-4 py-4 rounded-2xl border-none shadow-xl focus:ring-4 focus:ring-primary/20 outline-none text-gray-800 placeholder:text-gray-400 font-medium transition-all bg-white/90 backdrop-blur-sm"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />

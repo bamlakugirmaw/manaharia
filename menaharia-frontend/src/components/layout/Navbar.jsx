@@ -1,15 +1,17 @@
-import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '../ui/Button';
 import { Phone, LifeBuoy, Menu, X, LogOut, User } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { cn } from '../../lib/utils';
+import profileIcon from '../../assets/profile-icon.jpg';
 import { Logo } from '../ui/Logo';
 
 export default function Navbar() {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const { user, isAuthenticated, logout } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
 
     const navLinks = [
         { name: 'Routes', href: '/routes' },
@@ -28,7 +30,7 @@ export default function Navbar() {
         if (!user) return '/login';
         if (user.role === 'admin') return '/admin/dashboard';
         if (user.role === 'operator') return '/operator/dashboard';
-        return '/traveller/dashboard';
+        return '/traveller/bookings';
     };
 
     return (
@@ -60,33 +62,47 @@ export default function Navbar() {
 
                     {/* Right Action Buttons */}
                     <div className="hidden md:flex items-center gap-6">
-                        <Link to="/support" className="text-gray-600 hover:text-primary flex items-center gap-1.5 text-sm font-semibold transition-colors">
-                            <Phone size={18} />
-                            Support
-                        </Link>
 
                         {isAuthenticated ? (
-                            <div className="flex items-center gap-4 ml-2 border-l pl-6 border-gray-100">
+                            <div className="flex items-center gap-4 ml-2">
                                 <button onClick={() => navigate(getDashboardPath())} className="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer">
-                                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary border border-primary/20">
-                                        <User size={18} />
+                                    <div className="w-9 h-9 rounded-full bg-[#F8FAFC] flex items-center justify-center border border-gray-200 overflow-hidden shadow-sm flex-shrink-0">
+                                        <img src={profileIcon} alt="User Profile" className="w-full h-full object-cover" />
                                     </div>
                                     <span className="text-sm font-bold text-gray-800 hidden lg:block">{user.name}</span>
                                 </button>
-                                <Button variant="ghost" size="icon" onClick={handleLogout} className="text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all h-9 w-9">
-                                    <LogOut size={20} />
+                                <Button variant="ghost" onClick={handleLogout} className="group flex items-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all duration-300 ease-in-out h-9 px-2 overflow-hidden">
+                                    <LogOut size={20} className="shrink-0 transition-transform duration-300 group-hover:scale-110" />
+                                    <span className="text-sm font-bold text-red-500 max-w-0 opacity-0 overflow-hidden whitespace-nowrap transition-all duration-300 ease-in-out group-hover:max-w-[80px] group-hover:opacity-100 group-hover:ml-2">
+                                        Sign Out
+                                    </span>
                                 </Button>
                             </div>
                         ) : (
                             <div className="flex items-center gap-6 ml-2">
-                                <Link to="/signup" className="text-sm font-bold text-gray-700 hover:text-primary transition-colors">
-                                    Sign Up
-                                </Link>
-                                <Link to="/login">
-                                    <Button variant="secondary" className="bg-gradient-to-r from-[#FF8C37] to-[#F72585] border-0 hover:opacity-90 text-white font-bold h-11 px-8 rounded-xl shadow-lg shadow-orange-500/20 text-sm tracking-wide">
-                                        Sign In
-                                    </Button>
-                                </Link>
+                                {location.pathname === '/signup' ? (
+                                    <>
+                                        <Link to="/login" className="text-sm font-bold text-gray-700 hover:text-primary transition-colors">
+                                            Sign In
+                                        </Link>
+                                        <Link to="/signup">
+                                            <Button variant="secondary" className="bg-gradient-to-r from-[#FF8C37] to-[#F72585] border-0 hover:opacity-90 text-white font-bold h-11 px-8 rounded-xl shadow-lg shadow-orange-500/20 text-sm tracking-wide">
+                                                Sign Up
+                                            </Button>
+                                        </Link>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Link to="/signup" className="text-sm font-bold text-gray-700 hover:text-primary transition-colors">
+                                            Sign Up
+                                        </Link>
+                                        <Link to="/login">
+                                            <Button variant="secondary" className="bg-gradient-to-r from-[#FF8C37] to-[#F72585] border-0 hover:opacity-90 text-white font-bold h-11 px-8 rounded-xl shadow-lg shadow-orange-500/20 text-sm tracking-wide">
+                                                Sign In
+                                            </Button>
+                                        </Link>
+                                    </>
+                                )}
                             </div>
                         )}
                     </div>
@@ -115,8 +131,8 @@ export default function Navbar() {
                                 }}
                                 className="px-3 py-4 border-b border-gray-50 flex items-center gap-3 mb-2 w-full hover:bg-gray-50 transition-colors cursor-pointer"
                             >
-                                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                                    <User size={20} />
+                                <div className="w-10 h-10 rounded-full bg-[#F8FAFC] flex items-center justify-center overflow-hidden shadow-sm border border-gray-200 flex-shrink-0">
+                                    <img src={profileIcon} alt="User Profile" className="w-full h-full object-cover" />
                                 </div>
                                 <div className="text-left">
                                     <p className="font-bold text-gray-900">{user.name}</p>

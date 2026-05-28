@@ -1,10 +1,69 @@
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input'; // Assuming Input component exists
-import { User, Building, Phone, Mail, CreditCard, Lock, Bell } from 'lucide-react';
+import { Building, Phone, Mail, CreditCard, Lock, Upload, Check } from 'lucide-react';
 
 export default function OperatorSettings() {
+    const fileInputRef = useRef(null);
+    const [logo, setLogo] = useState(null);
+    
+    // States for actions
+    const [savingProfile, setSavingProfile] = useState(false);
+    const [savingBanking, setSavingBanking] = useState(false);
+    
+    // Password States
+    const [showPasswordForm, setShowPasswordForm] = useState(false);
+    const [passwords, setPasswords] = useState({ current: '', new: '', confirm: '' });
+    const [passwordError, setPasswordError] = useState('');
+    const [savingPassword, setSavingPassword] = useState(false);
+
+    // Handlers
+    const handleLogoUpload = (e) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setLogo(URL.createObjectURL(file));
+        }
+    };
+
+    const handleLogoRemove = () => {
+        setLogo(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    const handleSaveProfile = () => {
+        setSavingProfile(true);
+        setTimeout(() => setSavingProfile(false), 1000);
+    };
+
+    const handleSaveBanking = () => {
+        setSavingBanking(true);
+        setTimeout(() => setSavingBanking(false), 1500);
+    };
+
+    const handleUpdatePassword = () => {
+        setPasswordError('');
+        if (!passwords.current || !passwords.new || !passwords.confirm) {
+            setPasswordError('All fields are required');
+            return;
+        }
+        if (passwords.new.length < 8) {
+            setPasswordError('Password must be at least 8 characters long');
+            return;
+        }
+        if (passwords.new !== passwords.confirm) {
+            setPasswordError('New passwords do not match');
+            return;
+        }
+        
+        setSavingPassword(true);
+        setTimeout(() => {
+            setSavingPassword(false);
+            setShowPasswordForm(false);
+            setPasswords({ current: '', new: '', confirm: '' });
+            alert("Password updated successfully!");
+        }, 1200);
+    };
+
     return (
         <div className="space-y-8 max-w-4xl mx-auto">
             <div>
@@ -14,15 +73,30 @@ export default function OperatorSettings() {
 
             {/* Profile Header */}
             <Card className="p-6 border-none shadow-sm flex flex-col md:flex-row items-center gap-6">
-                <div className="w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center text-primary text-2xl font-bold border-4 border-white shadow-sm">
-                    SB
+                <div className="w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center text-primary text-2xl font-bold border-4 border-white shadow-sm overflow-hidden">
+                    {logo ? (
+                        <img src={logo} alt="Company Logo" className="w-full h-full object-cover" />
+                    ) : (
+                        'SB'
+                    )}
                 </div>
                 <div className="flex-1 text-center md:text-left">
                     <h2 className="text-xl font-bold">Selam Bus Line S.C.</h2>
                     <p className="text-gray-500">Verified Operator • Gold Tier</p>
                     <div className="flex justify-center md:justify-start gap-3 mt-4">
-                        <Button size="sm">Change Logo</Button>
-                        <Button variant="outline" size="sm" className="text-red-500 hover:text-red-600 hover:bg-red-50 border-red-100">Remove</Button>
+                        <input 
+                            type="file" 
+                            accept="image/*" 
+                            className="hidden" 
+                            ref={fileInputRef} 
+                            onChange={handleLogoUpload} 
+                        />
+                        <Button size="sm" onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2">
+                            <Upload size={16} /> Change Logo
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={handleLogoRemove} className="text-red-500 hover:text-red-600 hover:bg-red-50 border-red-100">
+                            Remove
+                        </Button>
                     </div>
                 </div>
             </Card>
@@ -63,7 +137,9 @@ export default function OperatorSettings() {
                     </div>
                 </div>
                 <div className="flex justify-end pt-4">
-                    <Button>Save Changes</Button>
+                    <Button onClick={handleSaveProfile} disabled={savingProfile} className="min-w-[140px]">
+                        {savingProfile ? 'Saving...' : 'Save Changes'}
+                    </Button>
                 </div>
             </Card>
 
@@ -89,7 +165,9 @@ export default function OperatorSettings() {
                     </div>
                 </div>
                 <div className="flex justify-end pt-4">
-                    <Button variant="outline">Update Banking Details</Button>
+                    <Button variant={savingBanking ? 'default' : 'outline'} onClick={handleSaveBanking} disabled={savingBanking} className={savingBanking ? 'bg-green-500 hover:bg-green-600 text-white border-green-500' : ''}>
+                        {savingBanking ? <span className="flex items-center gap-2"><Check size={16}/> Successfully Updated</span> : 'Update Banking Details'}
+                    </Button>
                 </div>
             </Card>
 
@@ -97,24 +175,65 @@ export default function OperatorSettings() {
             <Card className="p-8 border-none shadow-sm space-y-6">
                 <div className="flex items-center gap-2 pb-4 border-b border-gray-100">
                     <Lock className="text-gray-400" size={20} />
-                    <h3 className="font-bold text-lg">Security</h3>
+                    <h3 className="font-bold text-lg">Security & Passwords</h3>
                 </div>
 
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h4 className="font-medium">Two-Factor Authentication</h4>
-                        <p className="text-sm text-gray-500">Add an extra layer of security to your account.</p>
+                {!showPasswordForm ? (
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h4 className="font-medium">Account Password</h4>
+                            <p className="text-sm text-gray-500">Periodically changing your password ensures strong account security.</p>
+                        </div>
+                        <Button variant="outline" onClick={() => setShowPasswordForm(true)}>Update Password</Button>
                     </div>
-                    <Button variant="outline">Enable</Button>
-                </div>
-
-                <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                    <div>
-                        <h4 className="font-medium">Change Password</h4>
-                        <p className="text-sm text-gray-500">Last changed 3 months ago.</p>
+                ) : (
+                    <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 animate-in fade-in duration-300">
+                        <h4 className="font-bold text-gray-900 mb-4">Update Password</h4>
+                        
+                        {passwordError && (
+                            <div className="p-3 bg-red-50 text-red-600 text-sm font-medium rounded-lg border border-red-100 mb-5">
+                                {passwordError}
+                            </div>
+                        )}
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                            <div className="space-y-1 md:col-span-2">
+                                <label className="text-sm font-medium text-gray-700">Current Password</label>
+                                <input 
+                                    type="password" 
+                                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 outline-none"
+                                    value={passwords.current}
+                                    onChange={e => setPasswords({...passwords, current: e.target.value})}
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-sm font-medium text-gray-700">New Password</label>
+                                <input 
+                                    type="password" 
+                                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 outline-none"
+                                    value={passwords.new}
+                                    onChange={e => setPasswords({...passwords, new: e.target.value})}
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-sm font-medium text-gray-700">Confirm New Password</label>
+                                <input 
+                                    type="password" 
+                                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 outline-none"
+                                    value={passwords.confirm}
+                                    onChange={e => setPasswords({...passwords, confirm: e.target.value})}
+                                />
+                            </div>
+                        </div>
+                        
+                        <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+                            <Button variant="ghost" onClick={() => { setShowPasswordForm(false); setPasswordError(''); }}>Cancel</Button>
+                            <Button onClick={handleUpdatePassword} disabled={savingPassword}>
+                                {savingPassword ? 'Updating...' : 'Save Password'}
+                            </Button>
+                        </div>
                     </div>
-                    <Button variant="outline">Update Password</Button>
-                </div>
+                )}
             </Card>
         </div>
     );

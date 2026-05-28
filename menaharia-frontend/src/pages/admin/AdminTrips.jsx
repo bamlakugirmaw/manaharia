@@ -64,13 +64,6 @@ export default function AdminTrips() {
 
     return (
         <div className="space-y-6 relative">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold">All Trips</h1>
-                    <p className="text-gray-500 text-sm">Monitor and manage all scheduled and completed bus trips.</p>
-                </div>
-                <Button size="sm" onClick={() => setIsCreateModalOpen(true)}>Create New Trip</Button>
-            </div>
 
             {/* Filters Bar */}
             <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white p-4 rounded-xl border border-gray-100 shadow-sm">

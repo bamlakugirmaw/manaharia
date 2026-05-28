@@ -3,19 +3,21 @@ import { useParams, useNavigate } from 'react-router-dom';
 import BusLayout from '../components/seat-map/BusLayout';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { TRIPS, OPERATORS } from '../data/mock-db';
-import { ArrowLeft, Check } from 'lucide-react';
+import { TRIPS } from '../data/mock-db';
+import { Check } from 'lucide-react';
 import BookingSummary from '../components/booking/BookingSummary';
 import ProgressStepper from '../components/booking/ProgressStepper';
 
+import { useAuth } from '../contexts/AuthContext';
+
 export default function SeatSelection() {
+    const { isAuthenticated } = useAuth();
     const { tripId } = useParams();
     const navigate = useNavigate();
     const [selectedSeats, setSelectedSeats] = useState([]);
 
     // Find trip details
     const trip = TRIPS.find(t => t.id === tripId);
-    const operator = OPERATORS.find(op => op.id === trip?.operatorId);
 
     // Debug: Log the tripId to see what's being passed
     console.log('Trip ID from URL:', tripId);
@@ -52,6 +54,11 @@ export default function SeatSelection() {
     const totalPrice = selectedSeats.length * trip.price;
 
     const handleContinue = () => {
+        if (!isAuthenticated) {
+            navigate('/login');
+            return;
+        }
+
         navigate('/booking/passenger', {
             state: {
                 tripId,
@@ -66,49 +73,10 @@ export default function SeatSelection() {
             <ProgressStepper currentStep={2} />
 
             <div className="max-w-6xl mx-auto px-6 py-8">
-                <Button variant="ghost" className="mb-6 pl-0 text-gray-500 hover:text-primary transition-colors text-xs font-bold" onClick={() => navigate(-1)}>
-                    <ArrowLeft className="mr-2 h-4 w-4" /> Back to Results
-                </Button>
-
                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
 
                     {/* Left Column: Seat Map */}
                     <div className="lg:col-span-3">
-                        {/* Trip Info Header */}
-                        <Card className="p-6 mb-6 bg-white border-none shadow-[0_2px_20px_rgba(0,0,0,0.04)] rounded-3xl">
-                            <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                    <h2 className="text-2xl font-extrabold text-gray-900 mb-4">{operator?.name}</h2>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                        <div>
-                                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">Route</p>
-                                            <p className="font-semibold text-gray-900">{trip?.from} → {trip?.to}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">Date</p>
-                                            <p className="font-semibold text-gray-900">{trip?.date ? new Date(trip.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">Departure</p>
-                                            <p className="font-semibold text-gray-900">{trip?.departureTime}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">Arrival</p>
-                                            <p className="font-semibold text-gray-900">{trip?.arrivalTime}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="ml-6">
-                                    <span className={`px-3 py-1.5 rounded-full text-xs font-bold ${trip?.busType === 'Luxury' ? 'bg-purple-100 text-purple-700' :
-                                        trip?.busType === 'VIP' ? 'bg-blue-100 text-blue-700' :
-                                            'bg-gray-100 text-gray-700'
-                                        }`}>
-                                        {trip?.busType}
-                                    </span>
-                                </div>
-                            </div>
-                        </Card>
-
                         {/* Seat Selection Card */}
                         <Card className="p-10 flex flex-col items-center bg-white border-none shadow-[0_8px_30px_rgba(0,0,0,0.02)] rounded-[3rem]">
                             <h2 className="text-2xl font-extrabold text-gray-900 tracking-tight mb-2">Choose Your Seats</h2>

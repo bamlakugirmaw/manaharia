@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import chapaLogo from '../assets/chapa-logo.jpg';
 import { Button } from '../components/ui/Button';
-import { Shield, CreditCard, Smartphone, Wallet, ArrowRight } from 'lucide-react';
+import { CreditCard, Smartphone, Wallet, ArrowRight } from 'lucide-react';
 import ProgressStepper from '../components/booking/ProgressStepper';
 import BookingSummary from '../components/booking/BookingSummary';
 
@@ -10,7 +11,7 @@ export default function Payment() {
     const navigate = useNavigate();
     const { tripId, selectedSeats, totalPrice, passengerDetails } = location.state || {};
     const [loading, setLoading] = useState(false);
-    const [paymentMethod, setPaymentMethod] = useState('telebirr');
+    const [paymentMethod, setPaymentMethod] = useState('chapa');
 
     if (!tripId) {
         navigate('/');
@@ -19,25 +20,11 @@ export default function Payment() {
   
     const paymentMethods = [
         {
-            id: 'telebirr',
-            name: 'Telebirr',
-            description: 'Pay with Telebirr wallet',
-            icon: Smartphone,
-            color: 'bg-blue-500'
-        },
-        {
-            id: 'cbe',
-            name: 'CBE Birr',
-            description: 'Pay with CBE Birr mobile banking',
-            icon: CreditCard,
-            color: 'bg-purple-800'
-        },
-        {
             id: 'chapa',
             name: 'Chapa',
-            description: 'Pay with cards via Chapa',
-            icon: Wallet,
-            color: 'bg-orange-500'
+            description: 'Pay securely with your Card, Telebirr, CBE Birr, and more via Chapa',
+            iconUrl: chapaLogo,
+            color: 'bg-[#0B1536]'
         }
     ];
 
@@ -73,25 +60,11 @@ export default function Payment() {
                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                     {/* Main Content - Payment */}
                     <div className="lg:col-span-3">
-                        {/* Secure Payment Notice */}
-                        <div className="bg-green-50 border-l-4 border-green-500 rounded-lg p-4 mb-6">
-                            <div className="flex items-start gap-3">
-                                <Shield className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                                <div>
-                                    <h4 className="font-semibold text-sm text-gray-900 mb-1">Secure Payment</h4>
-                                    <p className="text-xs text-gray-700">
-                                        Your payment information is encrypted and secure
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
                         <div className="bg-white rounded-2xl shadow-sm p-8">
                             <h1 className="text-2xl font-bold text-gray-900 mb-6">Select Payment Method</h1>
 
                             <div className="space-y-4 mb-8">
                                 {paymentMethods.map((method) => {
-                                    const Icon = method.icon;
                                     const isSelected = paymentMethod === method.id;
 
                                     return (
@@ -104,8 +77,8 @@ export default function Payment() {
                                                 }`}
                                         >
                                             {/* Icon */}
-                                            <div className={`w-12 h-12 ${method.color} rounded-xl flex items-center justify-center text-white flex-shrink-0`}>
-                                                <Icon size={24} />
+                                            <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 bg-[#0B1536] overflow-hidden shadow-sm border border-gray-100 p-1">
+                                                <img src={method.iconUrl} alt="Chapa Logo" className="w-full h-full object-contain" />
                                             </div>
 
                                             {/* Details */}
@@ -152,7 +125,7 @@ export default function Payment() {
                                             3
                                         </div>
                                         <p className="text-sm text-gray-700 pt-0.5">
-                                            Enter your Telebirr PIN to complete payment
+                                            Complete your transaction securely on the Chapa gateway
                                         </p>
                                     </div>
                                     <div className="flex items-start gap-3">

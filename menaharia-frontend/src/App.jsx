@@ -1,7 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import MainLayout from './layouts/MainLayout';
 import DashboardLayout from './layouts/DashboardLayout';
+import ScrollToTop from './components/layout/ScrollToTop';
 import { AuthProvider } from './contexts/AuthContext';
+import { ComplaintsProvider } from './contexts/ComplaintsContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 
 import LandingPage from './pages/LandingPage';
@@ -23,11 +25,8 @@ import DestinationDetail from './pages/DestinationDetail';
 import Help from './pages/Help';
 import FAQ from './pages/FAQ';
 import ContactSupport from './pages/ContactSupport';
-import SupportPage from './pages/SupportPage';
 
-import UserUpcoming from './pages/dashboard/UserUpcoming';
-import UserPayments from './pages/dashboard/UserPayments';
-import UserOverview from './pages/dashboard/UserOverview';
+import UserComplaints from './pages/dashboard/UserComplaints';
 import UserBookings from './pages/dashboard/UserBookings';
 import UserProfile from './pages/dashboard/UserProfile';
 
@@ -54,7 +53,9 @@ import AdminPayments from './pages/admin/AdminPayments';
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <ComplaintsProvider>
+        <BrowserRouter>
+        <ScrollToTop />
         <Routes>
           {/* Public Routes */}
           <Route path="/" element={<MainLayout><LandingPage /></MainLayout>} />
@@ -78,7 +79,6 @@ function App() {
           <Route path="/help" element={<MainLayout><Help /></MainLayout>} />
           <Route path="/faq" element={<MainLayout><FAQ /></MainLayout>} />
           <Route path="/contact" element={<MainLayout><ContactSupport /></MainLayout>} />
-          <Route path="/support" element={<MainLayout><SupportPage /></MainLayout>} />
 
           {/* Booking Flow */}
           <Route path="/booking/seats/:tripId" element={<MainLayout><SeatSelection /></MainLayout>} />
@@ -87,11 +87,9 @@ function App() {
           <Route path="/booking/ticket/:bookingId" element={<MainLayout><Ticket /></MainLayout>} />
 
           {/* User Dashboard Routes */}
-          <Route path="/traveller" element={<ProtectedRoute allowedRoles={['traveller']}><Navigate to="/traveller/dashboard" replace /></ProtectedRoute>} />
-          <Route path="/traveller/dashboard" element={<ProtectedRoute allowedRoles={['traveller']}><DashboardLayout><UserOverview /></DashboardLayout></ProtectedRoute>} />
+          <Route path="/traveller" element={<ProtectedRoute allowedRoles={['traveller']}><Navigate to="/traveller/bookings" replace /></ProtectedRoute>} />
           <Route path="/traveller/bookings" element={<ProtectedRoute allowedRoles={['traveller']}><DashboardLayout><UserBookings /></DashboardLayout></ProtectedRoute>} />
-          <Route path="/traveller/upcoming" element={<ProtectedRoute allowedRoles={['traveller']}><DashboardLayout><UserUpcoming /></DashboardLayout></ProtectedRoute>} />
-          <Route path="/traveller/payments" element={<ProtectedRoute allowedRoles={['traveller']}><DashboardLayout><UserPayments /></DashboardLayout></ProtectedRoute>} />
+          <Route path="/traveller/complaints" element={<ProtectedRoute allowedRoles={['traveller']}><DashboardLayout><UserComplaints /></DashboardLayout></ProtectedRoute>} />
           <Route path="/traveller/profile" element={<ProtectedRoute allowedRoles={['traveller']}><DashboardLayout><UserProfile /></DashboardLayout></ProtectedRoute>} />
 
 
@@ -124,6 +122,7 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
+      </ComplaintsProvider>
     </AuthProvider>
   );
 }

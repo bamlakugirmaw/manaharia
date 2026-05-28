@@ -32,12 +32,6 @@ export default function OperatorRevenue() {
 
     return (
         <div className="space-y-8">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold">Revenue Analytics</h1>
-                    <p className="text-gray-500">Detailed financial performance and route analysis</p>
-                </div>
-            </div>
 
             {/* Key Metrics Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

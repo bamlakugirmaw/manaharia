@@ -20,12 +20,24 @@ export function AuthProvider({ children }) {
         // Mocking role detection based on email for testing
         let mockUser = null;
 
+        // 1. Check hardcoded users first
         if (email === 'admin@menaharia.com' && password === 'admin123') {
             mockUser = { id: 'u-admin', name: 'System Admin', email, role: 'admin' };
         } else if (email === 'op@selambus.com' && password === 'op123') {
-            mockUser = { id: 'u-op', name: 'Selam Bus Ops', email, role: 'operator' };
+            mockUser = { id: 'u-op', name: 'Selam Bus Ops', email, role: 'operator', operatorId: 'OP-001' };
         } else if (email === 'user@example.com' && password === 'user123') {
             mockUser = { id: 'u-1', name: 'Abebe Kebede', email, role: 'traveller' };
+        }
+
+        // 2. If not found in hardcoded, check localStorage "database"
+        if (!mockUser) {
+            const usersDb = JSON.parse(localStorage.getItem('menaharia_users_db') || '[]');
+            const foundUser = usersDb.find(u => u.email === email && u.password === password);
+            if (foundUser) {
+                // Return user without password
+                const { password: _, ...safeUser } = foundUser;
+                mockUser = safeUser;
+            }
         }
 
         if (mockUser) {
@@ -49,8 +61,19 @@ export function AuthProvider({ children }) {
             ...userData,
             role: 'traveller' // Default role for new signups
         };
-        // In a real app, this would be a POST request
-        return { success: true, message: 'Account created successfully! Please sign in.' };
+
+        // Save to "database"
+        const usersDb = JSON.parse(localStorage.getItem('menaharia_users_db') || '[]');
+        usersDb.push(newUser);
+        localStorage.setItem('menaharia_users_db', JSON.stringify(usersDb));
+
+        // Auto-login after signup
+        // Remove password from session user for better practice, though essentially mocked here
+        const { password: _, ...safeUser } = newUser;
+        setUser(safeUser);
+        localStorage.setItem('menaharia_user', JSON.stringify(safeUser));
+
+        return { success: true, message: 'Account created successfully!' };
     };
 
     return (

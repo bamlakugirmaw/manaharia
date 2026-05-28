@@ -27,7 +27,6 @@ export default function LandingPage() {
         { id: 4, from: 'Dire Dawa', to: 'Hawassa', time: '7h 45m', price: '390', image: '/images/Enhanced_Bus_Images/Abay_Bus.jpg' },
     ];
 
-
     const destinations = [
         { name: 'Addis Ababa', routes: 45, image: '/images/destinations/addis_ababa.jpg' },
         { name: 'Bahir Dar', routes: 28, image: '/images/destinations/bahir_dar.jpg' },
@@ -72,52 +71,54 @@ export default function LandingPage() {
     return (
         <div className="flex flex-col min-h-screen bg-white">
             {/* Hero Section */}
-            <section className="relative h-[467px] flex items-center justify-center text-white overflow-hidden">
-                <div className="absolute inset-0 z-0">
-                    {HERO_IMAGES.map((img, idx) => (
-                        <div
-                            key={idx}
-                            className={cn(
-                                "absolute inset-0 transition-all duration-[1500ms] ease-in-out transform",
-                                idx === heroIndex ? "opacity-100 scale-105" : "opacity-0 scale-100"
-                            )}
-                        >
-                            <img
-                                src={img}
-                                alt={`Hero background ${idx}`}
-                                className="w-full h-full object-cover"
+            <div className="relative z-10 max-w-[1400px] mx-auto px-4 w-full mt-6">
+                <section className="relative h-[467px] flex items-center justify-center text-white overflow-hidden rounded-[3rem]">
+                    <div className="absolute inset-0 z-0">
+                        {HERO_IMAGES.map((img, idx) => (
+                            <div
+                                key={idx}
+                                className={cn(
+                                    "absolute inset-0 transition-all duration-[1500ms] ease-in-out transform",
+                                    idx === heroIndex ? "opacity-100 scale-105" : "opacity-0 scale-100"
+                                )}
+                            >
+                                <img
+                                    src={img}
+                                    alt={`Hero background ${idx}`}
+                                    className="w-full h-full object-cover"
+                                />
+                            </div>
+                        ))}
+                        <div className="absolute inset-0 bg-black/30" />
+                    </div>
+
+                    <div className="relative z-10 w-full max-w-7xl mx-auto px-4 text-center pb-20">
+                        <h1 className="text-6xl md:text-[80px] font-black mb-6 tracking-tight leading-none">
+                            Find the Best Bus <br /> for Your Trip
+                        </h1>
+                        <p className="text-xl md:text-2xl text-white/90 font-medium max-w-2xl mx-auto">
+                            Compare routes, prices, and schedules for buses across Ethiopia
+                        </p>
+                    </div>
+
+                    {/* Carousel Indicators */}
+                    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-3 z-20">
+                        {HERO_IMAGES.map((_, idx) => (
+                            <button
+                                key={idx}
+                                onClick={() => setHeroIndex(idx)}
+                                className={cn(
+                                    "h-2 transition-all duration-500 rounded-full",
+                                    idx === heroIndex ? "w-10 bg-white" : "w-2 bg-white/40 hover:bg-white/60"
+                                )}
                             />
-                        </div>
-                    ))}
-                    <div className="absolute inset-0 bg-black/30" />
-                </div>
-
-                <div className="relative z-10 w-full max-w-7xl mx-auto px-4 text-center pb-20">
-                    <h1 className="text-6xl md:text-[80px] font-black mb-6 tracking-tight leading-none">
-                        Find the Best Bus <br /> for Your Trip
-                    </h1>
-                    <p className="text-xl md:text-2xl text-white/90 font-medium max-w-2xl mx-auto">
-                        Compare routes, prices, and schedules for buses across Ethiopia
-                    </p>
-                </div>
-
-                {/* Carousel Indicators */}
-                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-3 z-20">
-                    {HERO_IMAGES.map((_, idx) => (
-                        <button
-                            key={idx}
-                            onClick={() => setHeroIndex(idx)}
-                            className={cn(
-                                "h-2 transition-all duration-500 rounded-full",
-                                idx === heroIndex ? "w-10 bg-white" : "w-2 bg-white/40 hover:bg-white/60"
-                            )}
-                        />
-                    ))}
-                </div>
-            </section>
+                        ))}
+                    </div>
+                </section>
+            </div>
 
             {/* Content Wrapper for Overlapping Search */}
-            <div className="relative z-30 max-w-7xl mx-auto px-4 w-full -mt-8">
+            <div className="relative z-30 max-w-5xl mx-auto px-4 w-full -mt-8">
                 <Card className="bg-transparent p-0 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.15)] rounded-[3rem] border border-white/40 overflow-hidden">
                     <div className="h-7 w-full bg-transparent" />
                     <div className="bg-white p-10 pt-6">

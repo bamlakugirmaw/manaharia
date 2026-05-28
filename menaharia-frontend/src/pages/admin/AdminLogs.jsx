@@ -20,17 +20,14 @@ export default function AdminLogs() {
         if (levelFilter === 'error') {
             return log.level === 'error';
         }
+        if (levelFilter === 'warning') {
+            return log.level === 'warning';
+        }
         return true; // 'all' shows everything
     });
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-2xl font-bold">System Logs</h1>
-                    <p className="text-gray-500">Monitor platform activity and troubleshoot issues.</p>
-                </div>
-            </div>
 
             <Card className="p-4 border-none shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center">
                 <div className="flex items-center gap-2 w-full md:w-auto">
@@ -55,6 +52,18 @@ export default function AdminLogs() {
                         onClick={() => setLevelFilter('all')}
                     >
                         All Levels
+                    </Badge>
+                    <Badge
+                        variant="outline"
+                        className={cn(
+                            "cursor-pointer transition-colors",
+                            levelFilter === 'warning'
+                                ? "bg-amber-500 text-white border-amber-500"
+                                : "text-amber-600 border-amber-200 hover:bg-amber-50"
+                        )}
+                        onClick={() => setLevelFilter('warning')}
+                    >
+                        Warn
                     </Badge>
                     <Badge
                         variant="outline"

@@ -21,3 +21,18 @@
     @apply bg-light text-gray-900 font-sans antialiased;
   }
 }
+
+/* Thin custom scrollbar for trip list sidebar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #0096C7;
+}

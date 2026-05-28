@@ -29,7 +29,7 @@ export default function Login() {
                 // Determine destination based on role
                 if (result.user.role === 'admin') navigate('/admin/dashboard');
                 else if (result.user.role === 'operator') navigate('/operator/dashboard');
-                else navigate('/traveller/dashboard');
+                else navigate('/traveller/bookings');
             } else {
                 setError(result.message);
             }

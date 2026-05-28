@@ -92,14 +92,6 @@ export default function AdminOperatorManagement() {
 
     return (
         <div className="space-y-6 relative">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold">Bus Operators</h1>
-                    <p className="text-gray-500 text-sm">Manage transportation partners and their fleet credentials.</p>
-                </div>
-                <Button size="sm" onClick={() => setIsAddModalOpen(true)}>Add New Operator</Button>
-            </div>
-
             {/* Search and Filters */}
             <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
                 <div className="relative w-full md:w-96">
@@ -112,6 +104,7 @@ export default function AdminOperatorManagement() {
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
                 </div>
+                <Button size="sm" onClick={() => setIsAddModalOpen(true)}>Add New Operator</Button>
             </div>
 
             {/* Operators Table */}

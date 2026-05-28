@@ -3,22 +3,40 @@ import { useState, useEffect } from 'react';
 import TripCard from '../components/tickets/TripCard';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
-import { Filter, ArrowLeft, Bus, Check } from 'lucide-react';
-import { TRIPS, OPERATORS } from '../data/mock-db';
+import { Filter, ArrowLeft, Bus, Check, Sparkles, MapPin, Calendar, Search, ChevronUp, ChevronDown, RefreshCw, Clock } from 'lucide-react';
+import { TRIPS, OPERATORS, LOCATIONS } from '../data/mock-db';
+import heroBg from '../assets/hero-bus-bg.png';
 
 export default function SearchResults() {
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
     const navigate = useNavigate();
     const [trips, setTrips] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    // Filter states
-    const [selectedTime, setSelectedTime] = useState('');
-    const [selectedOperator, setSelectedOperator] = useState('');
-
     const from = searchParams.get('from');
     const to = searchParams.get('to');
     const date = searchParams.get('date');
+
+    // Local form states
+    const [fromVal, setFromVal] = useState(from || '');
+    const [toVal, setToVal] = useState(to || '');
+    const [dateVal, setDateVal] = useState(date || '');
+
+    // Filter states
+    const [selectedTime, setSelectedTime] = useState('');
+    const [selectedOperators, setSelectedOperators] = useState([]);
+    const [sortBy, setSortBy] = useState('earliest');
+
+    // Accordion states
+    const [timeOpen, setTimeOpen] = useState(true);
+    const [operatorsOpen, setOperatorsOpen] = useState(true);
+
+    // Sync input fields when URL search parameters change
+    useEffect(() => {
+        setFromVal(from || '');
+        setToVal(to || '');
+        setDateVal(date || '');
+    }, [from, to, date]);
 
     const handleTimeSelect = (time) => {
         if (selectedTime === time) setSelectedTime('');
@@ -26,124 +44,323 @@ export default function SearchResults() {
     };
 
     const handleOperatorSelect = (opId) => {
-        if (selectedOperator === opId) setSelectedOperator('');
-        else setSelectedOperator(opId);
+        if (selectedOperators.includes(opId)) {
+            setSelectedOperators(selectedOperators.filter(id => id !== opId));
+        } else {
+            setSelectedOperators([...selectedOperators, opId]);
+        }
+    };
+
+    const handleSwap = () => {
+        const temp = fromVal;
+        setFromVal(toVal);
+        setToVal(temp);
+    };
+
+    const handleSearchSubmit = (e) => {
+        e.preventDefault();
+        const newParams = {};
+        if (fromVal) newParams.from = fromVal;
+        if (toVal) newParams.to = toVal;
+        if (dateVal) newParams.date = dateVal;
+        setSearchParams(newParams);
     };
 
     useEffect(() => {
-        // Simulate API fetch delay
         setLoading(true);
-        setTimeout(() => {
-            let filtered = TRIPS;
-            if (from) filtered = filtered.filter(t => t.from === from);
-            if (to) filtered = filtered.filter(t => t.to === to);
+        const timer = setTimeout(() => {
+            let filtered = [...TRIPS];
+            
+            // Apply Route filter
+            if (from) filtered = filtered.filter(t => t.from.toLowerCase() === from.toLowerCase());
+            if (to) filtered = filtered.filter(t => t.to.toLowerCase() === to.toLowerCase());
 
-            // Apply Time Filter
+            // Apply Time Filter (4 bands matching the UI layout)
             if (selectedTime) {
                 filtered = filtered.filter(t => {
                     const hour = parseInt(t.departureTime.split(':')[0]);
                     if (selectedTime === 'Before 6:00 AM') return hour < 6;
                     if (selectedTime === '6:00 AM - 12:00 PM') return hour >= 6 && hour < 12;
-                    if (selectedTime === 'After 12:00 PM') return hour >= 12;
+                    if (selectedTime === '12:00 PM - 6:00 PM') return hour >= 12 && hour < 18;
+                    if (selectedTime === 'After 6:00 PM') return hour >= 18;
                     return true;
                 });
             }
 
-            // Apply Operator Filter
-            if (selectedOperator) {
-                filtered = filtered.filter(t => t.operatorId === selectedOperator);
+            // Apply Operator Filter (multi-select)
+            if (selectedOperators.length > 0) {
+                filtered = filtered.filter(t => selectedOperators.includes(t.operatorId));
             }
 
-            // Date filter ignored for demo to show results always
+            // Apply Sorting
+            if (sortBy === 'earliest') {
+                filtered.sort((a, b) => a.departureTime.localeCompare(b.departureTime));
+            } else if (sortBy === 'latest') {
+                filtered.sort((a, b) => b.departureTime.localeCompare(a.departureTime));
+            } else if (sortBy === 'price-low') {
+                filtered.sort((a, b) => a.price - b.price);
+            } else if (sortBy === 'price-high') {
+                filtered.sort((a, b) => b.price - a.price);
+            }
+
             setTrips(filtered);
             setLoading(false);
-        }, 500);
-    }, [from, to, date, selectedTime, selectedOperator]);
+        }, 300);
+
+        return () => clearTimeout(timer);
+    }, [from, to, date, selectedTime, selectedOperators, sortBy]);
 
     const handleSelectTrip = (tripId) => {
-        // Navigate to seat selection page
         navigate(`/booking/seats/${tripId}`);
     };
 
     const clearFilters = () => {
         setSelectedTime('');
-        setSelectedOperator('');
+        setSelectedOperators([]);
     };
 
     return (
-        <div className="container mx-auto px-4 py-12">
-            {/* Header */}
-            <div className="mb-10">
-                <Button variant="ghost" className="mb-6 pl-0 text-gray-400 hover:text-primary transition-colors text-xs font-bold" onClick={() => navigate('/')}>
-                    <ArrowLeft className="mr-2 h-4 w-4" /> Back to Search
-                </Button>
-                <div className="flex flex-col md:flex-row justify-between items-end gap-6">
-                    <div>
-                        <h1 className="text-3xl font-extrabold tracking-tight text-gray-900">
-                            {from || 'Anywhere'} <span className="text-gray-300 font-light mx-2">→</span> {to || 'Anywhere'}
-                        </h1>
-                        <p className="text-gray-400 text-[11px] font-bold mt-1.5 uppercase tracking-[0.2em]">
-                            {date ? new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'All Dates'}
-                            <span className="mx-3 text-gray-200">|</span>
-                            {trips.length} Buses Available
-                        </p>
-                    </div>
-                    {(selectedTime || selectedOperator) && (
-                        <Button variant="ghost" onClick={clearFilters} className="text-red-500 text-xs font-bold hover:bg-red-50">
-                            Clear Filters
-                        </Button>
-                    )}
-                </div>
-            </div>
+        <div className="container mx-auto px-4 py-8 max-w-7xl">
+            {/* Header / Search Banner */}
+            <div 
+                className="relative rounded-[2.5rem] p-8 md:p-10 mb-10 overflow-hidden shadow-sm"
+                style={{ 
+                    backgroundImage: `url(${heroBg})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center 55%',
+                    backgroundColor: '#E8EEFF'
+                }}
+            >
 
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-12">
-                {/* Filters Sidebar */}
-                <div className="hidden lg:block space-y-6">
-                    <Card className="p-6 space-y-8 bg-white border-none shadow-[0_8px_30px_rgba(0,0,0,0.02)] rounded-[2.5rem]">
-                        <div>
-                            <h3 className="text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400 mb-6">Departure Time</h3>
-                            <div className="space-y-4">
-                                {['Before 6:00 AM', '6:00 AM - 12:00 PM', 'After 12:00 PM'].map(time => (
-                                    <label key={time} className="flex items-center gap-3 text-xs font-bold text-gray-500 hover:text-primary transition-colors cursor-pointer group">
-                                        <div
-                                            className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center ${selectedTime === time ? 'border-primary bg-primary' : 'border-gray-100 bg-gray-50/50 group-hover:border-primary/30'}`}
-                                            onClick={() => handleTimeSelect(time)}
-                                        >
-                                            {selectedTime === time && <Check size={12} className="text-white" strokeWidth={4} />}
-                                        </div>
-                                        <span onClick={() => handleTimeSelect(time)}>{time}</span>
-                                    </label>
-                                ))}
+                {/* Banner Content */}
+                <div className="relative z-10">
+                    <div className="flex items-center gap-1.5 mb-2.5 text-blue-600">
+                        <Sparkles size={14} className="fill-blue-600/10" />
+                        <span className="text-[10px] font-extrabold uppercase tracking-[0.15em] opacity-90">Plan Your Journey</span>
+                    </div>
+
+                    <h1 className="text-3xl md:text-[38px] font-black text-dark tracking-tight leading-none mb-2 flex items-center gap-3">
+                        {from || 'Anywhere'} 
+                        <span className="text-blue-500/50 font-light text-2xl">➔</span> 
+                        {to || 'Anywhere'}
+                    </h1>
+
+                    <p className="text-gray-500/80 text-[11px] font-bold uppercase tracking-[0.1em] mb-8">
+                        {date ? new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'All dates'}
+                        <span className="mx-2.5 opacity-40">•</span>
+                        {trips.length} buses available
+                    </p>
+
+                    {/* Inline Search Bar Form */}
+                    <form onSubmit={handleSearchSubmit} className="flex flex-col lg:flex-row items-center gap-3 bg-white p-3 rounded-3xl shadow-sm border border-gray-100/90 w-full max-w-5xl">
+                        {/* Departure (FROM) Input */}
+                        <div className="flex-1 w-full flex items-center gap-3 px-4 py-1.5 border-r border-gray-100/70 lg:last:border-r-0">
+                            <div className="text-blue-500 shrink-0">
+                                <MapPin size={20} className="stroke-[2]" />
+                            </div>
+                            <div className="flex-1 flex flex-col min-w-0">
+                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">FROM</span>
+                                <select
+                                    className="w-full bg-transparent border-none p-0 text-[13px] font-bold text-gray-700 focus:ring-0 outline-none appearance-none cursor-pointer"
+                                    value={fromVal}
+                                    onChange={(e) => setFromVal(e.target.value)}
+                                    required
+                                >
+                                    <option value="">Departure location</option>
+                                    {LOCATIONS.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                                </select>
                             </div>
                         </div>
 
-                        <div className="h-px bg-gray-50"></div>
+                        {/* Swap Button */}
+                        <button
+                            type="button"
+                            onClick={handleSwap}
+                            className="w-9 h-9 rounded-full bg-white border border-gray-100/90 flex items-center justify-center shadow-sm hover:bg-gray-50 active:scale-95 transition-all shrink-0 -my-3 lg:my-0 -mx-1 lg:mx-0 z-20"
+                            title="Swap Departure and Destination"
+                        >
+                            <span className="text-gray-500 font-extrabold text-base leading-none">⇄</span>
+                        </button>
 
-                        <div>
-                            <h3 className="text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400 mb-6">Operators</h3>
-                            <div className="space-y-4">
-                                {OPERATORS.map(op => (
-                                    <label key={op.id} className="flex items-center gap-3 text-xs font-bold text-gray-500 hover:text-primary transition-colors cursor-pointer group">
-                                        <div
-                                            className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center ${selectedOperator === op.id ? 'border-primary bg-primary' : 'border-gray-100 bg-gray-50/50 group-hover:border-primary/30'}`}
-                                            onClick={() => handleOperatorSelect(op.id)}
-                                        >
-                                            {selectedOperator === op.id && <Check size={12} className="text-white" strokeWidth={4} />}
-                                        </div>
-                                        <span onClick={() => handleOperatorSelect(op.id)}>{op.name}</span>
-                                    </label>
-                                ))}
+                        {/* Destination (TO) Input */}
+                        <div className="flex-1 w-full flex items-center gap-3 px-4 py-1.5 border-r border-gray-100/70 lg:last:border-r-0">
+                            <div className="text-blue-500 shrink-0">
+                                <MapPin size={20} className="stroke-[2]" />
                             </div>
+                            <div className="flex-1 flex flex-col min-w-0">
+                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">TO</span>
+                                <select
+                                    className="w-full bg-transparent border-none p-0 text-[13px] font-bold text-gray-700 focus:ring-0 outline-none appearance-none cursor-pointer"
+                                    value={toVal}
+                                    onChange={(e) => setToVal(e.target.value)}
+                                    required
+                                >
+                                    <option value="">Destination location</option>
+                                    {LOCATIONS.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Date Selection */}
+                        <div className="flex-1 w-full flex items-center gap-3 px-4 py-1.5 border-r border-gray-100/70 lg:last:border-r-0">
+                            <div className="text-blue-500 shrink-0">
+                                <Calendar size={20} className="stroke-[2]" />
+                            </div>
+                            <div className="flex-1 flex flex-col min-w-0">
+                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">DATE</span>
+                                <input
+                                    type="date"
+                                    className="w-full bg-transparent border-none p-0 text-[13px] font-bold text-gray-700 focus:ring-0 outline-none cursor-pointer"
+                                    value={dateVal}
+                                    onChange={(e) => setDateVal(e.target.value)}
+                                    required
+                                />
+                            </div>
+                        </div>
+
+                        {/* Search Button */}
+                        <Button
+                            type="submit"
+                            className="w-full lg:w-auto h-12 px-8 rounded-2xl bg-gradient-to-r from-orange-400 to-pink-500 hover:opacity-90 text-white font-extrabold text-sm shadow-md shadow-orange-500/20 flex items-center justify-center gap-2 shrink-0 transition-all hover:scale-[1.01] active:scale-95 border-none"
+                        >
+                            <Search size={16} /> Search Buses
+                        </Button>
+                    </form>
+                </div>
+            </div>
+
+            {/* Content Layout Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
+                {/* Filters Sidebar - Sticky Full Height Layout */}
+                <div className="lg:sticky lg:top-24 self-start w-full">
+                    <Card className="p-6 bg-white border-none shadow-[0_8px_30px_rgba(0,0,0,0.02)] rounded-[2rem] border border-gray-50/50 flex flex-col justify-between min-h-[calc(100vh-220px)]">
+                        <div>
+                            {/* DEPARTURE TIME Accordion */}
+                            <div className="mb-8">
+                                <div 
+                                    className="flex items-center justify-between cursor-pointer group mb-6" 
+                                    onClick={() => setTimeOpen(!timeOpen)}
+                                >
+                                    <h3 className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-dark/70 flex items-center gap-2.5">
+                                        <Clock size={15} className="text-blue-500 stroke-[2.5]" />
+                                        Departure Time
+                                    </h3>
+                                    {timeOpen ? (
+                                        <ChevronUp size={16} className="text-gray-400 group-hover:text-dark transition-colors" />
+                                    ) : (
+                                        <ChevronDown size={16} className="text-gray-400 group-hover:text-dark transition-colors" />
+                                    )}
+                                </div>
+
+                                {timeOpen && (
+                                    <div className="space-y-4 pl-0.5">
+                                        {['Before 6:00 AM', '6:00 AM - 12:00 PM', '12:00 PM - 6:00 PM', 'After 6:00 PM'].map(time => (
+                                            <label 
+                                                key={time} 
+                                                className="flex items-center gap-3 text-xs font-bold text-gray-500 hover:text-dark transition-colors cursor-pointer group"
+                                            >
+                                                <div
+                                                    className={`w-5 h-5 rounded-full border transition-all flex items-center justify-center ${selectedTime === time ? 'border-blue-500 bg-blue-500' : 'border-gray-300 bg-white group-hover:border-blue-500/50'}`}
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        handleTimeSelect(time);
+                                                    }}
+                                                >
+                                                    {selectedTime === time && (
+                                                        <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                                                    )}
+                                                </div>
+                                                <span 
+                                                    className={selectedTime === time ? 'text-dark font-extrabold' : ''}
+                                                    onClick={() => handleTimeSelect(time)}
+                                                >
+                                                    {time}
+                                                </span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="h-px bg-gray-100/70 my-6"></div>
+
+                            {/* OPERATORS Accordion */}
+                            <div className="mb-4">
+                                <div 
+                                    className="flex items-center justify-between cursor-pointer group mb-6" 
+                                    onClick={() => setOperatorsOpen(!operatorsOpen)}
+                                >
+                                    <h3 className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-dark/70 flex items-center gap-2.5">
+                                        <Bus size={15} className="text-blue-500 stroke-[2.5]" />
+                                        Operators
+                                    </h3>
+                                    {operatorsOpen ? (
+                                        <ChevronUp size={16} className="text-gray-400 group-hover:text-dark transition-colors" />
+                                    ) : (
+                                        <ChevronDown size={16} className="text-gray-400 group-hover:text-dark transition-colors" />
+                                    )}
+                                </div>
+
+                                {operatorsOpen && (
+                                    <div className="space-y-4 pl-0.5">
+                                        {OPERATORS.map(op => {
+                                            const isChecked = selectedOperators.includes(op.id);
+                                            return (
+                                                <label 
+                                                    key={op.id} 
+                                                    className="flex items-center gap-3 text-xs font-bold text-gray-500 hover:text-dark transition-colors cursor-pointer group"
+                                                >
+                                                    <div
+                                                        className={`w-5 h-5 rounded border transition-all flex items-center justify-center ${isChecked ? 'border-blue-500 bg-blue-500' : 'border-gray-300 bg-white group-hover:border-blue-500/50'}`}
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            handleOperatorSelect(op.id);
+                                                        }}
+                                                    >
+                                                        {isChecked && (
+                                                            <Check size={12} className="text-white stroke-[3.5]" />
+                                                        )}
+                                                    </div>
+                                                    <span 
+                                                        className={isChecked ? 'text-dark font-extrabold' : ''}
+                                                        onClick={() => handleOperatorSelect(op.id)}
+                                                    >
+                                                        {op.name}
+                                                    </span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Reset / Clear Filters pushed to bottom */}
+                        <div className="mt-auto pt-6 border-t border-gray-100/50">
+                            {(selectedTime || selectedOperators.length > 0) ? (
+                                <Button 
+                                    onClick={clearFilters} 
+                                    variant="outline"
+                                    className="w-full py-2.5 rounded-2xl border border-blue-500 text-blue-500 font-bold hover:bg-blue-50/50 transition-all flex items-center justify-center gap-2 text-xs"
+                                >
+                                    <RefreshCw size={12} /> Clear Filters
+                                </Button>
+                            ) : (
+                                <div className="text-center text-[10px] text-gray-400 font-bold tracking-wide uppercase">
+                                    No active filters
+                                </div>
+                            )}
                         </div>
                     </Card>
                 </div>
 
-                {/* Results List */}
+                {/* Results List Area */}
                 <div className="lg:col-span-3">
+
                     {loading ? (
                         <div className="space-y-6">
                             {[1, 2, 3].map(i => (
-                                <Card key={i} className="h-32 animate-pulse bg-gray-50/50 rounded-2xl border-none" />
+                                <Card key={i} className="h-32 animate-pulse bg-gray-50/50 rounded-3xl border-none" />
                             ))}
                         </div>
                     ) : trips.length > 0 ? (
@@ -159,11 +376,17 @@ export default function SearchResults() {
                             </div>
                             <h3 className="text-xl font-extrabold text-gray-900">No trips found</h3>
                             <p className="text-gray-400 mt-2 text-[11px] font-bold uppercase tracking-wider">Try changing your search criteria</p>
-                            <Button className="mt-8 h-12 px-8 rounded-xl font-bold bg-gray-900 text-white hover:bg-black transition-all" onClick={() => {
-                                clearFilters();
-                                navigate('/');
-                            }}>
-                                Clear Filters
+                            <Button 
+                                className="mt-8 h-12 px-8 rounded-xl font-bold bg-gray-900 text-white hover:bg-black transition-all border-none" 
+                                onClick={() => {
+                                    clearFilters();
+                                    setFromVal('');
+                                    setToVal('');
+                                    setDateVal('');
+                                    setSearchParams({});
+                                }}
+                            >
+                                Clear All Search
                             </Button>
                         </div>
                     )}

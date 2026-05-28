@@ -30,12 +30,6 @@ export default function AdminUserManagement() {
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold">Manage Users</h1>
-                    <p className="text-gray-500 text-sm">Review, block, or manage permissions for all registered travellers.</p>
-                </div>
-            </div>
 
             <div className="relative w-full">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
