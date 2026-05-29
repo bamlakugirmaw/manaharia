@@ -22,7 +22,7 @@ const LEGACY_DISPUTES = [
         status: 'resolved',
         priority: 'medium',
         isLegacy: true,
-        operatorId: 'OP-001',
+        operatorId: 'selam-bus',
     },
     {
         id: 'DSP-002',
@@ -33,7 +33,7 @@ const LEGACY_DISPUTES = [
         status: 'in-progress',
         priority: 'low',
         isLegacy: true,
-        operatorId: 'OP-002',
+        operatorId: 'sky-bus',
     },
 ];
 
@@ -102,7 +102,7 @@ export default function OperatorDisputes() {
     };
 
     // Filter complaints to only those linked to this specific operator
-    const operatorId = user?.operatorId || 'OP-001'; // Default to Selam Bus OP-001 for demo purposes
+    const operatorId = user?.operatorId || 'selam-bus'; // Default to Selam Bus selam-bus for demo purposes
     const operatorComplaints = complaints.filter(c => c.operatorId === operatorId);
     const operatorLegacy = LEGACY_DISPUTES.filter(d => d.operatorId === operatorId);
 

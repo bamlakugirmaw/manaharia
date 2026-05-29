@@ -109,7 +109,7 @@ export default function BookingManagement() {
 
         const newTrip = {
             id: `trip-${Date.now()}`,
-            operatorId: 'op-1',
+            operatorId: 'selam-bus',
             from,
             to,
             date: addDate,

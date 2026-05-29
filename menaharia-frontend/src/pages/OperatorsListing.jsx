@@ -10,7 +10,7 @@ export default function OperatorsListing() {
 
     const filteredOperators = allOperators.filter(op =>
         op.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        op.routes.some(r => r.toLowerCase().includes(searchTerm.toLowerCase()))
+        op.routesServed.some(r => r.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
     return (

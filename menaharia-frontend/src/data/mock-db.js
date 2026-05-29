@@ -56,18 +56,18 @@ export const DESTINATIONS = [
 ];
 
 export const OPERATORS = [
-    { id: "op-1", name: "Selam Bus", rating: 4.8, image: "/images/Enhanced_Bus_Images/Selam_Bus1.jpg" },
-    { id: "op-2", name: "Sky Bus", rating: 4.7, image: "/images/Enhanced_Bus_Images/Sky_Bus.jpg" },
-    { id: "op-3", name: "Abay Bus", rating: 4.5, image: "/images/Enhanced_Bus_Images/Abay_Bus.jpg" },
-    { id: "op-4", name: "Golden Bus", rating: 4.6, image: "/images/Enhanced_Bus_Images/Golden_Bus.jpg" },
-    { id: "op-5", name: "Ethio Bus", rating: 4.3, image: "/images/Enhanced_Bus_Images/Ethio_Bus.jpg" },
+    { id: "selam-bus", name: "Selam Bus", rating: 4.8, image: "/images/Enhanced_Bus_Images/Selam_Bus1.jpg" },
+    { id: "sky-bus", name: "Sky Bus", rating: 4.7, image: "/images/Enhanced_Bus_Images/Sky_Bus.jpg" },
+    { id: "abay-bus", name: "Abay Bus", rating: 4.5, image: "/images/Enhanced_Bus_Images/Abay_Bus.jpg" },
+    { id: "golden-bus", name: "Golden Bus", rating: 4.6, image: "/images/Enhanced_Bus_Images/Golden_Bus.jpg" },
+    { id: "ethio-bus", name: "Ethio Bus", rating: 4.3, image: "/images/Enhanced_Bus_Images/Ethio_Bus.jpg" },
 ];
 
 export const TRIPS = [
     // Addis Ababa → Bahir Dar (Multiple operators)
     {
         id: "trip-1",
-        operatorId: "op-1",
+        operatorId: "selam-bus",
         from: "Addis Ababa",
         to: "Bahir Dar",
         date: "2025-12-15",
@@ -82,7 +82,7 @@ export const TRIPS = [
     },
     {
         id: "trip-2",
-        operatorId: "op-2",
+        operatorId: "sky-bus",
         from: "Addis Ababa",
         to: "Bahir Dar",
         date: "2025-12-15",
@@ -97,7 +97,7 @@ export const TRIPS = [
     },
     {
         id: "trip-3",
-        operatorId: "op-4",
+        operatorId: "golden-bus",
         from: "Addis Ababa",
         to: "Bahir Dar",
         date: "2025-12-15",
@@ -113,7 +113,7 @@ export const TRIPS = [
     // Addis Ababa → Mekelle
     {
         id: "trip-4",
-        operatorId: "op-2",
+        operatorId: "sky-bus",
         from: "Addis Ababa",
         to: "Mekelle",
         date: "2025-12-15",
@@ -128,7 +128,7 @@ export const TRIPS = [
     },
     {
         id: "trip-5",
-        operatorId: "op-3",
+        operatorId: "abay-bus",
         from: "Addis Ababa",
         to: "Mekelle",
         date: "2025-12-15",
@@ -144,7 +144,7 @@ export const TRIPS = [
     // Addis Ababa → Jimma
     {
         id: "trip-6",
-        operatorId: "op-1",
+        operatorId: "selam-bus",
         from: "Addis Ababa",
         to: "Jimma",
         date: "2025-12-15",
@@ -159,7 +159,7 @@ export const TRIPS = [
     },
     {
         id: "trip-7",
-        operatorId: "op-5",
+        operatorId: "ethio-bus",
         from: "Addis Ababa",
         to: "Jimma",
         date: "2025-12-15",
@@ -175,7 +175,7 @@ export const TRIPS = [
     // Addis Ababa → Hawassa
     {
         id: "trip-8",
-        operatorId: "op-1",
+        operatorId: "selam-bus",
         from: "Addis Ababa",
         to: "Hawassa",
         date: "2025-12-15",
@@ -190,7 +190,7 @@ export const TRIPS = [
     },
     {
         id: "trip-9",
-        operatorId: "op-2",
+        operatorId: "sky-bus",
         from: "Addis Ababa",
         to: "Hawassa",
         date: "2025-12-15",
@@ -206,7 +206,7 @@ export const TRIPS = [
     // Bahir Dar → Addis Ababa (Return route)
     {
         id: "trip-10",
-        operatorId: "op-1",
+        operatorId: "selam-bus",
         from: "Bahir Dar",
         to: "Addis Ababa",
         date: "2025-12-16",

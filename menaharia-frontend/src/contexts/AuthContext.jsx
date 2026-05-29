@@ -28,7 +28,7 @@ export function AuthProvider({ children }) {
         if (isAdmin && password === 'admin123') {
             mockUser = { id: 'u-admin', name: 'System Admin', email: 'admin@menaharia.com', phone: '+251900000000', role: 'admin' };
         } else if (isOperator && password === 'op123') {
-            mockUser = { id: 'u-op', name: 'Selam Bus Ops', email: 'op@selambus.com', phone: '+251911111111', role: 'operator', operatorId: 'OP-001' };
+            mockUser = { id: 'u-op', name: 'Selam Bus Ops', email: 'op@selambus.com', phone: '+251911111111', role: 'operator', operatorId: 'selam-bus' };
         } else if (isUser && password === 'user123') {
             mockUser = { id: 'u-1', name: 'Abebe Kebede', email: 'user@example.com', phone: '+251922222222', role: 'traveller' };
         }

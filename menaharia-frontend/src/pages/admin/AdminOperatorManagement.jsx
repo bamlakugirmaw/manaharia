@@ -8,7 +8,7 @@ import DetailModal, { ModalDataRow } from '../../components/admin/DetailModal';
 
 const MOCK_OPERATORS = [
     {
-        id: 'OP-001',
+        id: 'selam-bus',
         name: 'Selam Bus Transport',
         logo: '/images/Enhanced_Bus_Images/Selam_Bus1.jpg',
         license: 'LIC-2024-00123',
@@ -21,7 +21,7 @@ const MOCK_OPERATORS = [
         email: 'info@selambus.com'
     },
     {
-        id: 'OP-002',
+        id: 'sky-bus',
         name: 'Sky Bus Services',
         logo: '/images/Enhanced_Bus_Images/Sky_Bus.jpg',
         license: 'LIC-2024-00456',
@@ -34,7 +34,7 @@ const MOCK_OPERATORS = [
         email: 'ops@skybus.com'
     },
     {
-        id: 'OP-003',
+        id: 'golden-bus',
         name: 'Golden Bus',
         logo: '/images/Enhanced_Bus_Images/Golden_Bus.jpg',
         license: 'LIC-2024-00789',

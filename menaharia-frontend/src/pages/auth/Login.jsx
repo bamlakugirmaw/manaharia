@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { Logo } from '../../components/ui/Logo';
-import { Mail, Lock, Eye, EyeOff, ArrowRight, User, Bus, ShieldCheck, Phone } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ArrowRight, Phone } from 'lucide-react';
 
 export default function Login() {
     const [emailOrPhone, setEmailOrPhone] = useState('');
@@ -40,18 +40,7 @@ export default function Login() {
         }
     };
 
-    const handleQuickAccess = (role, usePhone = false) => {
-        if (role === 'admin') {
-            setEmailOrPhone(usePhone ? '0900000000' : 'admin@menaharia.com');
-            setPassword('admin123');
-        } else if (role === 'operator') {
-            setEmailOrPhone(usePhone ? '0911111111' : 'op@selambus.com');
-            setPassword('op123');
-        } else if (role === 'user') {
-            setEmailOrPhone(usePhone ? '0922222222' : 'user@example.com');
-            setPassword('user123');
-        }
-    };
+
 
     // Dynamically show Mail or Phone icon based on whether it looks like a phone pattern
     const isPhone = /^[+0-9]/.test(emailOrPhone);
@@ -128,46 +117,7 @@ export default function Login() {
                         </Button>
                     </form>
 
-                    {/* Quick Info / Role Help */}
-                    <div className="mt-8 pt-8 border-t border-gray-100">
-                        <p className="text-center text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Quick Test Access</p>
-                        <p className="text-center text-[9px] text-gray-400 mb-4">(Click to auto-fill. Click again to toggle phone/email)</p>
-                        <div className="grid grid-cols-3 gap-2">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    const usePhone = emailOrPhone === 'user@example.com';
-                                    handleQuickAccess('user', usePhone);
-                                }}
-                                className="flex flex-col items-center p-2 rounded-xl bg-gray-50/50 border border-gray-100 hover:bg-gray-100 hover:border-gray-200 transition-all cursor-pointer"
-                            >
-                                <User size={16} className="text-blue-500 mb-1" />
-                                <span className="text-[10px] font-bold text-gray-600">User</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    const usePhone = emailOrPhone === 'op@selambus.com';
-                                    handleQuickAccess('operator', usePhone);
-                                }}
-                                className="flex flex-col items-center p-2 rounded-xl bg-gray-50/50 border border-gray-100 hover:bg-gray-100 hover:border-gray-200 transition-all cursor-pointer"
-                            >
-                                <Bus size={16} className="text-orange-500 mb-1" />
-                                <span className="text-[10px] font-bold text-gray-600">Operator</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    const usePhone = emailOrPhone === 'admin@menaharia.com';
-                                    handleQuickAccess('admin', usePhone);
-                                }}
-                                className="flex flex-col items-center p-2 rounded-xl bg-gray-50/50 border border-gray-100 hover:bg-gray-100 hover:border-gray-200 transition-all cursor-pointer"
-                            >
-                                <ShieldCheck size={16} className="text-red-500 mb-1" />
-                                <span className="text-[10px] font-bold text-gray-600">Admin</span>
-                            </button>
-                        </div>
-                    </div>
+
                 </div>
 
                 {/* Signup Link */}
