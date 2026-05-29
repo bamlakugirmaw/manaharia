@@ -3,10 +3,10 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { Logo } from '../../components/ui/Logo';
-import { Mail, Lock, Eye, EyeOff, ArrowRight, User, Bus, ShieldCheck } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ArrowRight, User, Bus, ShieldCheck, Phone } from 'lucide-react';
 
 export default function Login() {
-    const [email, setEmail] = useState('');
+    const [emailOrPhone, setEmailOrPhone] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
@@ -24,7 +24,7 @@ export default function Login() {
         setIsSubmitting(true);
 
         try {
-            const result = await login(email, password);
+            const result = await login(emailOrPhone, password);
             if (result.success) {
                 // Determine destination based on role
                 if (result.user.role === 'admin') navigate('/admin/dashboard');
@@ -39,6 +39,23 @@ export default function Login() {
             setIsSubmitting(false);
         }
     };
+
+    const handleQuickAccess = (role, usePhone = false) => {
+        if (role === 'admin') {
+            setEmailOrPhone(usePhone ? '0900000000' : 'admin@menaharia.com');
+            setPassword('admin123');
+        } else if (role === 'operator') {
+            setEmailOrPhone(usePhone ? '0911111111' : 'op@selambus.com');
+            setPassword('op123');
+        } else if (role === 'user') {
+            setEmailOrPhone(usePhone ? '0922222222' : 'user@example.com');
+            setPassword('user123');
+        }
+    };
+
+    // Dynamically show Mail or Phone icon based on whether it looks like a phone pattern
+    const isPhone = /^[+0-9]/.test(emailOrPhone);
+    const InputIcon = isPhone ? Phone : Mail;
 
     return (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -59,16 +76,16 @@ export default function Login() {
 
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div className="space-y-2">
-                            <label className="text-sm font-semibold text-gray-700 ml-1">Email Address</label>
+                            <label className="text-sm font-semibold text-gray-700 ml-1">Email Address or Phone Number</label>
                             <div className="relative">
-                                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                                <InputIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 transition-all duration-300" size={18} />
                                 <input
-                                    type="email"
+                                    type="text"
                                     required
                                     className="w-full pl-12 pr-4 py-3.5 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none transition-all"
-                                    placeholder="Enter your email"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
+                                    placeholder="Enter your email or phone number"
+                                    value={emailOrPhone}
+                                    onChange={(e) => setEmailOrPhone(e.target.value)}
                                 />
                             </div>
                         </div>
@@ -113,20 +130,42 @@ export default function Login() {
 
                     {/* Quick Info / Role Help */}
                     <div className="mt-8 pt-8 border-t border-gray-100">
-                        <p className="text-center text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-4">Quick Test Access</p>
+                        <p className="text-center text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Quick Test Access</p>
+                        <p className="text-center text-[9px] text-gray-400 mb-4">(Click to auto-fill. Click again to toggle phone/email)</p>
                         <div className="grid grid-cols-3 gap-2">
-                            <div className="flex flex-col items-center p-2 rounded-xl bg-gray-50/50 border border-gray-100">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const usePhone = emailOrPhone === 'user@example.com';
+                                    handleQuickAccess('user', usePhone);
+                                }}
+                                className="flex flex-col items-center p-2 rounded-xl bg-gray-50/50 border border-gray-100 hover:bg-gray-100 hover:border-gray-200 transition-all cursor-pointer"
+                            >
                                 <User size={16} className="text-blue-500 mb-1" />
                                 <span className="text-[10px] font-bold text-gray-600">User</span>
-                            </div>
-                            <div className="flex flex-col items-center p-2 rounded-xl bg-gray-50/50 border border-gray-100">
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const usePhone = emailOrPhone === 'op@selambus.com';
+                                    handleQuickAccess('operator', usePhone);
+                                }}
+                                className="flex flex-col items-center p-2 rounded-xl bg-gray-50/50 border border-gray-100 hover:bg-gray-100 hover:border-gray-200 transition-all cursor-pointer"
+                            >
                                 <Bus size={16} className="text-orange-500 mb-1" />
                                 <span className="text-[10px] font-bold text-gray-600">Operator</span>
-                            </div>
-                            <div className="flex flex-col items-center p-2 rounded-xl bg-gray-50/50 border border-gray-100">
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const usePhone = emailOrPhone === 'admin@menaharia.com';
+                                    handleQuickAccess('admin', usePhone);
+                                }}
+                                className="flex flex-col items-center p-2 rounded-xl bg-gray-50/50 border border-gray-100 hover:bg-gray-100 hover:border-gray-200 transition-all cursor-pointer"
+                            >
                                 <ShieldCheck size={16} className="text-red-500 mb-1" />
                                 <span className="text-[10px] font-bold text-gray-600">Admin</span>
-                            </div>
+                            </button>
                         </div>
                     </div>
                 </div>

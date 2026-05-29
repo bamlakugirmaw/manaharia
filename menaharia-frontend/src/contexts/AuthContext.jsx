@@ -15,24 +15,30 @@ export function AuthProvider({ children }) {
         setIsLoading(false);
     }, []);
 
-    const login = async (email, password) => {
+    const login = async (emailOrPhone, password) => {
         // Simulation of login logic
-        // Mocking role detection based on email for testing
+        // Mocking role detection based on email/phone for testing
         let mockUser = null;
 
-        // 1. Check hardcoded users first
-        if (email === 'admin@menaharia.com' && password === 'admin123') {
-            mockUser = { id: 'u-admin', name: 'System Admin', email, role: 'admin' };
-        } else if (email === 'op@selambus.com' && password === 'op123') {
-            mockUser = { id: 'u-op', name: 'Selam Bus Ops', email, role: 'operator', operatorId: 'OP-001' };
-        } else if (email === 'user@example.com' && password === 'user123') {
-            mockUser = { id: 'u-1', name: 'Abebe Kebede', email, role: 'traveller' };
+        // 1. Check hardcoded users first (allow both email and phone)
+        const isAdmin = emailOrPhone === 'admin@menaharia.com' || emailOrPhone === '0900000000' || emailOrPhone === '+251900000000';
+        const isOperator = emailOrPhone === 'op@selambus.com' || emailOrPhone === '0911111111' || emailOrPhone === '+251911111111';
+        const isUser = emailOrPhone === 'user@example.com' || emailOrPhone === '0922222222' || emailOrPhone === '+251922222222';
+
+        if (isAdmin && password === 'admin123') {
+            mockUser = { id: 'u-admin', name: 'System Admin', email: 'admin@menaharia.com', phone: '+251900000000', role: 'admin' };
+        } else if (isOperator && password === 'op123') {
+            mockUser = { id: 'u-op', name: 'Selam Bus Ops', email: 'op@selambus.com', phone: '+251911111111', role: 'operator', operatorId: 'OP-001' };
+        } else if (isUser && password === 'user123') {
+            mockUser = { id: 'u-1', name: 'Abebe Kebede', email: 'user@example.com', phone: '+251922222222', role: 'traveller' };
         }
 
         // 2. If not found in hardcoded, check localStorage "database"
         if (!mockUser) {
             const usersDb = JSON.parse(localStorage.getItem('menaharia_users_db') || '[]');
-            const foundUser = usersDb.find(u => u.email === email && u.password === password);
+            const foundUser = usersDb.find(u => 
+                (u.email === emailOrPhone || u.phone === emailOrPhone) && u.password === password
+            );
             if (foundUser) {
                 // Return user without password
                 const { password: _, ...safeUser } = foundUser;
@@ -45,7 +51,7 @@ export function AuthProvider({ children }) {
             localStorage.setItem('menaharia_user', JSON.stringify(mockUser));
             return { success: true, user: mockUser };
         } else {
-            return { success: false, message: 'Invalid email or password' };
+            return { success: false, message: 'Invalid email, phone number, or password' };
         }
     };
 
@@ -56,6 +62,24 @@ export function AuthProvider({ children }) {
 
     const signup = async (userData) => {
         // Simulation of registration
+        const usersDb = JSON.parse(localStorage.getItem('menaharia_users_db') || '[]');
+
+        // Check if phone number is already registered
+        if (userData.phone) {
+            const phoneExists = usersDb.some(u => u.phone === userData.phone);
+            if (phoneExists) {
+                return { success: false, message: 'This phone number is already registered' };
+            }
+        }
+
+        // Check if email is already registered (if provided)
+        if (userData.email) {
+            const emailExists = usersDb.some(u => u.email === userData.email);
+            if (emailExists) {
+                return { success: false, message: 'This email address is already registered' };
+            }
+        }
+
         const newUser = {
             id: `u-${Math.floor(Math.random() * 1000)}`,
             ...userData,
@@ -63,12 +87,10 @@ export function AuthProvider({ children }) {
         };
 
         // Save to "database"
-        const usersDb = JSON.parse(localStorage.getItem('menaharia_users_db') || '[]');
         usersDb.push(newUser);
         localStorage.setItem('menaharia_users_db', JSON.stringify(usersDb));
 
         // Auto-login after signup
-        // Remove password from session user for better practice, though essentially mocked here
         const { password: _, ...safeUser } = newUser;
         setUser(safeUser);
         localStorage.setItem('menaharia_user', JSON.stringify(safeUser));

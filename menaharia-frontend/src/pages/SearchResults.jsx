@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import TripCard from '../components/tickets/TripCard';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
-import { Filter, ArrowLeft, Bus, Check, Sparkles, MapPin, Calendar, Search, ChevronUp, ChevronDown, RefreshCw, Clock } from 'lucide-react';
+import { Filter, ArrowLeft, Bus, Check, Sparkles, MapPin, Calendar, Search, ChevronUp, ChevronDown, RefreshCw, Clock, ArrowUpDown, Star, TrendingUp } from 'lucide-react';
 import { TRIPS, OPERATORS, LOCATIONS } from '../data/mock-db';
 import heroBg from '../assets/hero-bus-bg.png';
 
@@ -27,9 +27,22 @@ export default function SearchResults() {
     const [selectedOperators, setSelectedOperators] = useState([]);
     const [sortBy, setSortBy] = useState('earliest');
 
+    // Sort dropdown state
+    const [sortOpen, setSortOpen] = useState(false);
+
     // Accordion states
     const [timeOpen, setTimeOpen] = useState(true);
     const [operatorsOpen, setOperatorsOpen] = useState(true);
+
+    const SORT_OPTIONS = [
+        { value: 'earliest',   label: 'Departure: Earliest First',  icon: Clock },
+        { value: 'latest',     label: 'Departure: Latest First',    icon: Clock },
+        { value: 'price-low',  label: 'Price: Lowest First',        icon: TrendingUp },
+        { value: 'price-high', label: 'Price: Highest First',       icon: TrendingUp },
+        { value: 'rating',     label: 'Rating: Highest First',      icon: Star },
+    ];
+
+    const activeSortLabel = SORT_OPTIONS.find(o => o.value === sortBy)?.label || 'Sort By';
 
     // Sync input fields when URL search parameters change
     useEffect(() => {
@@ -101,6 +114,12 @@ export default function SearchResults() {
                 filtered.sort((a, b) => a.price - b.price);
             } else if (sortBy === 'price-high') {
                 filtered.sort((a, b) => b.price - a.price);
+            } else if (sortBy === 'rating') {
+                filtered.sort((a, b) => {
+                    const ratingA = OPERATORS.find(op => op.id === a.operatorId)?.rating ?? 0;
+                    const ratingB = OPERATORS.find(op => op.id === b.operatorId)?.rating ?? 0;
+                    return ratingB - ratingA;
+                });
             }
 
             setTrips(filtered);
@@ -356,6 +375,81 @@ export default function SearchResults() {
 
                 {/* Results List Area */}
                 <div className="lg:col-span-3">
+
+                    {/* Sort Bar */}
+                    <div className="flex items-center justify-between mb-6">
+                        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+                            {loading ? 'Searching...' : `${trips.length} result${trips.length !== 1 ? 's' : ''} found`}
+                        </p>
+
+                        {/* Sort By Dropdown */}
+                        <div className="relative">
+                            <button
+                                onClick={() => setSortOpen(prev => !prev)}
+                                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-md hover:border-blue-100 transition-all text-xs font-bold text-gray-700 group"
+                            >
+                                <ArrowUpDown size={14} className="text-blue-500 shrink-0" />
+                                <span className="hidden sm:inline text-gray-500 font-semibold">Sort:</span>
+                                <span className="text-gray-800 max-w-[130px] truncate">{activeSortLabel}</span>
+                                <ChevronDown
+                                    size={14}
+                                    className={`text-gray-400 transition-transform duration-200 shrink-0 ${
+                                        sortOpen ? 'rotate-180' : ''
+                                    }`}
+                                />
+                            </button>
+
+                            {sortOpen && (
+                                <>
+                                    {/* Backdrop */}
+                                    <div
+                                        className="fixed inset-0 z-10"
+                                        onClick={() => setSortOpen(false)}
+                                    />
+                                    {/* Dropdown Panel */}
+                                    <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-xl border border-gray-100/80 overflow-hidden z-20 animate-in fade-in slide-in-from-top-1 duration-150">
+                                        <div className="px-3 pt-3 pb-2">
+                                            <p className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-gray-400 px-2 mb-2">Sort By</p>
+                                            {SORT_OPTIONS.map(option => {
+                                                const Icon = option.icon;
+                                                const isActive = sortBy === option.value;
+                                                return (
+                                                    <button
+                                                        key={option.value}
+                                                        onClick={() => {
+                                                            setSortBy(option.value);
+                                                            setSortOpen(false);
+                                                        }}
+                                                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-xs font-bold transition-all ${
+                                                            isActive
+                                                                ? 'bg-blue-50 text-blue-700'
+                                                                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                                        }`}
+                                                    >
+                                                        <Icon
+                                                            size={14}
+                                                            className={`shrink-0 ${
+                                                                isActive ? 'text-blue-500' : 'text-gray-400'
+                                                            }`}
+                                                        />
+                                                        <span className="flex-1">{option.label}</span>
+                                                        {isActive && (
+                                                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                                                        )}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                        <div className="px-5 py-3 border-t border-gray-50 bg-gray-50/50">
+                                            <p className="text-[9px] text-gray-400 font-semibold text-center">
+                                                {activeSortLabel}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
 
                     {loading ? (
                         <div className="space-y-6">

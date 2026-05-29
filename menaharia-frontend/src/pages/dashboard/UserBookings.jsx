@@ -6,7 +6,7 @@ import { Card } from '../../components/ui/Card';
 import {
     Eye, X, MessageSquare, Send, Bus, Calendar, Ticket,
     User, CreditCard, Phone, Hash, ArrowRight, AlertCircle,
-    CheckCircle, Clock, ChevronLeft, MapPin, PlusCircle,
+    CheckCircle, Clock, ChevronLeft, MapPin, PlusCircle, Star,
 } from 'lucide-react';
 import { useComplaints } from '../../contexts/ComplaintsContext';
 import { cn } from '../../lib/utils';
@@ -81,7 +81,48 @@ const MOCK_BOOKINGS = [
     },
 ];
 
-// ─── Small reusable sub-components ───────────────────────────────────────────
+// ─── Star Rating Widget ───────────────────────────────────────────────────────
+function StarRating({ bookingId, ratings, setRatings }) {
+    const [hovered, setHovered] = useState(null);
+    const current = ratings[bookingId] ?? 0;
+
+    const handleRate = (star) => {
+        const updated = { ...ratings, [bookingId]: star };
+        setRatings(updated);
+        localStorage.setItem('bookingRatings', JSON.stringify(updated));
+    };
+
+    return (
+        <div className="flex items-center gap-0.5" onMouseLeave={() => setHovered(null)}>
+            {[1, 2, 3, 4, 5].map(star => {
+                const filled = star <= (hovered ?? current);
+                return (
+                    <button
+                        key={star}
+                        type="button"
+                        onMouseEnter={() => setHovered(star)}
+                        onClick={() => handleRate(star)}
+                        className="p-0.5 rounded transition-transform hover:scale-125 focus:outline-none"
+                        title={`Rate ${star} star${star > 1 ? 's' : ''}`}
+                    >
+                        <Star
+                            size={16}
+                            className={`transition-colors ${
+                                filled
+                                    ? 'fill-amber-400 text-amber-400'
+                                    : 'fill-gray-200 text-gray-200'
+                            }`}
+                        />
+                    </button>
+                );
+            })}
+            {current > 0 && hovered === null && (
+                <span className="ml-1 text-[10px] font-bold text-amber-500">{current}.0</span>
+            )}
+        </div>
+    );
+}
+
 function ComplaintStatusBadge({ status }) {
     const styles = {
         Open: 'bg-blue-100 text-blue-700',
@@ -141,6 +182,14 @@ export default function UserBookings() {
     const [chatMsg, setChatMsg] = useState('');
     const [activeCmpId, setActiveCmpId] = useState(null);
     const chatEndRef = useRef(null);
+
+    // Ratings state — persisted per bookingId
+    const [ratings, setRatings] = useState(() => {
+        try {
+            const saved = localStorage.getItem('bookingRatings');
+            return saved ? JSON.parse(saved) : {};
+        } catch { return {}; }
+    });
 
     // Find an existing complaint for the currently selected booking
     const existingComplaint = selectedBooking
@@ -263,7 +312,7 @@ export default function UserBookings() {
                             <th className="px-6 py-4">Operator</th>
                             <th className="px-6 py-4">Route</th>
                             <th className="px-6 py-4">Date</th>
-                            <th className="px-6 py-4">Status</th>
+                            <th className="px-6 py-4">Rating</th>
                             <th className="px-6 py-4 text-right">Amount</th>
                             <th className="px-6 py-4 text-center">Actions</th>
                         </tr>
@@ -276,9 +325,11 @@ export default function UserBookings() {
                                 <td className="px-6 py-4 text-gray-600">{booking.route}</td>
                                 <td className="px-6 py-4 text-gray-600">{booking.date}</td>
                                 <td className="px-6 py-4">
-                                    <Badge variant={booking.status === 'confirmed' ? 'success' : 'secondary'}>
-                                        {booking.status}
-                                    </Badge>
+                                    <StarRating
+                                        bookingId={booking.id}
+                                        ratings={ratings}
+                                        setRatings={setRatings}
+                                    />
                                 </td>
                                 <td className="px-6 py-4 text-right font-medium text-gray-900">
                                     ETB {booking.amount.toLocaleString()}

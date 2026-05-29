@@ -17,7 +17,6 @@ const TRAVELLER_NAV = [
 const OPERATOR_NAV = [
     { name: 'Overview', href: '/operator/dashboard', icon: LayoutDashboard },
     { name: 'Bus Management', href: '/operator/fleet', icon: Bus },
-    { name: 'Trip Scheduling', href: '/operator/schedules', icon: CalendarIcon },
     { name: 'Bookings', href: '/operator/bookings', icon: Ticket },
     { name: 'Revenue Reports', href: '/operator/reports', icon: CreditCard },
     { name: 'Disputes', href: '/operator/disputes', icon: Shield },

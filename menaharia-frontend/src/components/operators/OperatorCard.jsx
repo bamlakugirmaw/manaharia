@@ -76,14 +76,6 @@ export default function OperatorCard({ operator }) {
                 </div>
 
                 <div>
-                    {/* Reliability Score - Text only, no visual progress bar */}
-                    <div className="mb-5">
-                        <div className="flex justify-between items-center">
-                            <span className="text-xs font-extrabold text-gray-400 uppercase tracking-wider">Reliability</span>
-                            <span className="text-sm font-black text-emerald-500">{operator.reliabilityScore}%</span>
-                        </div>
-                    </div>
-
                     {/* View Trips Button - Styled as a clean outline button */}
                     <Button
                         onClick={handleViewTrips}

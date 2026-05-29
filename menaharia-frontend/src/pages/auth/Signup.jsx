@@ -3,15 +3,33 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { Logo } from '../../components/ui/Logo';
-import { User, Mail, Lock, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { User, Mail, Lock, ArrowRight, CheckCircle2, Phone } from 'lucide-react';
+
+const validatePhoneNumber = (phone) => {
+    const cleaned = phone.trim();
+    if (!cleaned) return 'Phone number is required';
+    
+    // Ethiopian specific check: 09... or 07... (10 digits) or +2517... or +2519... (13 chars)
+    const ethiopianRegex = /^(?:\+251|0)[79]\d{8}$/;
+    // General international check
+    const internationalRegex = /^\+[1-9]\d{6,14}$/;
+    
+    if (ethiopianRegex.test(cleaned) || internationalRegex.test(cleaned)) {
+        return '';
+    }
+    
+    return 'Please enter a valid phone number (e.g. 0912345678 or +251912345678)';
+};
 
 export default function Signup() {
     const [formData, setFormData] = useState({
         name: '',
+        phone: '',
         email: '',
         password: '',
         confirmPassword: ''
     });
+    const [phoneError, setPhoneError] = useState('');
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -19,9 +37,34 @@ export default function Signup() {
     const { signup } = useAuth();
     const navigate = useNavigate();
 
+    const handlePhoneChange = (e) => {
+        let val = e.target.value;
+        // Prevent invalid characters: allow only digits and leading '+'
+        let sanitized = val.replace(/[^\d+]/g, '');
+        if (sanitized.includes('+')) {
+            sanitized = (sanitized.startsWith('+') ? '+' : '') + sanitized.replace(/\+/g, '');
+        }
+        
+        setFormData(prev => ({ ...prev, phone: sanitized }));
+        
+        // Real-time validation
+        if (sanitized) {
+            setPhoneError(validatePhoneNumber(sanitized));
+        } else {
+            setPhoneError('Phone number is required');
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+        setPhoneError('');
+
+        const phoneValidationError = validatePhoneNumber(formData.phone);
+        if (phoneValidationError) {
+            setPhoneError(phoneValidationError);
+            return setError('Please provide a valid phone number');
+        }
 
         if (formData.password !== formData.confirmPassword) {
             return setError('Passwords do not match');
@@ -84,14 +127,35 @@ export default function Signup() {
                             </div>
 
                             <div className="space-y-2">
-                                <label className="text-sm font-semibold text-gray-700 ml-1">Email Address</label>
+                                <label className="text-sm font-semibold text-gray-700 ml-1">Phone Number</label>
+                                <div className="relative">
+                                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                                    <input
+                                        type="tel"
+                                        required
+                                        className={`w-full pl-12 pr-4 py-3.5 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none transition-all ${
+                                            phoneError ? 'focus:ring-red-500/20 border border-red-300' : ''
+                                        }`}
+                                        placeholder="Enter your phone number (e.g. 0912345678)"
+                                        value={formData.phone}
+                                        onChange={handlePhoneChange}
+                                    />
+                                </div>
+                                {phoneError && (
+                                    <p className="text-xs font-medium text-red-500 ml-1 mt-1 animate-in fade-in duration-200">
+                                        {phoneError}
+                                    </p>
+                                )}
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-semibold text-gray-700 ml-1">Email Address (Optional)</label>
                                 <div className="relative">
                                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                                     <input
                                         type="email"
-                                        required
                                         className="w-full pl-12 pr-4 py-3.5 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none transition-all"
-                                        placeholder="Enter your email"
+                                        placeholder="Enter your email (optional)"
                                         value={formData.email}
                                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                     />
@@ -132,7 +196,7 @@ export default function Signup() {
                                 type="submit"
                                 fullWidth
                                 className="py-6 rounded-xl font-bold text-lg shadow-lg shadow-primary/20 transition-all"
-                                disabled={isSubmitting}
+                                disabled={isSubmitting || !!phoneError}
                             >
                                 {isSubmitting ? 'Creating Account...' : 'Sign Up'}
                                 {!isSubmitting && <ArrowRight className="ml-2" size={20} />}
