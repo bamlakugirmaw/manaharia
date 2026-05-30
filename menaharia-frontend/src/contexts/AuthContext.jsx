@@ -1,105 +1,223 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { authApi } from '../api/auth.api';
 
 const AuthContext = createContext();
 
+// ─── Token helpers ────────────────────────────────────────────────────────────
+
+const storeTokens = ({ accessToken, refreshToken }) => {
+    localStorage.setItem('accessToken', accessToken);
+    if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
+};
+
+const clearTokens = () => {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+};
+
+const hasStoredToken = () => !!localStorage.getItem('accessToken');
+
+// ─── Role normalisation ───────────────────────────────────────────────────────
+// Backend returns roles as plain strings: ["USER"] | ["ADMIN"] | ["OPERATOR"]
+// Map to the frontend role strings used by ProtectedRoute.
+
+const ROLE_MAP = {
+    user:     'traveller',
+    traveller:'traveller',
+    operator: 'operator',
+    admin:    'admin',
+};
+
+const ROLE_PRIORITY = ['admin', 'operator', 'traveller'];
+
+const normaliseRole = (roles = []) => {
+    if (!Array.isArray(roles) || roles.length === 0) return 'traveller';
+    // Roles can be plain strings ["USER"] or objects [{ id, name }]
+    const names = roles.map((r) =>
+        (typeof r === 'string' ? r : r?.name ?? '').toLowerCase()
+    );
+    // Map backend role names to frontend role names
+    const mapped = names.map((n) => ROLE_MAP[n] ?? n);
+    return ROLE_PRIORITY.find((p) => mapped.includes(p)) ?? mapped[0] ?? 'traveller';
+};
+
+// ─── User shape normalisation ─────────────────────────────────────────────────
+// Accepts the user object from any backend response shape.
+
+const normaliseUser = (raw) => {
+    if (!raw) return null;
+    if (!raw.id && !raw._id) return null;
+    return {
+        id:         raw.id ?? raw._id,
+        name:       raw.fullName ?? raw.name ?? '',
+        email:      raw.email ?? '',
+        phone:      raw.phone ?? '',
+        role:       normaliseRole(raw.roles),
+        operatorId: raw.operatorId ?? raw.operator?.id ?? null,
+        roles:      raw.roles ?? [],
+    };
+};
+
+// ─── Extract tokens + user from login/register response ───────────────────────
+// Backend shape: { success, data: { user: {...}, tokens: { accessToken, refreshToken } } }
+
+const extractFromResponse = (response) => {
+    // Unwrap the outer { success, data, timestamp } envelope
+    const payload = response?.data ?? response;
+
+    // Tokens are nested under payload.tokens
+    const tokens      = payload?.tokens ?? {};
+    const accessToken  = tokens.accessToken  ?? payload?.accessToken  ?? null;
+    const refreshToken = tokens.refreshToken ?? payload?.refreshToken ?? null;
+
+    // User is at payload.user
+    const rawUser = payload?.user ?? null;
+    const user    = normaliseUser(rawUser);
+
+    return { accessToken, refreshToken, user };
+};
+
+// ─── Provider ─────────────────────────────────────────────────────────────────
+
 export function AuthProvider({ children }) {
-    const [user, setUser] = useState(null);
+    const [user,      setUser]      = useState(null);
     const [isLoading, setIsLoading] = useState(true);
 
+    // ── Session restore on mount ──────────────────────────────────────────────
+    // Backend me() shape: { success, data: { id, fullName, ... } }
     useEffect(() => {
-        // Check for saved user on mount
-        // const savedUser = localStorage.getItem('menaharia_user');
-        // if (savedUser) {
-        //     setUser(JSON.parse(savedUser));
-        // }
-        setIsLoading(false);
+        if (!hasStoredToken()) {
+            setIsLoading(false);
+            return;
+        }
+
+        authApi
+            .me()
+            .then((response) => {
+                // Unwrap { success, data: {...} }
+                const raw = response?.data ?? response;
+                setUser(normaliseUser(raw));
+            })
+            .catch(() => {
+                clearTokens();
+            })
+            .finally(() => setIsLoading(false));
     }, []);
 
-    const login = async (emailOrPhone, password) => {
-        // Simulation of login logic
-        // Mocking role detection based on email/phone for testing
-        let mockUser = null;
+    // ── login ─────────────────────────────────────────────────────────────────
+    const login = useCallback(async (identifier, password) => {
+        try {
+            const response = await authApi.login({ identifier, password });
+            const { accessToken, refreshToken, user: loginUser } = extractFromResponse(response);
 
-        // 1. Check hardcoded users first (allow both email and phone)
-        const isAdmin = emailOrPhone === 'admin@menaharia.com' || emailOrPhone === '0900000000' || emailOrPhone === '+251900000000';
-        const isOperator = emailOrPhone === 'op@selambus.com' || emailOrPhone === '0911111111' || emailOrPhone === '+251911111111';
-        const isUser = emailOrPhone === 'user@example.com' || emailOrPhone === '0922222222' || emailOrPhone === '+251922222222';
-
-        if (isAdmin && password === 'admin123') {
-            mockUser = { id: 'u-admin', name: 'System Admin', email: 'admin@menaharia.com', phone: '+251900000000', role: 'admin' };
-        } else if (isOperator && password === 'op123') {
-            mockUser = { id: 'u-op', name: 'Selam Bus Ops', email: 'op@selambus.com', phone: '+251911111111', role: 'operator', operatorId: 'selam-bus' };
-        } else if (isUser && password === 'user123') {
-            mockUser = { id: 'u-1', name: 'Abebe Kebede', email: 'user@example.com', phone: '+251922222222', role: 'traveller' };
-        }
-
-        // 2. If not found in hardcoded, check localStorage "database"
-        if (!mockUser) {
-            const usersDb = JSON.parse(localStorage.getItem('menaharia_users_db') || '[]');
-            const foundUser = usersDb.find(u => 
-                (u.email === emailOrPhone || u.phone === emailOrPhone) && u.password === password
-            );
-            if (foundUser) {
-                // Return user without password
-                const { password: _, ...safeUser } = foundUser;
-                mockUser = safeUser;
+            if (!accessToken) {
+                return {
+                    success: false,
+                    message: 'Login failed: server did not return a token. Please try again.',
+                };
             }
-        }
 
-        if (mockUser) {
-            setUser(mockUser);
-            localStorage.setItem('menaharia_user', JSON.stringify(mockUser));
-            return { success: true, user: mockUser };
-        } else {
-            return { success: false, message: 'Invalid email, phone number, or password' };
-        }
-    };
+            storeTokens({ accessToken, refreshToken });
 
-    const logout = () => {
+            // If user wasn't in the login response, fetch it via /me
+            let resolvedUser = loginUser;
+            if (!resolvedUser?.id) {
+                try {
+                    const meResponse = await authApi.me();
+                    const raw = meResponse?.data ?? meResponse;
+                    resolvedUser = normaliseUser(raw);
+                } catch {
+                    clearTokens();
+                    return {
+                        success: false,
+                        message: 'Could not load your profile. Please try again.',
+                    };
+                }
+            }
+
+            setUser(resolvedUser);
+            return { success: true, user: resolvedUser };
+        } catch (err) {
+            const raw = err?.response?.data?.message?.message
+                ?? err?.response?.data?.message
+                ?? err?.message
+                ?? 'Invalid credentials. Please try again.';
+            const message = Array.isArray(raw) ? raw.join('. ') : raw;
+            return { success: false, message };
+        }
+    }, []);
+
+    // ── signup ────────────────────────────────────────────────────────────────
+    const signup = useCallback(async (userData) => {
+        try {
+            const payload = {
+                fullName: userData.name,
+                phone:    userData.phone,
+                password: userData.password,
+            };
+            // Only include email if the user actually provided one
+            if (userData.email && userData.email.trim() !== '') {
+                payload.email = userData.email.trim();
+            }
+
+            await authApi.register(payload);
+            return { success: true, message: 'Account created successfully!' };
+        } catch (err) {
+            const raw = err?.response?.data?.message?.message
+                ?? err?.response?.data?.message
+                ?? 'Registration failed. Please try again.';
+            const message = Array.isArray(raw) ? raw.join('. ') : raw;
+            return { success: false, message };
+        }
+    }, []);
+
+    // ── logout ────────────────────────────────────────────────────────────────
+    const logout = useCallback(async () => {
+        const refreshToken = localStorage.getItem('refreshToken');
+        if (refreshToken) {
+            authApi.logout({ refreshToken }).catch(() => {});
+        }
+        clearTokens();
         setUser(null);
-        localStorage.removeItem('menaharia_user');
-    };
+    }, []);
 
-    const signup = async (userData) => {
-        // Simulation of registration
-        const usersDb = JSON.parse(localStorage.getItem('menaharia_users_db') || '[]');
-
-        // Check if phone number is already registered
-        if (userData.phone) {
-            const phoneExists = usersDb.some(u => u.phone === userData.phone);
-            if (phoneExists) {
-                return { success: false, message: 'This phone number is already registered' };
-            }
+    // ── updateProfile ─────────────────────────────────────────────────────────
+    const updateProfile = useCallback(async (data) => {
+        try {
+            const response = await authApi.updateMe(data);
+            const raw = response?.data ?? response;
+            setUser(normaliseUser(raw));
+            return { success: true };
+        } catch (err) {
+            const message = err?.response?.data?.message ?? 'Update failed.';
+            return { success: false, message };
         }
+    }, []);
 
-        // Check if email is already registered (if provided)
-        if (userData.email) {
-            const emailExists = usersDb.some(u => u.email === userData.email);
-            if (emailExists) {
-                return { success: false, message: 'This email address is already registered' };
-            }
+    // ── changePassword ────────────────────────────────────────────────────────
+    const changePassword = useCallback(async (data) => {
+        try {
+            await authApi.changePassword(data);
+            return { success: true };
+        } catch (err) {
+            const message = err?.response?.data?.message ?? 'Password change failed.';
+            return { success: false, message };
         }
-
-        const newUser = {
-            id: `u-${Math.floor(Math.random() * 1000)}`,
-            ...userData,
-            role: 'traveller' // Default role for new signups
-        };
-
-        // Save to "database"
-        usersDb.push(newUser);
-        localStorage.setItem('menaharia_users_db', JSON.stringify(usersDb));
-
-        // Auto-login after signup
-        const { password: _, ...safeUser } = newUser;
-        setUser(safeUser);
-        localStorage.setItem('menaharia_user', JSON.stringify(safeUser));
-
-        return { success: true, message: 'Account created successfully!' };
-    };
+    }, []);
 
     return (
-        <AuthContext.Provider value={{ user, login, logout, signup, isAuthenticated: !!user, isLoading }}>
+        <AuthContext.Provider
+            value={{
+                user,
+                isAuthenticated: !!user,
+                isLoading,
+                login,
+                logout,
+                signup,
+                updateProfile,
+                changePassword,
+            }}
+        >
             {children}
         </AuthContext.Provider>
     );

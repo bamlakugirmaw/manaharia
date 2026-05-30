@@ -75,7 +75,11 @@ export default function Signup() {
             const result = await signup(formData);
             if (result.success) {
                 setSuccess(true);
-                setTimeout(() => navigate('/login'), 2000);
+                // Redirect to login with the identifier pre-filled so the user
+                // doesn't have to retype their phone/email.
+                setTimeout(() => navigate('/login', {
+                    state: { prefill: formData.email || formData.phone }
+                }), 2000);
             } else {
                 setError(result.message);
             }
