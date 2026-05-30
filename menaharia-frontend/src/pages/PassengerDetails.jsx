@@ -8,7 +8,13 @@ import BookingSummary from '../components/booking/BookingSummary';
 export default function PassengerDetails() {
     const location = useLocation();
     const navigate = useNavigate();
-    const { tripId, selectedSeats, totalPrice } = location.state || {};
+    // selectedSeats is now an array of { label, tripSeatId } objects (from SeatSelection).
+    // We keep backward compatibility: if it's still a plain string array (mock flow),
+    // we wrap each entry so the rest of the page works uniformly.
+    const { trip, tripId, selectedSeats: rawSeats, totalPrice } = location.state || {};
+    const selectedSeats = (rawSeats ?? []).map(s =>
+        typeof s === 'string' ? { label: s, tripSeatId: null } : s
+    );
 
     const [formData, setFormData] = useState({
         fullName: '',
@@ -17,7 +23,7 @@ export default function PassengerDetails() {
         emergencyContact: ''
     });
 
-    if (!tripId) {
+    if (!tripId && !trip) {
         navigate('/');
         return null;
     }
@@ -26,11 +32,12 @@ export default function PassengerDetails() {
         e.preventDefault();
         navigate('/booking/payment', {
             state: {
-                tripId,
+                trip,
+                tripId: tripId ?? trip?.id,
                 selectedSeats,
                 totalPrice,
-                passengerDetails: formData
-            }
+                passengerDetails: formData,
+            },
         });
     };
 
@@ -163,8 +170,9 @@ export default function PassengerDetails() {
                     {/* Sidebar - Booking Summary */}
                     <div className="lg:col-span-2">
                         <BookingSummary
+                            trip={trip}
                             tripId={tripId}
-                            selectedSeats={selectedSeats}
+                            selectedSeats={selectedSeats.map(s => s.label ?? s)}
                         />
                     </div>
                 </div>
