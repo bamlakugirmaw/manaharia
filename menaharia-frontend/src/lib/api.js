@@ -100,3 +100,20 @@ function handleAuthFailure() {
  * Usage: const data = await api.get('/trips').then(unwrap)
  */
 export const unwrap = (response) => response.data;
+
+/**
+ * Extract a human-readable error message from any Axios error.
+ * Handles NestJS nested error shape: { message: { message, error, statusCode } }
+ * and flat shape: { message: "string" } or { message: ["a", "b"] }
+ */
+export const extractErrorMessage = (err, fallback = 'An error occurred.') => {
+    const raw = err?.response?.data?.message ?? err?.message;
+    if (!raw) return fallback;
+    if (typeof raw === 'string') return raw;
+    if (Array.isArray(raw)) return raw.join('. ');
+    // NestJS nested: { message: "...", error: "...", statusCode: 400 }
+    if (typeof raw === 'object' && raw.message) {
+        return typeof raw.message === 'string' ? raw.message : JSON.stringify(raw.message);
+    }
+    return JSON.stringify(raw);
+};

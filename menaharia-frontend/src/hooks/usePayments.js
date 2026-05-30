@@ -19,7 +19,15 @@ export const paymentKeys = {
 export function usePayments(params = {}) {
     return useQuery({
         queryKey: paymentKeys.list(params),
-        queryFn: () => paymentsApi.listPayments(params),
+        queryFn: async () => {
+            const res = await paymentsApi.listPayments(params);
+            // Backend envelope: { success, data: { items: [], meta: {} } }
+            const payload = res?.data ?? res;
+            if (Array.isArray(payload))        return payload;
+            if (Array.isArray(payload?.items)) return payload.items;
+            if (Array.isArray(payload?.data))  return payload.data;
+            return [];
+        },
         staleTime: 0,
     });
 }

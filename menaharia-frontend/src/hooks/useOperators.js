@@ -38,7 +38,11 @@ export function useOperators(params = {}) {
 export function useOperator(operatorId) {
     return useQuery({
         queryKey: operatorKeys.detail(operatorId),
-        queryFn: () => operatorsApi.getOperatorById(operatorId),
+        queryFn: async () => {
+            const res = await operatorsApi.getOperatorById(operatorId);
+            // Backend envelope: { success, data: { id, companyName, ... } }
+            return res?.data ?? res;
+        },
         enabled: !!operatorId,
         staleTime: 10 * 60 * 1000,
     });
@@ -51,7 +55,11 @@ export function useOperator(operatorId) {
 export function useOperatorDashboard(operatorId, params = {}) {
     return useQuery({
         queryKey: operatorKeys.dashboard(operatorId, params),
-        queryFn: () => operatorsApi.getOperatorDashboard(operatorId, params),
+        queryFn: async () => {
+            const res = await operatorsApi.getOperatorDashboard(operatorId, params);
+            // Backend envelope: { success, data: { totalRevenue, ... } }
+            return res?.data ?? res;
+        },
         enabled: !!operatorId,
         staleTime: 5 * 60 * 1000,
     });
