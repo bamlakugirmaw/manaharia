@@ -2,25 +2,40 @@ import React from 'react';
 import { MapPin, Calendar, Clock, ShieldCheck } from 'lucide-react';
 import { TRIPS, OPERATORS } from '../../data/mock-db';
 
-export default function BookingSummary({ tripId, selectedSeats = [], showEncryption = false }) {
-    // Use first trip as fallback for development/testing
-    const trip = TRIPS.find(t => t.id === tripId) || TRIPS[0];
-    const operator = OPERATORS.find(op => op.id === trip?.operatorId);
+/**
+ * BookingSummary
+ *
+ * Props:
+ *   trip          — full trip object (preferred, from API or parent state)
+ *   tripId        — fallback: looked up in mock-db when `trip` is not provided
+ *   selectedSeats — array of seat labels e.g. ['A1', 'B2']
+ *   showEncryption — unused legacy prop, kept for API compatibility
+ */
+export default function BookingSummary({ trip: tripProp, tripId, selectedSeats = [], showEncryption = false }) {
+    // Prefer the directly-passed trip object; fall back to mock-db lookup.
+    const trip = tripProp
+        ?? TRIPS.find(t => t.id === tripId)
+        ?? TRIPS[0];
 
-    // If no trip data at all, return null
+    // Operator name: backend embeds operator object; mock uses operatorId lookup.
+    const operatorName = trip?.operator?.name
+        ?? trip?.operator?.companyName
+        ?? OPERATORS.find(op => op.id === trip?.operatorId)?.name
+        ?? 'Unknown Operator';
+
+    // Route fields: backend uses route.origin/destination; mock uses from/to directly.
+    const from = trip?.from ?? trip?.route?.origin ?? '';
+    const to   = trip?.to   ?? trip?.route?.destination ?? '';
+
     if (!trip) {
         console.error('BookingSummary: No trip data available');
         return null;
     }
 
-    // Use mock seats if none selected (for development)
     const seatsToDisplay = selectedSeats.length > 0 ? selectedSeats : ['3-A', '3-B'];
-
-    const pricePerSeat = trip.price;
-    const subtotal = pricePerSeat * seatsToDisplay.length;
-    const serviceFee = 0; // Free
-    const processingFee = 0; // Free
-    const total = subtotal + serviceFee + processingFee;
+    const pricePerSeat   = trip.price ?? 0;
+    const subtotal       = pricePerSeat * seatsToDisplay.length;
+    const total          = subtotal; // service fee is free
 
     return (
         <div className="bg-white rounded-[2rem] border border-slate-100 shadow-[0_8px_30px_rgba(0,0,0,0.02)] p-8">
@@ -28,30 +43,24 @@ export default function BookingSummary({ tripId, selectedSeats = [], showEncrypt
 
             {/* Operator Info */}
             <div className="mb-6 space-y-4">
-                <div>
-                    <h4 className="font-black text-lg text-slate-800">{operator?.name || 'Sky Bus'}</h4>
-                </div>
+                <h4 className="font-black text-lg text-slate-800">{operatorName}</h4>
 
-                {/* Route */}
                 <div className="flex items-start gap-3 text-sm font-semibold text-slate-600">
                     <MapPin className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
-                    <span>Route: {trip.from} → {trip.to}</span>
+                    <span>Route: {from} → {to}</span>
                 </div>
 
-                {/* Date */}
                 <div className="flex items-start gap-3 text-sm font-semibold text-slate-600">
                     <Calendar className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
-                    <span>Date: {new Date(trip.date).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric'
-                    })}</span>
+                    <span>Date: {trip.date
+                        ? new Date(trip.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                        : '—'
+                    }</span>
                 </div>
 
-                {/* Departure Time */}
                 <div className="flex items-start gap-3 text-sm font-semibold text-slate-600">
                     <Clock className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
-                    <span>Departure: {trip.departureTime}</span>
+                    <span>Departure: {trip.departureTime ?? '—'}</span>
                 </div>
             </div>
 
@@ -70,9 +79,11 @@ export default function BookingSummary({ tripId, selectedSeats = [], showEncrypt
                         <div key={index} className="flex justify-between items-center border border-slate-100 bg-[#F8FAFC]/60 rounded-2xl p-4">
                             <div className="flex items-center">
                                 <div className="w-10 h-10 bg-blue-600 text-white rounded-xl flex items-center justify-center font-black text-xs shadow-md shadow-blue-600/10">
-                                    {seat}
+                                    {typeof seat === 'object' ? seat.label : seat}
                                 </div>
-                                <span className="text-sm font-extrabold text-slate-700 ml-3">Seat {seat}</span>
+                                <span className="text-sm font-extrabold text-slate-700 ml-3">
+                                    Seat {typeof seat === 'object' ? seat.label : seat}
+                                </span>
                             </div>
                             <div className="text-right">
                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">ETB</span>
@@ -88,7 +99,9 @@ export default function BookingSummary({ tripId, selectedSeats = [], showEncrypt
             {/* Price Breakdown */}
             <div className="space-y-4 mb-6">
                 <div className="flex justify-between items-center text-sm">
-                    <span className="text-slate-400 font-bold text-xs uppercase tracking-wider">Subtotal ({seatsToDisplay.length} seat{seatsToDisplay.length > 1 ? 's' : ''})</span>
+                    <span className="text-slate-400 font-bold text-xs uppercase tracking-wider">
+                        Subtotal ({seatsToDisplay.length} seat{seatsToDisplay.length > 1 ? 's' : ''})
+                    </span>
                     <span className="font-black text-slate-800">ETB {subtotal}</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">

@@ -36,7 +36,7 @@ const ADMIN_NAV = [
 export default function DashboardLayout({ children }) {
     const location = useLocation();
     const navigate = useNavigate();
-    const { logout } = useAuth();
+    const { user: authUser, logout } = useAuth();
 
     const handleLogout = () => {
         logout();
@@ -48,15 +48,27 @@ export default function DashboardLayout({ children }) {
     const isAdmin = location.pathname.startsWith('/admin');
 
     let navItems = TRAVELLER_NAV;
-    let user = { name: "Abebe Kebede", email: "abebe@example.com", initials: "AK" };
-    let roleLabel = "";
+
+    // Build the sidebar profile card data from the real authenticated user.
+    // Fall back to safe defaults so the layout never crashes if user is briefly null.
+    let user = {
+        name: authUser?.name ?? 'My Account',
+        email: authUser?.email ?? authUser?.phone ?? '',
+    };
 
     if (isOperator) {
         navItems = OPERATOR_NAV;
-        user = { name: "Selam Bus Transport", email: "Operator Dashboard", initials: "SB", role: "Operator" };
+        // Operators may not have an email — show phone as fallback label.
+        user = {
+            name: authUser?.name ?? 'Operator Dashboard',
+            email: authUser?.email || authUser?.phone || 'Operator Dashboard',
+        };
     } else if (isAdmin) {
         navItems = ADMIN_NAV;
-        user = { name: "System Admin", email: "admin@menaharia.com", initials: "SA", role: "Admin" };
+        user = {
+            name: authUser?.name ?? 'System Admin',
+            email: authUser?.email ?? 'admin@menaharia.com',
+        };
     }
 
     return (

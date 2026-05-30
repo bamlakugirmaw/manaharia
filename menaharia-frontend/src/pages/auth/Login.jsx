@@ -6,7 +6,6 @@ import { Logo } from '../../components/ui/Logo';
 import { Mail, Lock, Eye, EyeOff, ArrowRight, Phone } from 'lucide-react';
 
 export default function Login() {
-    const [emailOrPhone, setEmailOrPhone] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
@@ -16,7 +15,10 @@ export default function Login() {
     const navigate = useNavigate();
     const location = useLocation();
 
-    const from = location.state?.from?.pathname || "/";
+    const from = location.state?.from?.pathname || '/';
+
+    // Pre-fill identifier if redirected from signup
+    const [emailOrPhone, setEmailOrPhone] = useState(location.state?.prefill ?? '');
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -24,12 +26,14 @@ export default function Login() {
         setIsSubmitting(true);
 
         try {
+            // AuthContext.login now accepts (identifier, password) matching the backend.
+            // The `identifier` field accepts both email and phone — same UX, different param name.
             const result = await login(emailOrPhone, password);
             if (result.success) {
-                // Determine destination based on role
+                // Redirect based on the normalised role from the backend.
                 if (result.user.role === 'admin') navigate('/admin/dashboard');
                 else if (result.user.role === 'operator') navigate('/operator/dashboard');
-                else navigate('/traveller/bookings');
+                else navigate(from === '/' ? '/traveller/bookings' : from);
             } else {
                 setError(result.message);
             }

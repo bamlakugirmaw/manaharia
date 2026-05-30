@@ -3,8 +3,24 @@ import { Card } from '../ui/Card';
 import { Clock, Bus, Star, Heart, Scale } from 'lucide-react';
 import { OPERATORS } from '../../data/mock-db';
 
+/**
+ * TripCard
+ *
+ * Accepts a trip object from either the backend API or the mock-db.
+ * Backend trips embed the operator relation: trip.operator = { id, name, rating, ... }
+ * Mock trips reference by operatorId and we fall back to the OPERATORS array.
+ */
 export default function TripCard({ trip, onSelect }) {
-    const operator = OPERATORS.find(op => op.id === trip.operatorId);
+    // Prefer the embedded operator object from the backend response.
+    // Fall back to the mock-db lookup for local development / mock data.
+    const operator = trip.operator ?? OPERATORS.find(op => op.id === trip.operatorId);
+
+    // Backend uses route.origin / route.destination; mock uses trip.from / trip.to directly.
+    const from = trip.from ?? trip.route?.origin ?? '';
+    const to   = trip.to   ?? trip.route?.destination ?? '';
+
+    // Seats available: backend may return seatsAvailable or availableSeats
+    const seatsAvailable = trip.seatsAvailable ?? trip.availableSeats ?? 0;
 
     return (
         <Card className="overflow-hidden bg-white border border-gray-100/90 shadow-[0_8px_30px_rgba(0,0,0,0.015)] rounded-[2rem] hover:shadow-md hover:border-gray-200/50 transition-all duration-300 group">
@@ -17,14 +33,18 @@ export default function TripCard({ trip, onSelect }) {
                             <Bus size={22} className="stroke-[1.5]" />
                         </div>
                         <div className="flex flex-col">
-                            <span className="font-extrabold text-dark text-[17px] tracking-tight leading-tight mb-1">{operator?.name || "Unknown"}</span>
+                            <span className="font-extrabold text-dark text-[17px] tracking-tight leading-tight mb-1">
+                                {operator?.name ?? operator?.companyName ?? 'Unknown'}
+                            </span>
                             <div className="flex items-center gap-2">
                                 <div className="flex items-center gap-0.5 text-yellow-500">
                                     <Star size={12} fill="currentColor" className="text-yellow-400" />
-                                    <span className="text-[11px] font-bold text-gray-600">{operator?.rating || "4.5"}</span>
+                                    <span className="text-[11px] font-bold text-gray-600">
+                                        {operator?.rating ?? '4.5'}
+                                    </span>
                                 </div>
                                 <span className="px-2.5 py-0.5 rounded-full bg-gray-50 border border-gray-100/70 text-[9px] font-bold text-gray-400 uppercase tracking-widest">
-                                    {trip.busType}
+                                    {trip.busType ?? 'Standard'}
                                 </span>
                             </div>
                         </div>
@@ -32,15 +52,15 @@ export default function TripCard({ trip, onSelect }) {
 
                     {/* Timeline Section */}
                     <div className="flex-1 flex items-center justify-between gap-4 md:gap-8 px-2 md:px-6 w-full md:w-auto">
-                        {/* Departure */}
                         <div className="text-left md:text-center min-w-[90px]">
                             <div className="text-2xl font-black text-dark tracking-tight leading-none">{trip.departureTime}</div>
-                            <div className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1.5">{trip.from}</div>
+                            <div className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1.5">{from}</div>
                         </div>
 
-                        {/* Visual Connector Line */}
                         <div className="flex-1 flex flex-col items-center max-w-[140px] px-1">
-                            <span className="text-[9px] text-gray-400 font-extrabold uppercase tracking-widest mb-1.5">8H 30M</span>
+                            <span className="text-[9px] text-gray-400 font-extrabold uppercase tracking-widest mb-1.5">
+                                {trip.duration ?? '—'}
+                            </span>
                             <div className="w-full h-px bg-gray-200 relative flex items-center justify-center">
                                 <div className="absolute left-0 -translate-y-1/2 w-1 h-1 rounded-full bg-gray-300" />
                                 <div className="absolute right-0 -translate-y-1/2 w-1 h-1 rounded-full bg-gray-300" />
@@ -50,28 +70,25 @@ export default function TripCard({ trip, onSelect }) {
                             </div>
                         </div>
 
-                        {/* Arrival */}
                         <div className="text-right md:text-center min-w-[90px]">
                             <div className="text-2xl font-black text-dark tracking-tight leading-none">{trip.arrivalTime}</div>
-                            <div className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1.5">{trip.to}</div>
+                            <div className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1.5">{to}</div>
                         </div>
                     </div>
 
-                    {/* Pricing, Seats & Actions Container */}
+                    {/* Pricing, Seats & Actions */}
                     <div className="flex items-center gap-6 md:gap-8 w-full md:w-auto justify-between md:justify-end pl-0 md:pl-8 border-t md:border-t-0 md:border-l border-gray-100 pt-4 md:pt-0">
-                        {/* Pricing & Seats */}
                         <div className="text-left md:text-right min-w-[110px] flex flex-col items-start md:items-end">
                             <div className="text-[9px] text-gray-400 font-extrabold uppercase tracking-[0.18em] mb-1">TOTAL PRICE</div>
                             <div className="text-2xl font-extrabold text-blue-600 tracking-tight flex items-baseline leading-none">
                                 <span className="text-[10px] font-black text-blue-400/80 mr-1 uppercase">ETB</span>
-                                {trip.price.toLocaleString()}
+                                {(trip.price ?? 0).toLocaleString()}
                             </div>
                             <div className="text-[9px] font-extrabold mt-2 uppercase tracking-wider text-emerald-500">
-                                {trip.seatsAvailable} SEATS LEFT
+                                {seatsAvailable} SEATS LEFT
                             </div>
                         </div>
 
-                        {/* Select Seat CTA & Secondary Actions */}
                         <div className="flex flex-col items-center shrink-0">
                             <Button
                                 onClick={() => onSelect(trip.id)}

@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment variables — never commit secrets
+.env
+.env.local
+.env.*.local
+# Keep the example file so others know what vars are needed
+!.env.example
