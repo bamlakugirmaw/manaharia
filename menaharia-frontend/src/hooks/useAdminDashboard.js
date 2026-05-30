@@ -7,13 +7,20 @@ export const adminKeys = {
 
 /**
  * Fetch platform-wide KPI metrics for the admin dashboard.
+ * Backend envelope: { success, data: { users, operators, buses, routes, trips,
+ *   bookings: { pending, confirmed, cancelled },
+ *   payments: { successful, revenue } }, timestamp }
  *
  * @param {{ from?: string, to?: string }} params  ISO date strings
  */
 export function useAdminDashboard(params = {}) {
     return useQuery({
         queryKey: adminKeys.dashboard(params),
-        queryFn: () => adminApi.getAdminDashboard(params),
-        staleTime: 5 * 60 * 1000, // 5 minutes
+        queryFn: async () => {
+            const response = await adminApi.getAdminDashboard(params);
+            // Unwrap { success, data: {...} } envelope
+            return response?.data ?? response;
+        },
+        staleTime: 5 * 60 * 1000,
     });
 }

@@ -17,7 +17,15 @@ export const userKeys = {
 export function useUsers(params = {}) {
     return useQuery({
         queryKey: userKeys.list(params),
-        queryFn: () => usersApi.listUsers(params),
+        queryFn: async () => {
+            const response = await usersApi.listUsers(params);
+            // Backend envelope: { success, data: { items: [], meta: {} } }
+            const payload = response?.data ?? response;
+            if (Array.isArray(payload))        return payload;
+            if (Array.isArray(payload?.items)) return payload.items;
+            if (Array.isArray(payload?.data))  return payload.data;
+            return [];
+        },
         staleTime: 2 * 60 * 1000,
     });
 }

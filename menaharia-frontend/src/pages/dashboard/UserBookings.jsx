@@ -7,9 +7,9 @@ import {
     User, CreditCard, Phone, Hash, ArrowRight, AlertCircle,
     CheckCircle, Clock, ChevronLeft, MapPin, PlusCircle, Star,
 } from 'lucide-react';
-import { useComplaints } from '../../contexts/ComplaintsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBookings } from '../../hooks/useBookings';
+import { useCreateDispute } from '../../hooks/useDisputes';
 import { cn } from '../../lib/utils';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -123,7 +123,7 @@ function InfoTile({ icon: Icon, label, value, accent }) {
 export default function UserBookings() {
     const navigate = useNavigate();
     const { user } = useAuth();
-    const { complaints, addComplaint, addMessage } = useComplaints();
+    const { mutate: createDispute, isPending: filingDispute } = useCreateDispute();
 
     // GET /v1/bookings?userId= — fetch the current user's bookings
     const { data: bookingsResponse, isLoading, isError } = useBookings(
@@ -153,7 +153,6 @@ export default function UserBookings() {
     const [selectedBooking, setSelectedBooking] = useState(null);
     const [showChat,        setShowChat]        = useState(false);
     const [chatMsg,         setChatMsg]         = useState('');
-    const [activeCmpId,     setActiveCmpId]     = useState(null);
     const chatEndRef = useRef(null);
 
     const [ratings, setRatings] = useState(() => {
@@ -161,49 +160,35 @@ export default function UserBookings() {
         catch { return {}; }
     });
 
-    const existingComplaint = selectedBooking
-        ? complaints.find(c => c.tripId === selectedBooking.id) ?? null
-        : null;
-
-    const activeComplaint = activeCmpId
-        ? complaints.find(c => c.id === activeCmpId)
-        : existingComplaint;
+    const existingComplaint = null; // Disputes are now managed via /v1/disputes — see UserComplaints page
+    const activeComplaint   = null;
 
     useEffect(() => {
         if (showChat && chatEndRef.current)
             chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }, [activeComplaint?.messages?.length, showChat]);
+    }, [showChat]);
 
-    const openComplaintChat = () => {
-        if (existingComplaint) setActiveCmpId(existingComplaint.id);
-        setShowChat(true);
-    };
+    const openComplaintChat = () => setShowChat(true);
 
     const handleSend = () => {
-        if (!chatMsg.trim()) return;
-        if (!activeComplaint) {
-            const newId = addComplaint({
-                tripId:       selectedBooking.id,
-                busName:      selectedBooking.busName,
-                operatorName: selectedBooking.operator,
-                operatorId:   selectedBooking.operatorId,
-                seatNumber:   selectedBooking.seatNumber,
-                ticketId:     selectedBooking.ticketId,
-                route:        selectedBooking.route,
-                travelDate:   selectedBooking.date,
-                bookingDate:  selectedBooking.bookingDate,
-                passengerName:  selectedBooking.passengerName,
-                paymentStatus:  selectedBooking.paymentStatus,
-            }, chatMsg);
-            setActiveCmpId(newId);
-        } else {
-            addMessage(activeComplaint.id, chatMsg, 'user');
-        }
-        setChatMsg('');
+        if (!chatMsg.trim() || !selectedBooking) return;
+        // File a new dispute via the backend
+        createDispute({
+            operatorId: selectedBooking.operatorId,
+            bookingId:  selectedBooking._raw?.id ?? selectedBooking.id,
+            subject:    `Issue with booking ${selectedBooking.id}`,
+            message:    chatMsg,
+        }, {
+            onSuccess: () => {
+                setChatMsg('');
+                setShowChat(false);
+                navigate('/traveller/complaints');
+            },
+        });
     };
 
-    const closeModal = () => { setSelectedBooking(null); setShowChat(false); setActiveCmpId(null); setChatMsg(''); };
-    const openBookingDetail = (b) => { setSelectedBooking(b); setShowChat(false); setActiveCmpId(null); setChatMsg(''); };
+    const closeModal = () => { setSelectedBooking(null); setShowChat(false); setChatMsg(''); };
+    const openBookingDetail = (b) => { setSelectedBooking(b); setShowChat(false); setChatMsg(''); };
 
     return (
         <div className="space-y-6">
@@ -402,51 +387,30 @@ export default function UserBookings() {
                                         </p>
                                     </div>
 
-                                    <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                                        {!activeComplaint && (
-                                            <div className="text-center py-10 px-6">
-                                                <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                                                    <MessageSquare size={22} className="text-primary" />
-                                                </div>
-                                                <p className="text-sm font-bold text-gray-700">Start a complaint</p>
-                                                <p className="text-xs text-gray-400 mt-1.5 max-w-xs mx-auto leading-relaxed">
-                                                    Send your first message below. A complaint ticket will be created automatically and forwarded to the operator.
-                                                </p>
-                                            </div>
-                                        )}
-                                        {activeComplaint?.messages.map((msg, idx) => (
-                                            <div key={idx} className={cn('flex flex-col max-w-[78%]', msg.sender === 'user' ? 'ml-auto items-end' : 'items-start')}>
-                                                <span className="text-[10px] text-gray-400 mb-1 px-1 font-medium">{msg.senderName}</span>
-                                                <div className={cn('px-4 py-2.5 rounded-2xl text-sm leading-relaxed shadow-sm',
-                                                    msg.sender === 'user' ? 'bg-primary text-white rounded-br-sm' : 'bg-white border border-gray-200 text-gray-700 rounded-bl-sm')}>
-                                                    {msg.text}
-                                                </div>
-                                                <span className="text-[10px] text-gray-400 mt-1 px-1">{msg.time}</span>
-                                            </div>
-                                        ))}
-                                        <div ref={chatEndRef} />
+                                    <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center justify-center text-center">
+                                        <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                            <MessageSquare size={22} className="text-primary" />
+                                        </div>
+                                        <p className="text-sm font-bold text-gray-700">File a Dispute</p>
+                                        <p className="text-xs text-gray-400 mt-1.5 max-w-xs mx-auto leading-relaxed">
+                                            Describe your issue below. A dispute will be filed with the operator and you can track it in <strong>My Disputes</strong>.
+                                        </p>
                                     </div>
 
-                                    {activeComplaint?.status === 'Resolved' ? (
-                                        <div className="px-5 py-3 bg-green-50 border-t border-green-100 text-center text-xs font-bold text-green-600 shrink-0">
-                                            ✓ This complaint has been resolved
-                                        </div>
-                                    ) : (
-                                        <div className="px-4 py-3 bg-white border-t border-gray-100 flex gap-2 items-center shrink-0">
-                                            <input type="text"
-                                                placeholder={activeComplaint ? 'Send a reply...' : 'Describe your complaint to open a ticket...'}
-                                                value={chatMsg}
-                                                onChange={e => setChatMsg(e.target.value)}
-                                                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
-                                                className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-                                                autoFocus
-                                            />
-                                            <button onClick={handleSend} disabled={!chatMsg.trim()}
-                                                className="w-10 h-10 rounded-xl bg-primary text-white flex items-center justify-center hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all shrink-0 shadow-sm">
-                                                <Send size={16} />
-                                            </button>
-                                        </div>
-                                    )}
+                                    <div className="px-4 py-3 bg-white border-t border-gray-100 flex gap-2 items-center shrink-0">
+                                        <input type="text"
+                                            placeholder="Describe your issue..."
+                                            value={chatMsg}
+                                            onChange={e => setChatMsg(e.target.value)}
+                                            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
+                                            className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                                            autoFocus
+                                        />
+                                        <button onClick={handleSend} disabled={!chatMsg.trim() || filingDispute}
+                                            className="w-10 h-10 rounded-xl bg-primary text-white flex items-center justify-center hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all shrink-0 shadow-sm">
+                                            <Send size={16} />
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                         </div>

@@ -2,34 +2,35 @@ import { useQuery } from '@tanstack/react-query';
 import { routesApi } from '../api';
 
 export const routeKeys = {
-    all: ['routes'],
-    list: (params) => ['routes', 'list', params],
-    detail: (id) => ['routes', 'detail', id],
+    all:    ['routes'],
+    list:   (params) => ['routes', 'list', params],
+    detail: (id)     => ['routes', 'detail', id],
 };
 
-/**
- * @param {{
- *   page?: number,
- *   limit?: number,
- *   origin?: string,
- *   destination?: string
- * }} params
- */
+function unwrapList(res) {
+    const p = res?.data ?? res;
+    if (Array.isArray(p))        return p;
+    if (Array.isArray(p?.items)) return p.items;
+    if (Array.isArray(p?.data))  return p.data;
+    return [];
+}
+
+function unwrapSingle(res) {
+    return res?.data ?? res;
+}
+
 export function useRoutes(params = {}) {
     return useQuery({
         queryKey: routeKeys.list(params),
-        queryFn: () => routesApi.listRoutes(params),
-        staleTime: 30 * 60 * 1000, // 30 minutes — routes are near-static
+        queryFn: async () => unwrapList(await routesApi.listRoutes(params)),
+        staleTime: 30 * 60 * 1000,
     });
 }
 
-/**
- * @param {string | undefined} routeId
- */
 export function useRoute(routeId) {
     return useQuery({
         queryKey: routeKeys.detail(routeId),
-        queryFn: () => routesApi.getRouteById(routeId),
+        queryFn: async () => unwrapSingle(await routesApi.getRouteById(routeId)),
         enabled: !!routeId,
         staleTime: 30 * 60 * 1000,
     });

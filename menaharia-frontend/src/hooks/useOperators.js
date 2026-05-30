@@ -18,8 +18,17 @@ export const operatorKeys = {
 export function useOperators(params = {}) {
     return useQuery({
         queryKey: operatorKeys.list(params),
-        queryFn: () => operatorsApi.listOperators(params),
-        staleTime: 10 * 60 * 1000, // 10 minutes — operators change rarely
+        queryFn: async () => {
+            const response = await operatorsApi.listOperators(params);
+            // Backend envelope: { success, data: { items: [], meta: {} } }
+            // Normalise to always return an array
+            const payload = response?.data ?? response;
+            if (Array.isArray(payload)) return payload;
+            if (Array.isArray(payload?.items)) return payload.items;
+            if (Array.isArray(payload?.data)) return payload.data;
+            return [];
+        },
+        staleTime: 10 * 60 * 1000,
     });
 }
 

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authApi } from '../api/auth.api';
+import { api } from '../lib/api';
 
 const AuthContext = createContext();
 
@@ -18,14 +19,17 @@ const clearTokens = () => {
 const hasStoredToken = () => !!localStorage.getItem('accessToken');
 
 // ─── Role normalisation ───────────────────────────────────────────────────────
-// Backend returns roles as plain strings: ["USER"] | ["ADMIN"] | ["OPERATOR"]
-// Map to the frontend role strings used by ProtectedRoute.
+// Backend returns roles as plain strings.
+// Known values: "USER" | "ADMIN" | "BUS_OPERATOR"
+// Map to frontend role strings used by ProtectedRoute.
 
 const ROLE_MAP = {
-    user:     'traveller',
-    traveller:'traveller',
-    operator: 'operator',
-    admin:    'admin',
+    user:         'traveller',
+    traveller:    'traveller',
+    operator:     'operator',
+    bus_operator: 'operator',   // ← backend sends "BUS_OPERATOR"
+    admin:        'admin',
+    superadmin:   'admin',
 };
 
 const ROLE_PRIORITY = ['admin', 'operator', 'traveller'];
@@ -93,10 +97,26 @@ export function AuthProvider({ children }) {
 
         authApi
             .me()
-            .then((response) => {
-                // Unwrap { success, data: {...} }
+            .then(async (response) => {
                 const raw = response?.data ?? response;
-                setUser(normaliseUser(raw));
+                let u = normaliseUser(raw);
+
+                // For BUS_OPERATOR users, operatorId is not on the user object.
+                // Fetch the operators list to resolve it.
+                if (u?.role === 'operator' && !u.operatorId) {
+                    try {
+                        const opRes = await api.get('/operators', { params: { limit: 1 } });
+                        const opPayload = opRes.data?.data ?? opRes.data;
+                        const items = Array.isArray(opPayload) ? opPayload
+                            : Array.isArray(opPayload?.items) ? opPayload.items
+                            : [];
+                        if (items.length > 0) {
+                            u = { ...u, operatorId: items[0].id };
+                        }
+                    } catch { /* non-fatal */ }
+                }
+
+                setUser(u);
             })
             .catch(() => {
                 clearTokens();
@@ -132,6 +152,23 @@ export function AuthProvider({ children }) {
                         success: false,
                         message: 'Could not load your profile. Please try again.',
                     };
+                }
+            }
+
+            // For BUS_OPERATOR users the backend doesn't return operatorId on the
+            // user object. Fetch the operators list and pick the first one.
+            if (resolvedUser?.role === 'operator' && !resolvedUser.operatorId) {
+                try {
+                    const opRes = await api.get('/operators', { params: { limit: 1 } });
+                    const opPayload = opRes.data?.data ?? opRes.data;
+                    const items = Array.isArray(opPayload) ? opPayload
+                        : Array.isArray(opPayload?.items) ? opPayload.items
+                        : [];
+                    if (items.length > 0) {
+                        resolvedUser = { ...resolvedUser, operatorId: items[0].id };
+                    }
+                } catch {
+                    // Non-fatal — operator dashboard will show empty state
                 }
             }
 
