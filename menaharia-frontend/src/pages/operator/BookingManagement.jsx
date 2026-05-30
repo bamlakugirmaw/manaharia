@@ -12,17 +12,36 @@ import { useTrips } from '../../hooks/useTrips';
 import { useBuses } from '../../hooks/useBuses';
 import { useRoutes } from '../../hooks/useRoutes';
 import { tripsApi } from '../../api/trips.api';
+import { routesApi } from '../../api/routes.api';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { extractErrorMessage } from '../../lib/api';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 const tripFrom = (t) => t?.from ?? t?.route?.origin ?? '';
 const tripTo   = (t) => t?.to   ?? t?.route?.destination ?? '';
+
+/** Auto-generate a route code from origin + destination city names.
+ *  "Addis Ababa" + "Bahir Dar" → "ADD-BAH"
+ *  Falls back to a timestamp suffix if names are too short. */
+const autoCode = (origin = '', destination = '') => {
+    const abbr = (s) => s.trim().toUpperCase().replace(/\s+/g, '').slice(0, 3).padEnd(3, 'X');
+    if (!origin && !destination) return '';
+    return `${abbr(origin)}-${abbr(destination)}`;
+};
 
 function useCreateTrip() {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: (data) => tripsApi.createTrip(data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['trips'] }),
+    });
+}
+
+function useCreateRoute() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (data) => routesApi.createRoute(data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['routes'] }),
     });
 }
 
@@ -43,16 +62,12 @@ export default function BookingManagement() {
     const { data: buses = [] } = useBuses(operatorId ? { operatorId, limit: 50 } : {});
     const { data: routes = [] } = useRoutes({ limit: 100 });
     const { mutate: createTrip, isPending: creatingTrip, error: createTripError } = useCreateTrip();
+    const { mutate: createRoute, isPending: creatingRoute } = useCreateRoute();
 
     // ── UI state ──────────────────────────────────────────────────────────────
     const [selectedTrip, setSelectedTrip] = useState(null);
     const [activeSection, setActiveSection] = useState('manifest');
     const [isAddTripModalOpen, setIsAddTripModalOpen] = useState(false);
-    const [selectedSeat, setSelectedSeat] = useState('');
-    const [passengerName, setPassengerName] = useState('');
-    const [passengerPhone, setPassengerPhone] = useState('');
-    const [passengerGender, setPassengerGender] = useState('Male');
-    const [passengerAge, setPassengerAge] = useState('');
 
     // Add trip form
     const [addRouteId, setAddRouteId] = useState('');
@@ -61,6 +76,20 @@ export default function BookingManagement() {
     const [addTime, setAddTime] = useState('');
     const [addArrival, setAddArrival] = useState('');
     const [addPrice, setAddPrice] = useState('');
+    const [addAmenities, setAddAmenities] = useState('WiFi,AC');
+
+    // Inline route creation (shown when no routes exist or user wants a new one)
+    const [showNewRoute, setShowNewRoute] = useState(false);
+    const [newRoute, setNewRoute] = useState({ code: '', origin: '', destination: '', distance: '' });
+    const [routeError, setRouteError] = useState('');
+    const [tripError, setTripError] = useState('');
+
+    // Manual booking seat map state
+    const [selectedSeat, setSelectedSeat] = useState('');
+    const [passengerName, setPassengerName] = useState('');
+    const [passengerPhone, setPassengerPhone] = useState('');
+    const [passengerGender, setPassengerGender] = useState('Male');
+    const [passengerAge, setPassengerAge] = useState('');
 
     // ── Derived ───────────────────────────────────────────────────────────────
     const currentTripObj = trips.find(t => t.id === selectedTrip) ?? trips[0] ?? null;
@@ -76,23 +105,33 @@ export default function BookingManagement() {
     const emptySeatsCount = totalSeats - bookedSeatsCount;
     const occupiedSeats = filteredManifest.map(b => b.travelers?.[0]?.seat?.seatNumber ?? b.travelers?.[0]?.seatNumber ?? '');
 
-    // ── Handlers ──────────────────────────────────────────────────────────────
     const handleSaveTrip = (e) => {
         e.preventDefault();
+        setTripError('');
         if (!addRouteId || !addBusId || !addDate || !addTime || !addArrival || !addPrice) return;
+
+        // Backend requires full ISO 8601 datetime strings for departureTime and arrivalTime
+        const toISO = (date, time) => new Date(`${date}T${time}:00`).toISOString();
+
         createTrip({
-            routeId: addRouteId,
-            busId: addBusId,
-            date: addDate,
-            departureTime: addTime,
-            arrivalTime: addArrival,
-            price: Number(addPrice),
-            status: 'SCHEDULED',
+            routeId:       addRouteId,
+            busId:         addBusId,
+            date:          addDate,
+            departureTime: toISO(addDate, addTime),
+            arrivalTime:   toISO(addDate, addArrival),
+            price:         Number(addPrice),
+            amenities:     addAmenities.split(',').map(s => s.trim()).filter(Boolean),
+            status:        'SCHEDULED',
         }, {
             onSuccess: () => {
                 setIsAddTripModalOpen(false);
+                setShowNewRoute(false);
                 setAddRouteId(''); setAddBusId(''); setAddDate('');
                 setAddTime(''); setAddArrival(''); setAddPrice('');
+                setTripError('');
+            },
+            onError: (err) => {
+                setTripError(extractErrorMessage(err, 'Failed to create trip.'));
             },
         });
     };
@@ -317,24 +356,112 @@ export default function BookingManagement() {
             </div>
 
             {/* Add New Trip Schedule Modal */}
-            <Modal isOpen={isAddTripModalOpen} onClose={() => setIsAddTripModalOpen(false)} title="Add New Trip Schedule">
+            <Modal isOpen={isAddTripModalOpen} onClose={() => { setIsAddTripModalOpen(false); setShowNewRoute(false); setRouteError(''); setTripError(''); }} title="Add New Trip Schedule">
                 <form onSubmit={handleSaveTrip} className="space-y-4">
-                    {createTripError && (
-                        <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">
-                            {createTripError?.response?.data?.message ?? 'Failed to create trip.'}
-                        </div>
+                    {tripError && (
+                        <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">{tripError}</div>
                     )}
+
+                    {/* ── Route selector ── */}
                     <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-1">Route *</label>
-                        <select value={addRouteId} onChange={e => setAddRouteId(e.target.value)} required
-                            className="w-full rounded-md border border-gray-300 p-2.5 text-sm focus:ring-primary focus:border-primary focus:outline-none">
-                            <option value="">Select a route…</option>
-                            {routes.map(r => (
-                                <option key={r.id} value={r.id}>{r.origin} → {r.destination}</option>
-                            ))}
-                        </select>
-                        {routes.length === 0 && <p className="text-xs text-amber-600 mt-1">No routes available. Ask admin to create routes first.</p>}
+                        <div className="flex items-center justify-between mb-1">
+                            <label className="text-sm font-semibold text-gray-700">Route *</label>
+                            <button type="button" onClick={() => { setShowNewRoute(v => !v); setRouteError(''); }}
+                                className="text-xs font-bold text-primary hover:underline">
+                                {showNewRoute ? '← Select existing' : '+ Create new route'}
+                            </button>
+                        </div>
+
+                        {showNewRoute ? (
+                            /* ── Inline route creation form ── */
+                            <div className="space-y-3 p-4 bg-blue-50/50 border border-blue-100 rounded-xl">
+                                <p className="text-xs font-bold text-blue-600 uppercase tracking-wider">New Route — matches POST /v1/routes</p>
+                                {routeError && <p className="text-xs text-red-600">{routeError}</p>}
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-xs font-medium text-gray-600 mb-1 block">Origin *</label>
+                                        <input placeholder="e.g. Addis Ababa" required
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                                            value={newRoute.origin}
+                                            onChange={e => {
+                                                const origin = e.target.value;
+                                                const code = autoCode(origin, newRoute.destination);
+                                                setNewRoute(p => ({ ...p, origin, code }));
+                                            }} />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-medium text-gray-600 mb-1 block">Destination *</label>
+                                        <input placeholder="e.g. Bahir Dar" required
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                                            value={newRoute.destination}
+                                            onChange={e => {
+                                                const destination = e.target.value;
+                                                const code = autoCode(newRoute.origin, destination);
+                                                setNewRoute(p => ({ ...p, destination, code }));
+                                            }} />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-medium text-gray-600 mb-1 block">
+                                            Route Code *
+                                            <span className="ml-1 text-gray-400 font-normal">(auto-generated)</span>
+                                        </label>
+                                        <input placeholder="e.g. ADD-BAH" required
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-gray-50"
+                                            value={newRoute.code}
+                                            onChange={e => setNewRoute(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-medium text-gray-600 mb-1 block">Distance (km) *</label>
+                                        <input type="number" placeholder="e.g. 510" required
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                                            value={newRoute.distance} onChange={e => setNewRoute(p => ({ ...p, distance: e.target.value }))} />
+                                    </div>
+                                </div>
+                                <Button type="button" size="sm" disabled={creatingRoute}
+                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg"
+                                    onClick={() => {
+                                        setRouteError('');
+                                        if (!newRoute.code || !newRoute.origin || !newRoute.destination || !newRoute.distance) {
+                                            setRouteError('All route fields are required.'); return;
+                                        }
+                                        createRoute({
+                                            code: newRoute.code,
+                                            origin: newRoute.origin,
+                                            destination: newRoute.destination,
+                                            distance: Number(newRoute.distance),
+                                        }, {
+                                            onSuccess: (res) => {
+                                                const created = res?.data ?? res;
+                                                if (created?.id) setAddRouteId(created.id);
+                                                setShowNewRoute(false);
+                                                setNewRoute({ code: '', origin: '', destination: '', distance: '' });
+                                            },
+                                            onError: (err) => {
+                                                setRouteError(extractErrorMessage(err, 'Failed to create route.'));
+                                            },
+                                        });
+                                    }}>
+                                    {creatingRoute ? 'Creating Route…' : 'Create Route & Select'}
+                                </Button>
+                            </div>
+                        ) : (
+                            /* ── Existing route dropdown ── */
+                            <div>
+                                <select value={addRouteId} onChange={e => setAddRouteId(e.target.value)} required
+                                    className="w-full rounded-md border border-gray-300 p-2.5 text-sm focus:ring-primary focus:border-primary focus:outline-none">
+                                    <option value="">Select a route…</option>
+                                    {routes.map(r => (
+                                        <option key={r.id} value={r.id}>{r.origin} → {r.destination} ({r.code})</option>
+                                    ))}
+                                </select>
+                                {routes.length === 0 && (
+                                    <p className="text-xs text-amber-600 mt-1">No routes yet — click "Create new route" above to add one.</p>
+                                )}
+                            </div>
+                        )}
                     </div>
+
+                    {/* ── Bus selector ── */}
                     <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-1">Bus *</label>
                         <select value={addBusId} onChange={e => setAddBusId(e.target.value)} required
@@ -344,17 +471,22 @@ export default function BookingManagement() {
                                 <option key={b.id} value={b.id}>{b.plateNumber} — {b.make} ({b.totalSeats} seats)</option>
                             ))}
                         </select>
-                        {buses.length === 0 && <p className="text-xs text-amber-600 mt-1">No buses registered. Add buses in Bus Management first.</p>}
+                        {buses.length === 0 && (
+                            <p className="text-xs text-amber-600 mt-1">No buses registered. Add buses in Bus Management first.</p>
+                        )}
                     </div>
+
+                    {/* ── Date / Time ── */}
                     <div className="grid grid-cols-2 gap-4">
                         <Input type="date" label="Date *" required value={addDate} onChange={e => setAddDate(e.target.value)} className="rounded-xl h-11" />
                         <Input type="time" label="Departure Time *" required value={addTime} onChange={e => setAddTime(e.target.value)} className="rounded-xl h-11" />
                     </div>
                     <Input type="time" label="Arrival Time *" required value={addArrival} onChange={e => setAddArrival(e.target.value)} className="rounded-xl h-11" />
                     <Input type="number" label="Ticket Price (ETB) *" placeholder="e.g. 1500" required value={addPrice} onChange={e => setAddPrice(e.target.value)} className="rounded-xl h-11" />
+
                     <div className="flex justify-end gap-3 mt-6">
-                        <Button type="button" variant="outline" onClick={() => setIsAddTripModalOpen(false)}>Cancel</Button>
-                        <Button type="submit" disabled={creatingTrip} className="bg-primary hover:bg-primary/90 text-white font-bold h-11 px-5 rounded-xl">
+                        <Button type="button" variant="outline" onClick={() => { setIsAddTripModalOpen(false); setShowNewRoute(false); setRouteError(''); setTripError(''); }}>Cancel</Button>
+                        <Button type="submit" disabled={creatingTrip || showNewRoute} className="bg-primary hover:bg-primary/90 text-white font-bold h-11 px-5 rounded-xl">
                             {creatingTrip ? 'Saving…' : 'Save Schedule'}
                         </Button>
                     </div>
