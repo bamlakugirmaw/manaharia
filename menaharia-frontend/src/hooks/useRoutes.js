@@ -54,3 +54,11 @@ export function useUpdateRoute() {
         },
     });
 }
+
+export function useRemoveRoute() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (id) => routesApi.removeRoute(id),
+        onSuccess: () => qc.invalidateQueries({ queryKey: routeKeys.all }),
+    });
+}

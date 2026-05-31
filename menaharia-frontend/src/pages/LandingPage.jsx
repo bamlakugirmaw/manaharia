@@ -8,8 +8,7 @@ import { cn } from '../lib/utils';
 import { useRoutes } from '../hooks/useRoutes';
 import { useAllTrips } from '../hooks/useTrips';
 import { usePublicDestinations } from '../hooks/useDestinations';
-import { useOperators } from '../hooks/useOperators';
-import { useAuth } from '../contexts/AuthContext';
+import { usePublicOperators } from '../hooks/useOperators';
 import { tripOrigin, tripDest, formatTripDuration } from '../lib/tripHelpers';
 
 const STATIC_POPULAR_ROUTES = [
@@ -34,15 +33,10 @@ const FALLBACK_OPERATORS = [
 
 export default function LandingPage() {
     const navigate = useNavigate();
-    const { isAuthenticated } = useAuth();
     const { data: apiRoutes = [] } = useRoutes({ limit: 200 });
     const { data: trips = [] } = useAllTrips({ limit: 100, status: 'SCHEDULED' });
     const { data: destPayload } = usePublicDestinations({ limit: 12 });
-    const { data: apiOperators = [] } = useOperators({
-        limit: 6,
-        status: 'ACTIVE',
-        enabled: isAuthenticated,
-    });
+    const { data: apiOperators = [] } = usePublicOperators();
 
     const locations = useMemo(() => {
         const set = new Set();

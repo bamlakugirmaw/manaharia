@@ -1,5 +1,15 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { operatorsApi } from '../api';
+import { useAuth } from '../contexts/AuthContext';
+import { useAllTrips } from './useTrips';
+import {
+    aggregateOperatorsFromTrips,
+    buildOperatorTripStats,
+    mergeOperatorLists,
+    mergeOperatorRecord,
+    normaliseOperatorForUI,
+} from '../lib/operatorHelpers';
 
 export const operatorKeys = {
     all: ['operators'],
@@ -32,13 +42,15 @@ export function useOperators(params = {}) {
         },
         enabled,
         staleTime: 10 * 60 * 1000,
+        retry: false,
     });
 }
 
 /**
  * @param {string | undefined} operatorId
  */
-export function useOperator(operatorId) {
+export function useOperator(operatorId, options = {}) {
+    const { enabled = true } = options;
     return useQuery({
         queryKey: operatorKeys.detail(operatorId),
         queryFn: async () => {
@@ -46,8 +58,107 @@ export function useOperator(operatorId) {
             // Backend envelope: { success, data: { id, companyName, ... } }
             return res?.data ?? res;
         },
-        enabled: !!operatorId,
+        enabled: !!operatorId && enabled,
         staleTime: 10 * 60 * 1000,
+        retry: false,
+    });
+}
+
+/**
+ * Public operator listing — works without auth by aggregating GET /trips.
+ * When signed in, merges GET /operators with trip stats (routes, prices, trips).
+ */
+export function usePublicOperators(params = {}) {
+    const { isAuthenticated } = useAuth();
+    const { status = 'ACTIVE', enabled = true } = params;
+
+    const { data: trips = [], isLoading: tripsLoading } = useAllTrips({
+        limit: 100,
+        status: 'SCHEDULED',
+        enabled,
+    });
+
+    const { data: apiOperators = [], isLoading: apiLoading, isError: apiError } = useOperators({
+        limit: 100,
+        status,
+        enabled: enabled && isAuthenticated,
+    });
+
+    const operators = useMemo(() => {
+        if (isAuthenticated && apiOperators.length > 0) {
+            return mergeOperatorLists(apiOperators, trips);
+        }
+        return aggregateOperatorsFromTrips(trips);
+    }, [isAuthenticated, apiOperators, trips]);
+
+    return {
+        data: operators,
+        isLoading: tripsLoading || (isAuthenticated && apiLoading),
+        isFromApi: isAuthenticated && !apiError && apiOperators.length > 0,
+        tripCount: trips.length,
+    };
+}
+
+/**
+ * Single operator profile — public via trip aggregation; enriched when authenticated.
+ */
+export function usePublicOperator(operatorId) {
+    const { isAuthenticated } = useAuth();
+
+    const { data: trips = [], isLoading: tripsLoading } = useAllTrips({
+        limit: 100,
+        status: 'SCHEDULED',
+        enabled: !!operatorId,
+    });
+
+    const { data: apiOperator, isLoading: apiLoading } = useOperator(operatorId, {
+        enabled: isAuthenticated && !!operatorId,
+    });
+
+    const operator = useMemo(() => {
+        if (!operatorId) return null;
+
+        const stats = buildOperatorTripStats(trips, operatorId);
+        if (apiOperator) {
+            return mergeOperatorRecord(apiOperator, stats
+                ? {
+                    routesServed: stats.routesServed,
+                    routeDetails: stats.routeDetails,
+                    startingPrice: stats.startingPrice,
+                    upcomingTrips: stats.upcomingTrips,
+                    scheduledTripCount: stats.scheduledTripCount,
+                }
+                : null);
+        }
+
+        if (stats?.rawOperator || stats?.upcomingTrips?.length) {
+            const raw = stats.rawOperator ?? { id: operatorId };
+            return normaliseOperatorForUI(
+                { ...raw, id: operatorId },
+                {
+                    routesServed: stats.routesServed,
+                    routeDetails: stats.routeDetails,
+                    startingPrice: stats.startingPrice,
+                    upcomingTrips: stats.upcomingTrips,
+                    scheduledTripCount: stats.scheduledTripCount,
+                },
+            );
+        }
+
+        return null;
+    }, [operatorId, trips, apiOperator]);
+
+    return {
+        data: operator,
+        isLoading: tripsLoading || (isAuthenticated && apiLoading),
+    };
+}
+
+export function useRemoveOperator() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (id) => operatorsApi.removeOperator(id),
+        onSuccess: () => qc.invalidateQueries({ queryKey: operatorKeys.all }),
     });
 }
 

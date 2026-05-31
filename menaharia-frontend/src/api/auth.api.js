@@ -10,6 +10,7 @@ import { api, unwrap } from '../lib/api';
  * me         — GET  /v1/auth/me
  * updateMe   — PATCH /v1/auth/me
  * changePassword — POST /v1/auth/change-password
+ * deleteMe     — DELETE /v1/auth/me
  */
 
 /**
@@ -56,7 +57,7 @@ export const me = () =>
     api.get('/auth/me').then(unwrap);
 
 /**
- * @param {{ fullName?: string, email?: string, phone?: string }} data
+ * @param {{ fullName?: string, email?: string, phone?: string, profilePicture?: string | null }} data
  * @returns {object} updated user
  */
 export const updateMe = (data) =>
@@ -68,4 +69,8 @@ export const updateMe = (data) =>
 export const changePassword = (data) =>
     api.post('/auth/change-password', data).then(unwrap);
 
-export const authApi = { register, login, refresh, logout, me, updateMe, changePassword };
+/** Soft-delete the authenticated user's account. */
+export const deleteMe = () =>
+    api.delete('/auth/me').then(unwrap);
+
+export const authApi = { register, login, refresh, logout, me, updateMe, changePassword, deleteMe };

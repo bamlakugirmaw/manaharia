@@ -42,12 +42,14 @@ export function useTrips(params = {}) {
  * Used by the operator Bookings page to list all trips for the operator's buses.
  */
 export function useAllTrips(params = {}) {
+    const { enabled = true, ...queryParams } = params;
     return useQuery({
-        queryKey: tripKeys.list({ _all: true, ...params }),
+        queryKey: tripKeys.list({ _all: true, ...queryParams }),
         queryFn: async () => {
-            const list = unwrapList(await tripsApi.listTrips(params));
+            const list = unwrapList(await tripsApi.listTrips(queryParams));
             return Array.isArray(list) ? list : [];
         },
+        enabled,
         placeholderData: (prev) => (Array.isArray(prev) ? prev : []),
         staleTime: 30 * 1000, // 30s — operator needs fresh data after creating a trip
     });

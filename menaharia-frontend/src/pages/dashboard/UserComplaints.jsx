@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDisputes, useRemoveDispute, DISPUTE_STATUS_LABEL } from '../../hooks/useDisputes';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { cn } from '../../lib/utils';
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
@@ -34,15 +35,22 @@ function StatusBadge({ status }) {
 // ─── Detail view ──────────────────────────────────────────────────────────────
 function DisputeDetail({ dispute, onBack }) {
     const { mutate: removeDispute, isPending: removing } = useRemoveDispute();
+    const { confirm, ConfirmDialogHost } = useConfirmDialog();
 
-    const handleWithdraw = () => {
-        if (!window.confirm('Withdraw this dispute? This cannot be undone.')) return;
+    const handleWithdraw = async () => {
+        const ok = await confirm({
+            title: 'Withdraw this dispute?',
+            description: 'Your complaint will be removed. This action cannot be undone.',
+            confirmLabel: 'Withdraw',
+        });
+        if (!ok) return;
         removeDispute(dispute.id, { onSuccess: onBack });
     };
 
     return (
         <div className="flex flex-col bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"
             style={{ minHeight: 'calc(100vh - 152px)' }}>
+            <ConfirmDialogHost />
 
             {/* Header */}
             <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 shrink-0">

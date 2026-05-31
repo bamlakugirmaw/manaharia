@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Card } from '../../components/ui/Card';
-import { Search, Bus, Building2, X } from 'lucide-react';
+import { Search, Bus, Building2, X, Trash2 } from 'lucide-react';
 import { Input } from '../../components/ui/Input';
-import { useOperators } from '../../hooks/useOperators';
+import { useOperators, useRemoveOperator } from '../../hooks/useOperators';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { operatorsApi } from '../../api/operators.api';
 import { operatorKeys } from '../../hooks/useOperators';
@@ -52,6 +53,8 @@ export default function AdminOperatorManagement() {
     const { data: operators = [], isLoading } = useOperators({ limit: 100 });
     const { data: busOperatorRoleId, isLoading: roleLoading } = useBusOperatorRoleId();
     const { mutate: updateOp, isPending: updating } = useUpdateOperator();
+    const { mutate: removeOp, isPending: removingOp } = useRemoveOperator();
+    const { confirm, ConfirmDialogHost } = useConfirmDialog();
     const qc = useQueryClient();
 
     const operatorRoleId = busOperatorRoleId ?? BUS_OPERATOR_ROLE_FALLBACK;
@@ -146,6 +149,20 @@ export default function AdminOperatorManagement() {
         });
     };
 
+    const handleDeleteOperator = async () => {
+        if (!selectedOp) return;
+        const name = selectedOp.name ?? selectedOp.companyName ?? 'this operator';
+        const ok = await confirm({
+            title: 'Delete this operator?',
+            description: `${name} will be soft-deleted. Scheduled trips and buses may be affected.`,
+            confirmLabel: 'Delete Operator',
+        });
+        if (!ok) return;
+        removeOp(selectedOp.id, {
+            onSuccess: () => setSelectedOp(null),
+        });
+    };
+
     const closeAdd = () => {
         setIsAddOpen(false);
         setForm(EMPTY_FORM);
@@ -161,14 +178,22 @@ export default function AdminOperatorManagement() {
     if (selectedOp) {
         return (
             <div className="space-y-6">
+                <ConfirmDialogHost />
                 <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
                     <Button variant="ghost" onClick={() => setSelectedOp(null)} className="font-bold flex items-center gap-2">
                         ← Back to Operators List
                     </Button>
-                    <Button className="bg-primary hover:bg-primary/95 text-white font-bold"
-                        onClick={() => { setEditForm({ id: selectedOp.id, ...selectedOp }); setIsEditOpen(true); }}>
-                        Edit Operator
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button variant="outline" disabled={removingOp}
+                            className="text-red-600 border-red-200 hover:bg-red-50 font-bold flex items-center gap-2"
+                            onClick={handleDeleteOperator}>
+                            <Trash2 size={16} /> {removingOp ? 'Deleting…' : 'Delete Operator'}
+                        </Button>
+                        <Button className="bg-primary hover:bg-primary/95 text-white font-bold"
+                            onClick={() => { setEditForm({ id: selectedOp.id, ...selectedOp }); setIsEditOpen(true); }}>
+                            Edit Operator
+                        </Button>
+                    </div>
                 </div>
 
                 <div className="bg-white rounded-3xl p-8 border border-gray-100 shadow-[0_8px_30px_rgba(0,0,0,0.02)] space-y-6">
@@ -243,6 +268,7 @@ export default function AdminOperatorManagement() {
     // ── List view ─────────────────────────────────────────────────────────────
     return (
         <div className="space-y-6">
+            <ConfirmDialogHost />
             <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
                 <div className="relative w-full md:w-96">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />

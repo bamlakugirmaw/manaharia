@@ -68,3 +68,24 @@ export function useRemoveUser() {
         },
     });
 }
+
+export function useHardRemoveUser() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (id) => usersApi.hardRemoveUser(id),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: userKeys.all });
+        },
+    });
+}
+
+export function useRemoveUserRole() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, roleId }) => usersApi.removeUserRole(id, { roleId }),
+        onSuccess: (_data, { id }) => {
+            queryClient.invalidateQueries({ queryKey: userKeys.all });
+            queryClient.invalidateQueries({ queryKey: userKeys.detail(id) });
+        },
+    });
+}

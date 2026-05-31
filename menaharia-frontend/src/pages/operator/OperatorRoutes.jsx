@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
-import { Plus, MapPin, Edit2, X } from 'lucide-react';
+import { Plus, MapPin, Edit2, X, Trash2 } from 'lucide-react';
 import { Input } from '../../components/ui/Input';
-import { useRoutes, useCreateRoute, useUpdateRoute } from '../../hooks/useRoutes';
+import { useRoutes, useCreateRoute, useUpdateRoute, useRemoveRoute } from '../../hooks/useRoutes';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { extractErrorMessage } from '../../lib/api';
 
 const autoCode = (origin = '', destination = '') => {
@@ -19,6 +20,8 @@ export default function OperatorRoutes() {
     const { data: routes = [], isLoading, isError } = useRoutes({ limit: 200 });
     const { mutate: createRoute, isPending: creating } = useCreateRoute();
     const { mutate: updateRoute, isPending: updating } = useUpdateRoute();
+    const { mutate: removeRoute, isPending: removing } = useRemoveRoute();
+    const { confirm, ConfirmDialogHost } = useConfirmDialog();
 
     const [searchQuery, setSearchQuery] = useState('');
     const [isAddOpen, setIsAddOpen] = useState(false);
@@ -86,8 +89,22 @@ export default function OperatorRoutes() {
         );
     };
 
+    const handleDelete = async (route) => {
+        const ok = await confirm({
+            title: 'Delete this route?',
+            description: `${route.code} (${route.origin} → ${route.destination}) will be permanently removed.`,
+            confirmLabel: 'Delete Route',
+        });
+        if (!ok) return;
+        removeRoute(route.id, {
+            onSuccess: () => setEditingRoute(null),
+            onError: (err) => window.alert(extractErrorMessage(err, 'Failed to delete route.')),
+        });
+    };
+
     return (
         <div className="space-y-6">
+            <ConfirmDialogHost />
             <div className="flex justify-between items-center">
                 <div>
                     <h1 className="text-xl font-bold tracking-tight">Route Management</h1>
@@ -142,20 +159,31 @@ export default function OperatorRoutes() {
                             <p className="text-xs text-gray-400 my-1">→</p>
                             <h3 className="font-bold text-gray-900 mb-3">{route.destination}</h3>
                             <p className="text-sm text-gray-500 mb-4">{route.distance} km</p>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="w-full gap-2 rounded-xl"
-                                onClick={() => {
-                                    setFormError('');
-                                    setEditingRoute({
-                                        ...route,
-                                        distance: String(route.distance ?? ''),
-                                    });
-                                }}
-                            >
-                                <Edit2 size={14} /> Edit Route
-                            </Button>
+                            <div className="flex gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="flex-1 gap-2 rounded-xl"
+                                    onClick={() => {
+                                        setFormError('');
+                                        setEditingRoute({
+                                            ...route,
+                                            distance: String(route.distance ?? ''),
+                                        });
+                                    }}
+                                >
+                                    <Edit2 size={14} /> Edit
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="gap-2 rounded-xl text-red-600 border-red-100 hover:bg-red-50"
+                                    disabled={removing}
+                                    onClick={() => handleDelete(route)}
+                                >
+                                    <Trash2 size={14} />
+                                </Button>
+                            </div>
                         </Card>
                     ))}
                     {filtered.length === 0 && (
@@ -254,6 +282,10 @@ export default function OperatorRoutes() {
                         <div className="flex gap-3 mt-6">
                             <Button variant="outline" className="flex-1" onClick={() => setEditingRoute(null)}>
                                 Cancel
+                            </Button>
+                            <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50"
+                                disabled={removing} onClick={() => handleDelete(editingRoute)}>
+                                <Trash2 size={14} className="inline mr-1" /> Delete
                             </Button>
                             <Button className="flex-1 bg-primary" disabled={updating} onClick={handleUpdate}>
                                 {updating ? 'Saving…' : 'Save Changes'}

@@ -52,6 +52,10 @@ const normaliseRole = (roles = []) => {
 const normaliseUser = (raw) => {
     if (!raw) return null;
     if (!raw.id && !raw._id) return null;
+    const profilePicture = raw.profilePicture ?? raw.profilePhoto ?? null;
+    const avatarFromProfile = typeof profilePicture === 'string'
+        ? profilePicture
+        : (profilePicture?.secureUrl ?? profilePicture?.url ?? null);
     return {
         id:         raw.id ?? raw._id,
         name:       raw.fullName ?? raw.name ?? '',
@@ -59,7 +63,7 @@ const normaliseUser = (raw) => {
         phone:      raw.phone ?? '',
         role:       normaliseRole(raw.roles),
         operatorId: raw.operatorId ?? raw.operator?.id ?? null,
-        avatarUrl:  raw.profilePhoto ?? raw.avatarUrl ?? raw.avatar ?? null,
+        avatarUrl:  avatarFromProfile ?? raw.avatarUrl ?? raw.avatar ?? null,
         roles:      raw.roles ?? [],
     };
 };
@@ -267,6 +271,19 @@ export function AuthProvider({ children }) {
         }
     }, []);
 
+    // ── deleteAccount ─────────────────────────────────────────────────────────
+    const deleteAccount = useCallback(async () => {
+        try {
+            await authApi.deleteMe();
+            clearTokens();
+            setUser(null);
+            return { success: true };
+        } catch (err) {
+            const message = err?.response?.data?.message ?? 'Account deletion failed.';
+            return { success: false, message: Array.isArray(message) ? message.join('. ') : message };
+        }
+    }, []);
+
     return (
         <AuthContext.Provider
             value={{
@@ -279,6 +296,7 @@ export function AuthProvider({ children }) {
                 updateProfile,
                 setAvatarUrl,
                 changePassword,
+                deleteAccount,
             }}
         >
             {children}

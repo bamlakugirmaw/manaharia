@@ -8,6 +8,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { operatorsApi } from '../../api/operators.api';
 import { operatorKeys } from '../../hooks/useOperators';
 import ProfileAvatarUpload from '../../components/profile/ProfileAvatarUpload';
+import { storageApi } from '../../api/storage.api';
 
 function useUpdateOperator() {
     const qc = useQueryClient();
@@ -22,6 +23,7 @@ export default function OperatorSettings() {
     const operatorId = user?.operatorId ?? null;
 
     const [logo, setLogo] = useState(null);
+    const [logoPublicId, setLogoPublicId] = useState(null);
     const [logoError, setLogoError] = useState('');
     const [logoSuccess, setLogoSuccess] = useState(false);
 
@@ -59,11 +61,12 @@ export default function OperatorSettings() {
         setAvatarUrl(logoUrl || null);
     };
 
-    const handleLogoUploaded = async ({ url }) => {
+    const handleLogoUploaded = async ({ url, publicId }) => {
         setLogoError('');
         setLogoSuccess(false);
         try {
             await persistLogo(url);
+            if (publicId) setLogoPublicId(publicId);
             setLogoSuccess(true);
             setTimeout(() => setLogoSuccess(false), 3000);
         } catch (err) {
@@ -77,7 +80,15 @@ export default function OperatorSettings() {
         setLogoError('');
         setLogoSuccess(false);
         try {
+            if (logoPublicId) {
+                try {
+                    await storageApi.deleteImage(logoPublicId);
+                } catch {
+                    // Non-fatal — still clear operator logo reference
+                }
+            }
             await persistLogo('');
+            setLogoPublicId(null);
             setLogoSuccess(true);
             setTimeout(() => setLogoSuccess(false), 3000);
         } catch (err) {

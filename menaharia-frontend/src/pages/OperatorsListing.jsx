@@ -1,37 +1,24 @@
 import { useState, useMemo } from 'react';
 import OperatorCard from '../components/operators/OperatorCard';
-import { Search } from 'lucide-react';
+import { Search, Bus, AlertCircle } from 'lucide-react';
 import heroBg from '../assets/hero-bus-bg.png';
-import { useOperators } from '../hooks/useOperators';
-import { getAllOperators } from '../data/operators-data';
+import { usePublicOperators } from '../hooks/useOperators';
 
 export default function OperatorsListing() {
     const [searchTerm, setSearchTerm] = useState('');
-
-    // GET /v1/operators — requires auth.
-    // If the request fails (unauthenticated or network error) we fall back to
-    // the static operators-data.js so the public listing page still renders.
-    const { data: apiResponse, isLoading, isError } = useOperators({ limit: 100 });
-
-    const apiOperators = useMemo(() => {
-        if (!apiResponse) return null;
-        return Array.isArray(apiResponse) ? apiResponse : (apiResponse.data ?? null);
-    }, [apiResponse]);
-
-    // Use API data when available, static fallback otherwise
-    const allOperators = apiOperators ?? getAllOperators();
+    const { data: operators = [], isLoading, tripCount } = usePublicOperators();
 
     const filteredOperators = useMemo(() => {
-        const term = searchTerm.toLowerCase();
-        return allOperators.filter(op => {
-            const name   = (op.name ?? op.companyName ?? '').toLowerCase();
-            // Backend operators have routesServed as array of strings or route objects
-            const routes = Array.isArray(op.routesServed)
-                ? op.routesServed.map(r => (typeof r === 'string' ? r : `${r.origin} → ${r.destination}`)).join(' ')
-                : '';
-            return name.includes(term) || routes.toLowerCase().includes(term);
+        const term = searchTerm.toLowerCase().trim();
+        if (!term) return operators;
+
+        return operators.filter((op) => {
+            const name = (op.name ?? op.companyName ?? '').toLowerCase();
+            const routes = (op.routesServed ?? []).join(' ').toLowerCase();
+            const address = (op.contact?.address ?? op.address ?? '').toLowerCase();
+            return name.includes(term) || routes.includes(term) || address.includes(term);
         });
-    }, [allOperators, searchTerm]);
+    }, [operators, searchTerm]);
 
     return (
         <div className="min-h-screen bg-gray-50 pb-20">
@@ -46,7 +33,7 @@ export default function OperatorsListing() {
                         Our Transport Partners
                     </h1>
                     <p className="text-lg text-dark/70 font-medium max-w-xl mx-auto">
-                        Travel with confidence. Choose from Ethiopia's most trusted and verified bus operators.
+                        Travel with confidence. Browse verified operators, live routes, and scheduled trips across Ethiopia.
                     </p>
                     <div className="relative max-w-xl mx-auto mt-8">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -58,6 +45,11 @@ export default function OperatorsListing() {
                             onChange={e => setSearchTerm(e.target.value)}
                         />
                     </div>
+                    {!isLoading && operators.length > 0 && (
+                        <p className="text-sm font-semibold text-dark/60">
+                            {operators.length} operator{operators.length !== 1 ? 's' : ''} · {tripCount} scheduled trip{tripCount !== 1 ? 's' : ''}
+                        </p>
+                    )}
                 </div>
             </div>
 
@@ -69,19 +61,33 @@ export default function OperatorsListing() {
                             <div key={i} className="h-64 bg-white rounded-3xl animate-pulse shadow-sm" />
                         ))}
                     </div>
-                ) : (
+                ) : filteredOperators.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                         {filteredOperators.map(operator => (
                             <OperatorCard key={operator.id} operator={operator} />
                         ))}
-                        {filteredOperators.length === 0 && (
-                            <div className="col-span-full text-center py-20 bg-white rounded-3xl shadow-sm">
-                                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
-                                    <Search className="w-8 h-8 text-gray-400" />
-                                </div>
-                                <h3 className="text-xl font-bold text-gray-900">No operators found</h3>
-                                <p className="text-gray-500 mt-2">Try adjusting your search terms.</p>
-                            </div>
+                    </div>
+                ) : (
+                    <div className="col-span-full text-center py-20 bg-white rounded-3xl shadow-sm">
+                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
+                            {operators.length === 0
+                                ? <Bus className="w-8 h-8 text-gray-400" />
+                                : <Search className="w-8 h-8 text-gray-400" />
+                            }
+                        </div>
+                        <h3 className="text-xl font-bold text-gray-900">
+                            {operators.length === 0 ? 'No operators with scheduled trips yet' : 'No operators found'}
+                        </h3>
+                        <p className="text-gray-500 mt-2 max-w-md mx-auto">
+                            {operators.length === 0
+                                ? 'Operators appear here once they publish scheduled trips on the platform.'
+                                : 'Try adjusting your search terms.'}
+                        </p>
+                        {operators.length === 0 && (
+                            <p className="text-xs text-amber-600 mt-4 flex items-center justify-center gap-1.5">
+                                <AlertCircle size={14} />
+                                Live data from GET /trips — no mock listings.
+                            </p>
                         )}
                     </div>
                 )}
@@ -95,8 +101,8 @@ export default function OperatorsListing() {
                     </div>
                     <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 text-center">
                         <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center mb-4 mx-auto text-blue-600 text-2xl font-bold">★</div>
-                        <h3 className="font-bold text-gray-900 mb-2">Real Ratings</h3>
-                        <p className="text-sm text-gray-600">See honest reviews from fellow travelers.</p>
+                        <h3 className="font-bold text-gray-900 mb-2">Live Schedules</h3>
+                        <p className="text-sm text-gray-600">Routes and prices pulled from real scheduled trips.</p>
                     </div>
                     <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 text-center">
                         <div className="w-12 h-12 bg-purple-50 rounded-xl flex items-center justify-center mb-4 mx-auto text-purple-600 text-2xl font-bold">🔒</div>
