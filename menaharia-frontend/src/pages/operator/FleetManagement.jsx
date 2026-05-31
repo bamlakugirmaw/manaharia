@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
-import { Plus, Bus, Settings, AlertTriangle, X, LayoutGrid } from 'lucide-react';
+import { Plus, Bus, Settings, AlertTriangle, X, LayoutGrid, Trash2 } from 'lucide-react';
 import { Input } from '../../components/ui/Input';
 import { useAuth } from '../../contexts/AuthContext';
-import { useBuses } from '../../hooks/useBuses';
+import { useBuses, useRemoveBus } from '../../hooks/useBuses';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { useSeats } from '../../hooks/useSeats';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { busesApi } from '../../api/buses.api';
@@ -45,7 +46,7 @@ const statusLabel = (s) => {
     return 'Inactive';
 };
 
-function BusFleetCard({ bus, onEdit }) {
+function BusFleetCard({ bus, onEdit, onDelete, deleting }) {
     const qc = useQueryClient();
     const { data: seats = [], isLoading: seatsLoading } = useSeats(bus.id);
     const [seeding, setSeeding] = useState(false);
@@ -122,6 +123,14 @@ function BusFleetCard({ bus, onEdit }) {
                     >
                         Edit Details
                     </Button>
+                    <Button
+                        variant="outline"
+                        className="h-8 text-[10px] font-bold text-red-600 border-red-100 hover:bg-red-50 rounded-lg w-full gap-1"
+                        onClick={() => onDelete(bus)}
+                        disabled={deleting}
+                    >
+                        <Trash2 size={12} /> {deleting ? 'Deleting…' : 'Remove Bus'}
+                    </Button>
                 </div>
             </div>
         </Card>
@@ -135,6 +144,9 @@ export default function FleetManagement() {
     const { data: buses = [], isLoading } = useBuses(operatorId ? { operatorId, limit: 100 } : {});
     const { mutate: createBus, isPending: creating } = useCreateBus();
     const { mutate: updateBus, isPending: updating } = useUpdateBus();
+    const { mutate: removeBus, isPending: removingBus } = useRemoveBus();
+    const { confirm, ConfirmDialogHost } = useConfirmDialog();
+    const [deletingBusId, setDeletingBusId] = useState(null);
 
     const [isAddOpen,   setIsAddOpen]   = useState(false);
     const [editingBus,  setEditingBus]  = useState(null);
@@ -201,12 +213,30 @@ export default function FleetManagement() {
         }, { onSuccess: () => setEditingBus(null) });
     };
 
+    const handleDeleteBus = async (bus) => {
+        const ok = await confirm({
+            title: 'Remove this bus?',
+            description: `Bus ${bus.plateNumber} will be removed from your fleet. This action cannot be undone.`,
+            confirmLabel: 'Remove Bus',
+        });
+        if (!ok) return;
+        setDeletingBusId(bus.id);
+        removeBus(bus.id, {
+            onSuccess: () => {
+                setDeletingBusId(null);
+                if (editingBus?.id === bus.id) setEditingBus(null);
+            },
+            onError: () => setDeletingBusId(null),
+        });
+    };
+
     const activeCount     = buses.filter(b => (b.status ?? '').toUpperCase() === 'ACTIVE').length;
     const inactiveCount   = buses.filter(b => (b.status ?? '').toUpperCase() === 'INACTIVE').length;
     const suspendedCount  = buses.filter(b => (b.status ?? '').toUpperCase() === 'SUSPENDED').length;
 
     return (
         <div className="space-y-6">
+            <ConfirmDialogHost />
             <div className="flex justify-between items-center">
                 <div>
                     <h1 className="text-xl font-bold tracking-tight">Fleet Management</h1>
@@ -257,7 +287,13 @@ export default function FleetManagement() {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {buses.map((bus) => (
-                        <BusFleetCard key={bus.id} bus={bus} onEdit={setEditingBus} />
+                        <BusFleetCard
+                            key={bus.id}
+                            bus={bus}
+                            onEdit={setEditingBus}
+                            onDelete={handleDeleteBus}
+                            deleting={deletingBusId === bus.id && removingBus}
+                        />
                     ))}
                 </div>
             )}
@@ -335,6 +371,15 @@ export default function FleetManagement() {
                             </div>
                             <Button className="w-full mt-6 bg-primary" onClick={handleSaveEdit} disabled={updating}>
                                 {updating ? 'Saving…' : 'Save Changes'}
+                            </Button>
+                            <Button
+                                variant="outline"
+                                className="w-full mt-2 text-red-600 border-red-200 hover:bg-red-50"
+                                disabled={removingBus}
+                                onClick={() => handleDeleteBus(editingBus)}
+                            >
+                                <Trash2 size={14} className="inline mr-1" />
+                                {removingBus ? 'Deleting…' : 'Remove Bus'}
                             </Button>
                         </div>
                     </Card>

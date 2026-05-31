@@ -10,6 +10,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useBookings, useCancelBooking } from '../../hooks/useBookings';
 import { useCreateDispute } from '../../hooks/useDisputes';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { cn } from '../../lib/utils';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -125,6 +126,7 @@ export default function UserBookings() {
     const { user } = useAuth();
     const { mutate: createDispute, isPending: filingDispute } = useCreateDispute();
     const { mutate: cancelBooking, isPending: cancelling } = useCancelBooking();
+    const { confirm, ConfirmDialogHost } = useConfirmDialog();
 
     // GET /v1/bookings — returns the authenticated traveller's bookings
     const { data: rawBookings = [], isLoading, isError, refetch } = useBookings(
@@ -181,9 +183,14 @@ export default function UserBookings() {
     const canCancelBooking = (b) =>
         ['pending', 'confirmed', 'paid'].includes((b.status ?? '').toLowerCase());
 
-    const handleCancelBooking = () => {
+    const handleCancelBooking = async () => {
         if (!selectedBooking || !canCancelBooking(selectedBooking)) return;
-        if (!window.confirm('Cancel this booking? Refund rules may apply per operator policy.')) return;
+        const ok = await confirm({
+            title: 'Cancel this booking?',
+            description: 'Refund rules may apply per operator policy.',
+            confirmLabel: 'Cancel Booking',
+        });
+        if (!ok) return;
         cancelBooking(selectedBooking.id, {
             onSuccess: () => closeModal(),
         });
@@ -191,6 +198,7 @@ export default function UserBookings() {
 
     return (
         <div className="space-y-6">
+            <ConfirmDialogHost />
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <Card className="p-6 flex items-center gap-4 bg-white border border-gray-100/50 shadow-[0_8px_30px_rgba(0,0,0,0.02)] rounded-3xl">

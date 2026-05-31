@@ -7,6 +7,7 @@ import { api, unwrap } from '../lib/api';
  * getById      — GET    /v1/users/:id
  * updateStatus — PATCH  /v1/users/:id/status
  * remove       — DELETE /v1/users/:id
+ * hardRemove   — DELETE /v1/users/:id/hard
  * addRole      — POST   /v1/users/:id/roles
  * removeRole   — DELETE /v1/users/:id/roles
  */
@@ -42,6 +43,13 @@ export const removeUser = (id) =>
     api.delete(`/users/${id}`).then(unwrap);
 
 /**
+ * Permanently delete a user (admin only).
+ * @param {string} id
+ */
+export const hardRemoveUser = (id) =>
+    api.delete(`/users/${id}/hard`).then(unwrap);
+
+/**
  * @param {string} id
  * @param {{ roleId: string }} data
  */
@@ -60,6 +68,7 @@ export const usersApi = {
     getUserById,
     updateUserStatus,
     removeUser,
+    hardRemoveUser,
     addUserRole,
     removeUserRole,
 };

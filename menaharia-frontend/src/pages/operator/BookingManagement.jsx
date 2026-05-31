@@ -4,12 +4,13 @@ import { Badge } from '../../components/ui/Badge';
 import { Input } from '../../components/ui/Input';
 import { Card } from '../../components/ui/Card';
 import { Modal } from '../../components/ui/Modal';
-import { Plus, Ticket } from 'lucide-react';
+import { Plus, Ticket, Trash2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBookings, useCreateBookingForUser } from '../../hooks/useBookings';
 import { authApi } from '../../api/auth.api';
-import { useAllTrips } from '../../hooks/useTrips';
+import { useAllTrips, useRemoveTrip } from '../../hooks/useTrips';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { tripOrigin, tripDest, tripCityLabel, parseTripDateTime, buildArrivalDateTime, parseAmenities, toTripDateISO } from '../../lib/tripHelpers';
 import { useBuses } from '../../hooks/useBuses';
 import { useRoutes } from '../../hooks/useRoutes';
@@ -63,6 +64,8 @@ export default function BookingManagement() {
     const { mutate: createRoute, isPending: creatingRoute } = useCreateRoute();
     const { mutateAsync: createBookingForUser } = useCreateBookingForUser();
     const queryClient = useQueryClient();
+    const { mutate: removeTrip, isPending: removingTrip } = useRemoveTrip();
+    const { confirm, ConfirmDialogHost } = useConfirmDialog();
 
     // ── UI state ──────────────────────────────────────────────────────────────
     const [selectedTrip, setSelectedTrip] = useState(null);
@@ -266,8 +269,25 @@ export default function BookingManagement() {
         }
     };
 
+    const handleDeleteTrip = async (tripId, e) => {
+        e?.stopPropagation?.();
+        const ok = await confirm({
+            title: 'Delete this trip?',
+            description: 'This schedule will be removed. Existing bookings may be affected.',
+            confirmLabel: 'Delete Trip',
+        });
+        if (!ok) return;
+        removeTrip(tripId, {
+            onSuccess: () => {
+                if (selectedTrip === tripId) setSelectedTrip(null);
+                queryClient.invalidateQueries({ queryKey: ['trips'] });
+            },
+        });
+    };
+
     return (
         <div className="space-y-6">
+            <ConfirmDialogHost />
             {/* Header */}
             <div className="flex justify-between items-center flex-wrap gap-4 border-b border-gray-100 pb-5">
                 <div>
@@ -304,6 +324,15 @@ export default function BookingManagement() {
                                     highlightedTripId === trip.id
                                         ? "bg-white border-primary shadow-lg shadow-primary/5"
                                         : "bg-white border-transparent hover:border-gray-200 hover:bg-gray-50")}>
+                                <button
+                                    type="button"
+                                    title="Delete trip"
+                                    disabled={removingTrip}
+                                    onClick={(e) => handleDeleteTrip(trip.id, e)}
+                                    className="absolute top-3 right-3 w-7 h-7 rounded-lg bg-red-50 text-red-500 opacity-0 group-hover:opacity-100 hover:bg-red-100 flex items-center justify-center transition-opacity z-10"
+                                >
+                                    <Trash2 size={12} />
+                                </button>
                                 <div className="flex justify-between items-start mb-2">
                                     <div>
                                         <div className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider mb-1">

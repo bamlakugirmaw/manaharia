@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { rolesApi } from '../api/roles.api';
 
 export const roleKeys = {
@@ -35,5 +35,13 @@ export function useBusOperatorRoleId() {
             return match?.id ?? null;
         },
         staleTime: Infinity,
+    });
+}
+
+export function useRevokeRole() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (data) => rolesApi.revokeRole(data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: roleKeys.all }),
     });
 }

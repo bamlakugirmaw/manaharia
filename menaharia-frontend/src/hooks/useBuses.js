@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { busesApi } from '../api/buses.api';
 
 export const busKeys = {
@@ -43,5 +43,13 @@ export function useBus(id) {
         },
         enabled: !!id,
         staleTime: 5 * 60 * 1000,
+    });
+}
+
+export function useRemoveBus() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (id) => busesApi.removeBus(id),
+        onSuccess: () => qc.invalidateQueries({ queryKey: busKeys.all }),
     });
 }

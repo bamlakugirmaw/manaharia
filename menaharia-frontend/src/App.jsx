@@ -49,7 +49,6 @@ import AdminSettings from './pages/admin/AdminSettings';
 import AdminTrips from './pages/admin/AdminTrips';
 import AdminBookings from './pages/admin/AdminBookings';
 import AdminPayments from './pages/admin/AdminPayments';
-import AdminDestinations from './pages/admin/AdminDestinations';
 
 function App() {
   return (
@@ -115,7 +114,6 @@ function App() {
           <Route path="/admin/payments" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminPayments /></DashboardLayout></ProtectedRoute>} />
           <Route path="/admin/bookings" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminBookings /></DashboardLayout></ProtectedRoute>} />
           <Route path="/admin/trips" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminTrips /></DashboardLayout></ProtectedRoute>} />
-          <Route path="/admin/destinations" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminDestinations /></DashboardLayout></ProtectedRoute>} />
           <Route path="/admin/logs" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminLogs /></DashboardLayout></ProtectedRoute>} />
           <Route path="/admin/profile" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><UserProfile /></DashboardLayout></ProtectedRoute>} />
           <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminSettings /></DashboardLayout></ProtectedRoute>} />

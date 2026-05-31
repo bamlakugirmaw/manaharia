@@ -10,6 +10,7 @@ import {
     useRemoveDestination,
 } from '../../hooks/useDestinations';
 import { extractErrorMessage } from '../../lib/api';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 
 const EMPTY = { name: '', description: '', image: '', highlights: '' };
 
@@ -18,6 +19,7 @@ export default function AdminDestinations() {
     const { mutate: createDest, isPending: creating } = useCreateDestination();
     const { mutate: updateDest, isPending: updating } = useUpdateDestination();
     const { mutate: removeDest, isPending: removing } = useRemoveDestination();
+    const { confirm, ConfirmDialogHost } = useConfirmDialog();
 
     const [searchQuery, setSearchQuery] = useState('');
     const [isAddOpen, setIsAddOpen] = useState(false);
@@ -83,13 +85,19 @@ export default function AdminDestinations() {
         );
     };
 
-    const handleDelete = (id) => {
-        if (!window.confirm('Remove this destination?')) return;
+    const handleDelete = async (id, name) => {
+        const ok = await confirm({
+            title: 'Remove this destination?',
+            description: name ? `"${name}" will be removed from the platform.` : 'This destination will be removed.',
+            confirmLabel: 'Remove',
+        });
+        if (!ok) return;
         removeDest(id);
     };
 
     return (
         <div className="space-y-6">
+            <ConfirmDialogHost />
             <div className="flex justify-between items-center">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">Destinations</h1>
@@ -151,7 +159,7 @@ export default function AdminDestinations() {
                                         size="sm"
                                         className="rounded-xl text-red-600 border-red-100"
                                         disabled={removing}
-                                        onClick={() => handleDelete(dest.id)}
+                                        onClick={() => handleDelete(dest.id, dest.name)}
                                     >
                                         <Trash2 size={14} />
                                     </Button>

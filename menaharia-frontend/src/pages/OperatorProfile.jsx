@@ -2,22 +2,16 @@ import { useParams, useNavigate } from 'react-router-dom';
 import OperatorHeader from '../components/operators/OperatorHeader';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
-import { ArrowLeft, Clock, Bus, Users, MapPin, Info, Shield } from 'lucide-react';
-import { useOperator } from '../hooks/useOperators';
-import { getOperatorById } from '../data/operators-data';
+import { Badge } from '../components/ui/Badge';
+import {
+    ArrowLeft, Clock, Bus, Users, MapPin, Info, Shield, Route, Star, TrendingUp, Calendar,
+} from 'lucide-react';
+import { usePublicOperator } from '../hooks/useOperators';
 
 export default function OperatorProfile() {
     const { operatorId } = useParams();
     const navigate = useNavigate();
-
-    // GET /v1/operators/:id — requires auth.
-    // Falls back to static data when unauthenticated.
-    const { data: apiOperator, isLoading } = useOperator(operatorId);
-
-    // Normalise: backend operator shape vs static shape
-    const operator = apiOperator
-        ? normaliseOperator(apiOperator)
-        : getOperatorById(operatorId);
+    const { data: operator, isLoading } = usePublicOperator(operatorId);
 
     if (isLoading) {
         return (
@@ -32,6 +26,9 @@ export default function OperatorProfile() {
             <div className="min-h-screen flex items-center justify-center">
                 <div className="text-center">
                     <h1 className="text-3xl font-black text-gray-900 mb-4">Operator Not Found</h1>
+                    <p className="text-gray-500 mb-6 max-w-sm mx-auto">
+                        This operator has no scheduled trips on the platform right now.
+                    </p>
                     <Button onClick={() => navigate('/operators')}>
                         <ArrowLeft className="w-4 h-4 mr-2" /> Back to Operators
                     </Button>
@@ -61,28 +58,63 @@ export default function OperatorProfile() {
                     <OperatorHeader operator={operator} />
                 </div>
 
+                {/* Stats strip */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                    <StatCard icon={Star} label="Rating" value={operator.rating != null ? operator.rating.toFixed(1) : 'New'} />
+                    <StatCard icon={TrendingUp} label="Reliability" value={operator.reliabilityScore != null ? `${operator.reliabilityScore}%` : '—'} />
+                    <StatCard icon={Route} label="Routes" value={operator.routeDetails?.length ?? operator.routesServed?.length ?? 0} />
+                    <StatCard icon={Calendar} label="Scheduled Trips" value={operator.scheduledTripCount ?? operator.upcomingTrips?.length ?? 0} />
+                </div>
+
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Trips Table */}
-                    <div className="lg:col-span-2">
+                    <div className="lg:col-span-2 space-y-8">
+                        {/* Routes */}
+                        {(operator.routeDetails?.length > 0 || operator.routesServed?.length > 0) && (
+                            <Card className="shadow-xl border-2 border-gray-100">
+                                <div className="bg-gradient-to-r from-gray-900 to-gray-800 p-6 text-white">
+                                    <h2 className="text-2xl font-black flex items-center gap-3">
+                                        <Route className="w-6 h-6" /> Routes Served
+                                    </h2>
+                                    <p className="text-white/70 text-sm mt-2">Destinations this operator currently schedules</p>
+                                </div>
+                                <CardContent className="p-6">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        {(operator.routeDetails ?? operator.routesServed.map(label => ({ label }))).map((route, idx) => (
+                                            <div key={idx} className="flex items-center gap-3 p-4 rounded-xl bg-gray-50 border border-gray-100">
+                                                <MapPin className="w-4 h-4 text-primary shrink-0" />
+                                                <div>
+                                                    <p className="font-bold text-gray-900 text-sm">{route.label ?? route}</p>
+                                                    {route.distance != null && (
+                                                        <p className="text-xs text-gray-500 mt-0.5">{route.distance} km · {route.code ?? 'Route'}</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        {/* Trips */}
                         <Card className="shadow-xl border-2 border-gray-100">
                             <div className="bg-gradient-to-r from-primary to-primary/80 p-6 text-white">
                                 <h2 className="text-2xl font-black flex items-center gap-3">
                                     <Bus className="w-6 h-6" /> Available Trips
                                 </h2>
-                                <p className="text-white/80 text-sm mt-2 font-medium">Select a trip and book your seat</p>
+                                <p className="text-white/80 text-sm mt-2 font-medium">Live scheduled trips from GET /trips</p>
                             </div>
 
                             <CardContent className="p-0">
                                 {operator.upcomingTrips?.length > 0 ? (
                                     <>
-                                        {/* Desktop Table */}
                                         <div className="hidden md:block overflow-x-auto">
                                             <table className="w-full">
                                                 <thead className="bg-gray-50 border-b-2 border-gray-200">
                                                     <tr>
                                                         <th className="text-left py-4 px-6 text-xs font-black text-gray-600 uppercase tracking-wider">Route</th>
+                                                        <th className="text-left py-4 px-6 text-xs font-black text-gray-600 uppercase tracking-wider">Date</th>
                                                         <th className="text-left py-4 px-6 text-xs font-black text-gray-600 uppercase tracking-wider">Departure</th>
-                                                        <th className="text-left py-4 px-6 text-xs font-black text-gray-600 uppercase tracking-wider">Seats Left</th>
+                                                        <th className="text-left py-4 px-6 text-xs font-black text-gray-600 uppercase tracking-wider">Seats</th>
                                                         <th className="text-left py-4 px-6 text-xs font-black text-gray-600 uppercase tracking-wider">Price</th>
                                                         <th className="text-left py-4 px-6 text-xs font-black text-gray-600 uppercase tracking-wider">Action</th>
                                                     </tr>
@@ -96,17 +128,18 @@ export default function OperatorProfile() {
                                                                     <span className="font-bold text-gray-900 text-sm">{trip.route}</span>
                                                                 </div>
                                                             </td>
+                                                            <td className="py-4 px-6 text-sm font-semibold text-gray-600">{trip.dateLabel}</td>
                                                             <td className="py-4 px-6">
                                                                 <div className="flex items-center gap-2">
                                                                     <Clock className="w-4 h-4 text-gray-400" />
-                                                                    <span className="font-bold text-gray-700 text-sm">{trip.departure ?? trip.departureTime}</span>
+                                                                    <span className="font-bold text-gray-700 text-sm">{trip.departure}</span>
                                                                 </div>
                                                             </td>
                                                             <td className="py-4 px-6">
                                                                 <div className="flex items-center gap-2">
                                                                     <Users className="w-4 h-4 text-gray-400" />
-                                                                    <span className={`text-sm ${getSeatsColor(trip.seatsLeft ?? trip.seatsAvailable ?? 0)}`}>
-                                                                        {trip.seatsLeft ?? trip.seatsAvailable ?? 0} left
+                                                                    <span className={`text-sm ${getSeatsColor(trip.seatsLeft)}`}>
+                                                                        {trip.seatsLeft} left
                                                                     </span>
                                                                 </div>
                                                             </td>
@@ -126,7 +159,6 @@ export default function OperatorProfile() {
                                             </table>
                                         </div>
 
-                                        {/* Mobile Cards */}
                                         <div className="md:hidden divide-y divide-gray-200">
                                             {operator.upcomingTrips.map(trip => (
                                                 <div key={trip.id} className="p-4 hover:bg-blue-50/50 transition-colors">
@@ -135,16 +167,17 @@ export default function OperatorProfile() {
                                                             <MapPin className="w-4 h-4 text-primary flex-shrink-0" />
                                                             <span className="font-bold text-gray-900 text-sm">{trip.route}</span>
                                                         </div>
+                                                        <Badge variant="outline" className="text-[10px]">{trip.dateLabel}</Badge>
                                                     </div>
                                                     <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
                                                         <div className="flex items-center gap-2">
                                                             <Clock className="w-4 h-4 text-gray-400" />
-                                                            <span className="font-bold text-gray-700">{trip.departure ?? trip.departureTime}</span>
+                                                            <span className="font-bold text-gray-700">{trip.departure}</span>
                                                         </div>
                                                         <div className="flex items-center gap-2">
                                                             <Users className="w-4 h-4 text-gray-400" />
-                                                            <span className={getSeatsColor(trip.seatsLeft ?? trip.seatsAvailable ?? 0)}>
-                                                                {trip.seatsLeft ?? trip.seatsAvailable ?? 0} seats
+                                                            <span className={getSeatsColor(trip.seatsLeft)}>
+                                                                {trip.seatsLeft} seats
                                                             </span>
                                                         </div>
                                                     </div>
@@ -186,6 +219,13 @@ export default function OperatorProfile() {
                                         <p className="text-2xl font-black text-primary">
                                             {new Date().getFullYear() - operator.established} Years
                                         </p>
+                                        <p className="text-xs text-gray-500 mt-1">Est. {operator.established}</p>
+                                    </div>
+                                )}
+                                {operator.startingPrice != null && (
+                                    <div className="mt-4 bg-green-50 rounded-xl p-4 border border-green-100">
+                                        <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Starting from</p>
+                                        <p className="text-2xl font-black text-green-700">{operator.startingPrice} <span className="text-sm">ETB</span></p>
                                     </div>
                                 )}
                             </CardContent>
@@ -208,22 +248,28 @@ export default function OperatorProfile() {
                             <CardContent className="p-6">
                                 <h3 className="text-lg font-black text-gray-900 mb-4">Contact Information</h3>
                                 <div className="space-y-3 text-sm">
-                                    {(operator.contact?.phone ?? operator.companyPhone) && (
+                                    {operator.contact?.phone && (
                                         <div>
                                             <p className="text-xs font-bold text-gray-500 uppercase mb-1">Phone</p>
-                                            <p className="font-bold text-gray-900">{operator.contact?.phone ?? operator.companyPhone}</p>
+                                            <p className="font-bold text-gray-900">{operator.contact.phone}</p>
                                         </div>
                                     )}
-                                    {(operator.contact?.email ?? operator.companyEmail) && (
+                                    {operator.contact?.email && (
                                         <div>
                                             <p className="text-xs font-bold text-gray-500 uppercase mb-1">Email</p>
-                                            <p className="font-bold text-gray-900">{operator.contact?.email ?? operator.companyEmail}</p>
+                                            <p className="font-bold text-gray-900 break-all">{operator.contact.email}</p>
                                         </div>
                                     )}
-                                    {(operator.contact?.address ?? operator.address) && (
+                                    {operator.contact?.address && (
                                         <div>
                                             <p className="text-xs font-bold text-gray-500 uppercase mb-1">Address</p>
-                                            <p className="font-bold text-gray-900">{operator.contact?.address ?? operator.address}</p>
+                                            <p className="font-bold text-gray-900">{operator.contact.address}</p>
+                                        </div>
+                                    )}
+                                    {operator.responsibleName && (
+                                        <div>
+                                            <p className="text-xs font-bold text-gray-500 uppercase mb-1">Contact Person</p>
+                                            <p className="font-bold text-gray-900">{operator.responsibleName}</p>
                                         </div>
                                     )}
                                 </div>
@@ -236,22 +282,18 @@ export default function OperatorProfile() {
     );
 }
 
-/**
- * Normalise a backend operator object to the shape the UI expects.
- * The static operators-data.js uses a nested `contact` object and `upcomingTrips`.
- * The backend returns flat fields (companyPhone, companyEmail, address) and may
- * embed trips differently.
- */
-function normaliseOperator(op) {
-    return {
-        ...op,
-        name: op.name ?? op.companyName,
-        contact: op.contact ?? {
-            phone:   op.companyPhone,
-            email:   op.companyEmail,
-            address: op.address,
-        },
-        // Backend may not embed upcomingTrips — fall back to empty array
-        upcomingTrips: op.upcomingTrips ?? [],
-    };
+function StatCard({ icon: Icon, label, value }) {
+    return (
+        <Card className="p-5 border border-gray-100 shadow-sm">
+            <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                    <Icon size={18} />
+                </div>
+                <div>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{label}</p>
+                    <p className="text-xl font-black text-gray-900">{value}</p>
+                </div>
+            </div>
+        </Card>
+    );
 }

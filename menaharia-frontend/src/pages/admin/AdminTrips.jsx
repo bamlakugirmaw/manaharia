@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { Search, Calendar, Bus, MoreHorizontal } from 'lucide-react';
+import { Search, Calendar, Bus, MoreHorizontal, Trash2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import DetailModal, { ModalDataRow } from '../../components/admin/DetailModal';
-import { useAllTrips, useUpdateTrip } from '../../hooks/useTrips';
+import { useAllTrips, useUpdateTrip, useRemoveTrip } from '../../hooks/useTrips';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { tripOrigin, tripDest, tripOperatorName } from '../../lib/tripHelpers';
 
 const STATUS_UI_TO_API = {
@@ -39,6 +40,8 @@ export default function AdminTrips() {
 
     const { data: rawTrips = [], isLoading, isError } = useAllTrips({ limit: 200 });
     const { mutate: updateTrip, isPending: updating } = useUpdateTrip();
+    const { mutate: removeTrip, isPending: removing } = useRemoveTrip();
+    const { confirm, ConfirmDialogHost } = useConfirmDialog();
 
     const trips = useMemo(
         () => (Array.isArray(rawTrips) ? rawTrips : []).map(normaliseTripRow),
@@ -74,8 +77,25 @@ export default function AdminTrips() {
         );
     };
 
+    const handleDeleteTrip = async () => {
+        if (!selectedTrip) return;
+        const ok = await confirm({
+            title: 'Delete this trip?',
+            description: `Trip ${selectedTrip.id} will be soft-deleted and removed from schedules.`,
+            confirmLabel: 'Delete Trip',
+        });
+        if (!ok) return;
+        removeTrip(selectedTrip.id, {
+            onSuccess: () => {
+                setIsManageModalOpen(false);
+                setSelectedTrip(null);
+            },
+        });
+    };
+
     return (
         <div className="space-y-6 relative">
+            <ConfirmDialogHost />
 
             <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
                 <div className="relative w-full md:w-96">
@@ -218,7 +238,14 @@ export default function AdminTrips() {
                     onClose={() => setIsManageModalOpen(false)}
                     title={`Manage Trip ${selectedTrip.id}`}
                     footer={
-                        <Button variant="outline" onClick={() => setIsManageModalOpen(false)}>Close</Button>
+                        <div className="flex gap-2 justify-end w-full">
+                            <Button variant="destructive" disabled={removing}
+                                className="flex items-center gap-2 mr-auto"
+                                onClick={handleDeleteTrip}>
+                                <Trash2 size={16} /> {removing ? 'Deleting…' : 'Delete Trip'}
+                            </Button>
+                            <Button variant="outline" onClick={() => setIsManageModalOpen(false)}>Close</Button>
+                        </div>
                     }
                 >
                     <div className="space-y-6">

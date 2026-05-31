@@ -36,7 +36,6 @@ const ADMIN_NAV = [
     { name: 'Manage Users', href: '/admin/users', icon: Users },
     { name: 'All Bookings', href: '/admin/bookings', icon: Ticket },
     { name: 'All Trips', href: '/admin/trips', icon: CalendarIcon },
-    { name: 'Destinations', href: '/admin/destinations', icon: Map },
     { name: 'Payment Logs', href: '/admin/payments', icon: CreditCard },
     { name: 'System Logs', href: '/admin/logs', icon: Activity },
     { name: 'Profile Settings', href: '/admin/profile', icon: User },

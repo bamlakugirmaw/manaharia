@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
-import { Search, User, Mail, Phone, Calendar, Shield, UserCheck, UserX } from 'lucide-react';
+import { Search, User, Mail, Phone, Calendar, Shield, UserCheck, UserX, Trash2 } from 'lucide-react';
 import DetailModal, { ModalDataRow } from '../../components/admin/DetailModal';
-import { useUsers, useUpdateUserStatus } from '../../hooks/useUsers';
+import { useUsers, useUpdateUserStatus, useRemoveUser, useHardRemoveUser, useRemoveUserRole } from '../../hooks/useUsers';
+import { useRoles } from '../../hooks/useRoles';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 
 // Backend status → badge variant
 const statusVariant = (s) => {
@@ -20,7 +22,12 @@ export default function AdminUserManagement() {
 
     // GET /v1/users
     const { data: users = [], isLoading } = useUsers({ limit: 100 });
+    const { data: allRoles = [] } = useRoles({});
     const { mutate: updateStatus, isPending: updatingStatus } = useUpdateUserStatus();
+    const { mutate: removeUser, isPending: removingUser } = useRemoveUser();
+    const { mutate: hardRemoveUser, isPending: hardRemoving } = useHardRemoveUser();
+    const { mutate: removeUserRole, isPending: removingRole } = useRemoveUserRole();
+    const { confirm, ConfirmDialogHost } = useConfirmDialog();
 
     const filteredUsers = users.filter(u => {
         const q = searchQuery.toLowerCase();
@@ -40,8 +47,75 @@ export default function AdminUserManagement() {
         const newStatus = (user.status ?? '').toUpperCase() === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
         updateStatus({ id: user.id, status: newStatus }, {
             onSuccess: () => {
-                // Refresh selected user in modal if open
                 setSelectedUser(prev => prev?.id === user.id ? { ...prev, status: newStatus } : prev);
+            },
+        });
+    };
+
+    const handleSoftDelete = async (user) => {
+        const ok = await confirm({
+            title: 'Soft-delete this user?',
+            description: `${displayName(user)} will no longer be able to sign in. Their data is retained.`,
+            confirmLabel: 'Soft Delete',
+        });
+        if (!ok) return;
+        removeUser(user.id, {
+            onSuccess: () => {
+                setIsModalOpen(false);
+                setSelectedUser(null);
+            },
+        });
+    };
+
+    const handleHardDelete = async (user) => {
+        const ok = await confirm({
+            title: 'Permanently delete this user?',
+            description: `${displayName(user)} and all associated data will be permanently removed. This cannot be undone.`,
+            confirmLabel: 'Continue',
+        });
+        if (!ok) return;
+        const confirmed = await confirm({
+            title: 'Final confirmation',
+            description: 'All data will be erased. Are you absolutely sure?',
+            confirmLabel: 'Permanently Delete',
+        });
+        if (!confirmed) return;
+        hardRemoveUser(user.id, {
+            onSuccess: () => {
+                setIsModalOpen(false);
+                setSelectedUser(null);
+            },
+        });
+    };
+
+    const roleName = (r) => (typeof r === 'string' ? r : r?.name ?? '');
+    const roleIdFor = (roleItem) => {
+        if (typeof roleItem === 'object' && roleItem?.id) return roleItem.id;
+        const name = roleName(roleItem).toUpperCase().replace(/\s+/g, '_');
+        const match = allRoles.find((r) => {
+            const n = (r.name ?? '').toUpperCase().replace(/\s+/g, '_');
+            return n === name;
+        });
+        return match?.id ?? null;
+    };
+
+    const handleRevokeRole = async (user, roleItem) => {
+        const roleId = roleIdFor(roleItem);
+        if (!roleId) return;
+        const label = roleName(roleItem);
+        const ok = await confirm({
+            title: `Revoke ${label} role?`,
+            description: `${displayName(user)} will lose the ${label} role.`,
+            confirmLabel: 'Revoke Role',
+        });
+        if (!ok) return;
+        removeUserRole({ id: user.id, roleId }, {
+            onSuccess: () => {
+                setSelectedUser((prev) => {
+                    if (prev?.id !== user.id) return prev;
+                    const nextRoles = (prev.roles ?? []).filter((r) => roleIdFor(r) !== roleId);
+                    return { ...prev, roles: nextRoles };
+                });
             },
         });
     };
@@ -54,6 +128,7 @@ export default function AdminUserManagement() {
 
     return (
         <div className="space-y-6">
+            <ConfirmDialogHost />
             <div className="relative w-full">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                 <input
@@ -135,7 +210,23 @@ export default function AdminUserManagement() {
                     onClose={() => setIsModalOpen(false)}
                     title="User Account Details"
                     footer={
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2 justify-end">
+                            {(selectedUser.roles ?? []).length > 0 && (
+                                <div className="flex flex-wrap gap-1 mr-auto">
+                                    {(selectedUser.roles ?? []).map((roleItem, idx) => {
+                                        const label = roleName(roleItem);
+                                        const rid = roleIdFor(roleItem);
+                                        if (!rid || label.toUpperCase() === 'USER') return null;
+                                        return (
+                                            <Button key={idx} variant="outline" size="sm" disabled={removingRole}
+                                                className="text-xs"
+                                                onClick={() => handleRevokeRole(selectedUser, roleItem)}>
+                                                Revoke {label}
+                                            </Button>
+                                        );
+                                    })}
+                                </div>
+                            )}
                             {(selectedUser.status ?? '').toUpperCase() !== 'SUSPENDED' ? (
                                 <Button variant="destructive" disabled={updatingStatus}
                                     className="flex items-center gap-2"
@@ -149,6 +240,16 @@ export default function AdminUserManagement() {
                                     <UserCheck size={16} /> {updatingStatus ? 'Updating…' : 'Activate User'}
                                 </Button>
                             )}
+                            <Button variant="outline" disabled={removingUser}
+                                className="text-red-600 border-red-200 hover:bg-red-50 flex items-center gap-2"
+                                onClick={() => handleSoftDelete(selectedUser)}>
+                                <Trash2 size={16} /> {removingUser ? 'Deleting…' : 'Soft Delete'}
+                            </Button>
+                            <Button variant="destructive" disabled={hardRemoving}
+                                className="flex items-center gap-2"
+                                onClick={() => handleHardDelete(selectedUser)}>
+                                <Trash2 size={16} /> {hardRemoving ? 'Deleting…' : 'Hard Delete'}
+                            </Button>
                             <Button variant="outline" onClick={() => setIsModalOpen(false)}>Close</Button>
                         </div>
                     }
@@ -161,7 +262,7 @@ export default function AdminUserManagement() {
                             <div>
                                 <h3 className="text-lg font-bold text-gray-900">{displayName(selectedUser)}</h3>
                                 <p className="text-sm text-gray-500">
-                                    {(selectedUser.roles ?? []).join(', ') || 'User'} · Registered since {joinedDate(selectedUser)}
+                                    {(selectedUser.roles ?? []).map(roleName).join(', ') || 'User'} · Registered since {joinedDate(selectedUser)}
                                 </p>
                             </div>
                         </div>
