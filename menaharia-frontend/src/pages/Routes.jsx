@@ -1,49 +1,41 @@
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { TRIPS, OPERATORS } from '../data/mock-db';
 import { MapPin, TrendingUp, Users, Search } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import heroBg from '../assets/hero-bus-bg.png';
+import { useRoutes } from '../hooks/useRoutes';
+import { useAllTrips } from '../hooks/useTrips';
+import { tripOrigin, tripDest } from '../lib/tripHelpers';
 
 export default function RoutesPage() {
     const navigate = useNavigate();
     const [searchQuery, setSearchQuery] = useState('');
 
-    // Extract unique routes from trips
-    const getUniqueRoutes = () => {
-        const routesMap = new Map();
+    const { data: apiRoutes = [], isLoading: routesLoading } = useRoutes({ limit: 200 });
+    const { data: trips = [], isLoading: tripsLoading } = useAllTrips({ limit: 200, status: 'SCHEDULED' });
 
-        TRIPS.forEach(trip => {
-            const routeKey = `${trip.from}-${trip.to}`;
-
-            if (!routesMap.has(routeKey)) {
-                routesMap.set(routeKey, {
-                    from: trip.from,
-                    to: trip.to,
-                    distance: trip.distance || 0,
-                    operators: new Set([trip.operatorId]),
-                    prices: [trip.price],
-                    trips: [trip]
-                });
-            } else {
-                const route = routesMap.get(routeKey);
-                route.operators.add(trip.operatorId);
-                route.prices.push(trip.price);
-                route.trips.push(trip);
-            }
+    const routes = useMemo(() => {
+        return apiRoutes.map((route) => {
+            const matching = trips.filter(
+                (t) => tripOrigin(t) === route.origin && tripDest(t) === route.destination
+            );
+            const operatorIds = new Set(
+                matching.map((t) => t.bus?.operatorId ?? t.bus?.operator?.id).filter(Boolean)
+            );
+            const prices = matching.map((t) => t.price).filter((p) => p != null);
+            return {
+                id: route.id,
+                from: route.origin,
+                to: route.destination,
+                distance: route.distance ?? 0,
+                operatorCount: operatorIds.size,
+                cheapestPrice: prices.length > 0 ? Math.min(...prices) : null,
+            };
         });
+    }, [apiRoutes, trips]);
 
-        return Array.from(routesMap.values()).map(route => ({
-            ...route,
-            operatorCount: route.operators.size,
-            cheapestPrice: Math.min(...route.prices),
-            operators: undefined,
-            prices: undefined
-        }));
-    };
-
-    const routes = getUniqueRoutes();
+    const isLoading = routesLoading || tripsLoading;
 
     // Filter routes based on search
     const filteredRoutes = routes.filter(route => {
@@ -89,9 +81,14 @@ export default function RoutesPage() {
 
             {/* Routes Grid */}
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-12 relative z-10">
+                {isLoading && (
+                    <div className="flex justify-center py-20">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
+                    </div>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredRoutes.map((route, index) => (
-                        <Card key={index} className="bg-white border-none shadow-[0_2px_20px_rgba(0,0,0,0.04)] rounded-3xl p-6 hover:shadow-[0_8px_30px_rgba(0,0,0,0.08)] transition-all duration-300">
+                    {!isLoading && filteredRoutes.map((route) => (
+                        <Card key={route.id ?? `${route.from}-${route.to}`} className="bg-white border-none shadow-[0_2px_20px_rgba(0,0,0,0.04)] rounded-3xl p-6 hover:shadow-[0_8px_30px_rgba(0,0,0,0.08)] transition-all duration-300">
                             {/* Route Header */}
                             <div className="mb-6">
                                 <div className="flex items-center gap-3 mb-3">
@@ -145,7 +142,7 @@ export default function RoutesPage() {
                                         <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">From</p>
                                         <p className="text-xl font-extrabold text-primary">
                                             <span className="text-xs font-semibold mr-1 opacity-60">ETB</span>
-                                            {route.cheapestPrice}
+                                            {route.cheapestPrice ?? '—'}
                                         </p>
                                     </div>
                                 </div>

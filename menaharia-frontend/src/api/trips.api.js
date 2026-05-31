@@ -1,4 +1,4 @@
-import { api, unwrap } from '../lib/api';
+import { api, unwrap, unwrapEnvelope, sanitizeListParams } from '../lib/api';
 
 /**
  * Trips API  (GET endpoints are public — no auth required)
@@ -24,13 +24,13 @@ import { api, unwrap } from '../lib/api';
  * }} params
  */
 export const listTrips = (params = {}) =>
-    api.get('/trips', { params }).then(unwrap);
+    api.get('/trips', { params: sanitizeListParams(params) }).then(unwrap);
 
 /**
  * @param {string} id
  */
 export const getTripById = (id) =>
-    api.get(`/trips/${id}`).then(unwrap);
+    api.get(`/trips/${id}`).then(unwrapEnvelope);
 
 /**
  * @param {{
@@ -44,8 +44,25 @@ export const getTripById = (id) =>
  *   status?: 'SCHEDULED' | 'COMPLETED' | 'CANCELLED'
  * }} data
  */
-export const createTrip = (data) =>
-    api.post('/trips', data).then(unwrap);
+/** Normalise POST /trips body — backend may return trip object or wrapped shapes. */
+function normaliseCreatedTrip(raw) {
+    if (raw == null) return null;
+    if (Array.isArray(raw)) return raw.find((t) => t?.id) ?? raw[0] ?? null;
+    if (raw.id) return raw;
+    if (raw.trip?.id) return raw.trip;
+    if (Array.isArray(raw.items)) return raw.items.find((t) => t?.id) ?? raw.items[0] ?? null;
+    if (raw.data?.id) return raw.data;
+    return raw;
+}
+
+export async function createTrip(data) {
+    const res = await api.post('/trips', data);
+    const trip = normaliseCreatedTrip(unwrapEnvelope(res));
+    if (!trip?.id) {
+        throw new Error('Trip was saved but the server response did not include a trip id.');
+    }
+    return trip;
+}
 
 /**
  * @param {string} id

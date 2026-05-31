@@ -1,15 +1,17 @@
 import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '../ui/Button';
-import { Phone, LifeBuoy, Menu, X, LogOut, User } from 'lucide-react';
+import { Phone, LifeBuoy, Menu, X, LogOut } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useProfileImage } from '../../hooks/useProfileImage';
+import ProfileAvatar from '../profile/ProfileAvatar';
 import { cn } from '../../lib/utils';
-import profileIcon from '../../assets/profile-icon.jpg';
 import { Logo } from '../ui/Logo';
 
 export default function Navbar() {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const { user, isAuthenticated, logout } = useAuth();
+    const avatarUrl = useProfileImage();
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -65,9 +67,12 @@ export default function Navbar() {
                         {isAuthenticated ? (
                             <div className="flex items-center gap-4 ml-2">
                                 <button onClick={() => navigate(getDashboardPath())} className="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer">
-                                    <div className="w-9 h-9 rounded-full bg-[#F8FAFC] flex items-center justify-center border border-gray-200 overflow-hidden shadow-sm flex-shrink-0">
-                                        <img src={profileIcon} alt="User Profile" className="w-full h-full object-cover" />
-                                    </div>
+                                    <ProfileAvatar
+                                        src={avatarUrl}
+                                        name={user?.name}
+                                        size="sm"
+                                        className="shadow-sm"
+                                    />
                                     <span className="text-sm font-bold text-gray-800 hidden lg:block">{user.name}</span>
                                 </button>
                                 <Button variant="ghost" onClick={handleLogout} className="group flex items-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all duration-300 ease-in-out h-9 px-2 overflow-hidden">
@@ -130,9 +135,7 @@ export default function Navbar() {
                                 }}
                                 className="px-3 py-4 border-b border-gray-50 flex items-center gap-3 mb-2 w-full hover:bg-gray-50 transition-colors cursor-pointer"
                             >
-                                <div className="w-10 h-10 rounded-full bg-[#F8FAFC] flex items-center justify-center overflow-hidden shadow-sm border border-gray-200 flex-shrink-0">
-                                    <img src={profileIcon} alt="User Profile" className="w-full h-full object-cover" />
-                                </div>
+                                <ProfileAvatar src={avatarUrl} name={user?.name} size="md" className="shadow-sm" />
                                 <div className="text-left">
                                     <p className="font-bold text-gray-900">{user.name}</p>
                                     <p className="text-xs text-gray-500 capitalize">{user.role}</p>

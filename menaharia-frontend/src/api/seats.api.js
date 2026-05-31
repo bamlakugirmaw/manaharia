@@ -1,4 +1,4 @@
-import { api, unwrap } from '../lib/api';
+import { api, unwrapEnvelope, sanitizeListParams } from '../lib/api';
 
 /**
  * Seats API
@@ -20,7 +20,7 @@ import { api, unwrap } from '../lib/api';
  * @returns {{ data: Array<{ id: string, seatNumber: string, seatType: 'VIP' | 'STANDARD', busId: string }>, ... }}
  */
 export const listSeats = (params = {}) =>
-    api.get('/seats', { params }).then(unwrap);
+    api.get('/seats', { params: sanitizeListParams(params) }).then(unwrapEnvelope);
 
 /**
  * Create bus seats in batch.
@@ -30,6 +30,6 @@ export const listSeats = (params = {}) =>
  * }} data
  */
 export const createSeatBatch = (data) =>
-    api.post('/seats/batch', data).then(unwrap);
+    api.post('/seats/batch', data).then(unwrapEnvelope);
 
 export const seatsApi = { listSeats, createSeatBatch };

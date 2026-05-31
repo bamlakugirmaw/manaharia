@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Input } from '../../components/ui/Input';
@@ -7,18 +7,24 @@ import { Modal } from '../../components/ui/Modal';
 import { Plus, Ticket } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
-import { useBookings } from '../../hooks/useBookings';
-import { useTrips } from '../../hooks/useTrips';
+import { useBookings, useCreateBookingForUser } from '../../hooks/useBookings';
+import { authApi } from '../../api/auth.api';
+import { useAllTrips } from '../../hooks/useTrips';
+import { tripOrigin, tripDest, tripCityLabel, parseTripDateTime, buildArrivalDateTime, parseAmenities, toTripDateISO } from '../../lib/tripHelpers';
 import { useBuses } from '../../hooks/useBuses';
 import { useRoutes } from '../../hooks/useRoutes';
 import { tripsApi } from '../../api/trips.api';
 import { routesApi } from '../../api/routes.api';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { extractErrorMessage } from '../../lib/api';
+import BusLayout from '../../components/seat-map/BusLayout';
+import { useTripSeatContext } from '../../hooks/useTripSeatContext';
+import { useSeats } from '../../hooks/useSeats';
+import { ensureBusSeatsReady } from '../../lib/tripSeats';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
-const tripFrom = (t) => t?.from ?? t?.route?.origin ?? '';
-const tripTo   = (t) => t?.to   ?? t?.route?.destination ?? '';
+const tripFrom = (t) => tripOrigin(t);
+const tripTo = (t) => tripDest(t);
 
 /** Auto-generate a route code from origin + destination city names.
  *  "Addis Ababa" + "Bahir Dar" → "ADD-BAH"
@@ -29,14 +35,6 @@ const autoCode = (origin = '', destination = '') => {
     return `${abbr(origin)}-${abbr(destination)}`;
 };
 
-function useCreateTrip() {
-    const qc = useQueryClient();
-    return useMutation({
-        mutationFn: (data) => tripsApi.createTrip(data),
-        onSuccess: () => qc.invalidateQueries({ queryKey: ['trips'] }),
-    });
-}
-
 function useCreateRoute() {
     const qc = useQueryClient();
     return useMutation({
@@ -45,27 +43,36 @@ function useCreateRoute() {
     });
 }
 
-// Bus Layout definition matching standard 45-seater bus
-const BUS_LAYOUT = [
-    [1,1,0,1,1],[1,1,0,1,1],[1,1,0,1,1],[1,1,0,1,1],[1,1,0,1,1],
-    [1,1,0,1,1],[1,1,0,1,1],[1,1,0,1,1],[1,1,0,1,1],[1,1,1,1,1],
-];
-const getSeatLabel = (r, c) => `${String.fromCharCode(65+r)}${c > 2 ? c : c+1}`;
 
 export default function BookingManagement() {
     const { user } = useAuth();
     const operatorId = user?.operatorId ?? null;
 
     // ── Data ──────────────────────────────────────────────────────────────────
-    const { data: trips = [], isLoading: tripsLoading } = useTrips({ limit: 100 });
+    // Fetch ALL trips (no origin/destination filter) so operator sees their trips
+    const { data: tripsRaw, isLoading: tripsLoading } = useAllTrips({ limit: 100, status: 'SCHEDULED' });
+    const tripList = useMemo(
+        () => (Array.isArray(tripsRaw) ? tripsRaw.filter((t) => t?.id) : []),
+        [tripsRaw]
+    );
+    const firstTripId = tripList?.[0]?.id ?? null;
     const { data: bookings = [], isLoading: bookingsLoading } = useBookings({ limit: 500 });
     const { data: buses = [] } = useBuses(operatorId ? { operatorId, limit: 50 } : {});
     const { data: routes = [] } = useRoutes({ limit: 100 });
-    const { mutate: createTrip, isPending: creatingTrip, error: createTripError } = useCreateTrip();
+    const [creatingTrip, setCreatingTrip] = useState(false);
     const { mutate: createRoute, isPending: creatingRoute } = useCreateRoute();
+    const { mutateAsync: createBookingForUser } = useCreateBookingForUser();
+    const queryClient = useQueryClient();
 
     // ── UI state ──────────────────────────────────────────────────────────────
     const [selectedTrip, setSelectedTrip] = useState(null);
+
+    // Auto-select first trip when list loads
+    useEffect(() => {
+        if (!selectedTrip && firstTripId) {
+            setSelectedTrip(firstTripId);
+        }
+    }, [selectedTrip, firstTripId]);
     const [activeSection, setActiveSection] = useState('manifest');
     const [isAddTripModalOpen, setIsAddTripModalOpen] = useState(false);
 
@@ -77,6 +84,7 @@ export default function BookingManagement() {
     const [addArrival, setAddArrival] = useState('');
     const [addPrice, setAddPrice] = useState('');
     const [addAmenities, setAddAmenities] = useState('WiFi,AC');
+    const { data: selectedBusSeats = [], isLoading: selectedBusSeatsLoading } = useSeats(addBusId || null, { limit: 100 });
 
     // Inline route creation (shown when no routes exist or user wants a new one)
     const [showNewRoute, setShowNewRoute] = useState(false);
@@ -88,52 +96,174 @@ export default function BookingManagement() {
     const [selectedSeat, setSelectedSeat] = useState('');
     const [passengerName, setPassengerName] = useState('');
     const [passengerPhone, setPassengerPhone] = useState('');
-    const [passengerGender, setPassengerGender] = useState('Male');
-    const [passengerAge, setPassengerAge] = useState('');
+    const [passengerEmail, setPassengerEmail] = useState('');
+    const [emergencyContact, setEmergencyContact] = useState('');
+    const [passengerUserId, setPassengerUserId] = useState('');
+    const [walkInPayment, setWalkInPayment] = useState('CASH');
+    const [walkInError, setWalkInError] = useState('');
+    const [walkInSaving, setWalkInSaving] = useState(false);
 
     // ── Derived ───────────────────────────────────────────────────────────────
-    const currentTripObj = trips.find(t => t.id === selectedTrip) ?? trips[0] ?? null;
+    const currentTripObj = tripList.find((t) => t.id === selectedTrip) ?? tripList?.[0] ?? null;
+    const highlightedTripId = selectedTrip ?? firstTripId;
     const effectiveTripId = selectedTrip ?? currentTripObj?.id ?? null;
+    const seatContextTripId = isAddTripModalOpen || creatingTrip ? null : effectiveTripId;
+
+    const {
+        tripSeats,
+        seatIdMap,
+        bookedSeats: tripBookedLabels,
+        canSelectSeats: canWalkInBook,
+        unavailableMessage: walkInSeatMessage,
+        refetchTrip: refetchTripSeats,
+    } = useTripSeatContext(seatContextTripId);
 
     const filteredManifest = useMemo(() => {
         if (!effectiveTripId) return [];
         return bookings.filter(b => b.trip?.id === effectiveTripId || b.tripId === effectiveTripId);
     }, [bookings, effectiveTripId]);
 
-    const totalSeats = currentTripObj?.bus?.totalSeats ?? currentTripObj?.totalSeats ?? 45;
+    const totalSeats = tripSeats.length > 0
+        ? tripSeats.length
+        : currentTripObj?.bus?.totalSeats ?? 45;
     const bookedSeatsCount = filteredManifest.length;
-    const emptySeatsCount = totalSeats - bookedSeatsCount;
-    const occupiedSeats = filteredManifest.map(b => b.travelers?.[0]?.seat?.seatNumber ?? b.travelers?.[0]?.seatNumber ?? '');
+    const emptySeatsCount = Math.max(0, totalSeats - bookedSeatsCount);
 
-    const handleSaveTrip = (e) => {
+    const bookedSeatLabels = filteredManifest.map(b =>
+        b.travelers?.[0]?.seat?.seatNumber ?? b.travelers?.[0]?.seatNumber ?? ''
+    ).filter(Boolean);
+    const occupiedSeats = [...new Set([...bookedSeatLabels, ...tripBookedLabels])];
+
+    const PAYMENT_MAP = { chapa: 'CHAPA', telebirr: 'TELEBIRR', cbe: 'CBE' };
+
+    const resolveWalkInUserId = async () => {
+        if (passengerUserId.trim()) return passengerUserId.trim();
+        const tempPassword = `Walk@${Date.now().toString(36).slice(-8)}1!`;
+        const email =
+            passengerEmail.trim() ||
+            `walkin.${passengerPhone.replace(/\D/g, '') || Date.now()}@menaharia.local`;
+        const regResponse = await authApi.register({
+            fullName: passengerName,
+            phone: passengerPhone,
+            email,
+            password: tempPassword,
+        });
+        const payload = regResponse?.data ?? regResponse;
+        const uid = payload?.user?.id ?? payload?.id;
+        if (!uid) throw new Error('Could not create passenger account.');
+        return uid;
+    };
+
+    const handleWalkInBooking = async () => {
+        setWalkInError('');
+        if (!effectiveTripId || !selectedSeat) {
+            setWalkInError('Select a trip and an available seat.');
+            return;
+        }
+        if (!passengerName.trim() || !passengerPhone.trim()) {
+            setWalkInError('Passenger name and phone are required.');
+            return;
+        }
+        if (!emergencyContact.trim()) {
+            setWalkInError('Emergency contact is required.');
+            return;
+        }
+        const tripSeatId = seatIdMap[selectedSeat];
+        if (!tripSeatId) {
+            setWalkInError(
+                'No trip seat ID for this label. Add bus seats (Fleet) and create a new trip so trip seats are materialized.'
+            );
+            return;
+        }
+
+        setWalkInSaving(true);
+        try {
+            const userId = await resolveWalkInUserId();
+            const method = PAYMENT_MAP[walkInPayment.toLowerCase()] ?? 'CHAPA';
+            await createBookingForUser({
+                tripId: effectiveTripId,
+                userId,
+                paymentMethod: method,
+                travelers: [{
+                    tripSeatId,
+                    fullName: passengerName.trim(),
+                    email: passengerEmail.trim() || `walkin.${passengerPhone.replace(/\D/g, '')}@menaharia.local`,
+                    phone: passengerPhone.trim(),
+                    emergencyContact: emergencyContact.trim(),
+                }],
+            });
+            await queryClient.invalidateQueries({ queryKey: ['bookings'] });
+            await queryClient.invalidateQueries({ queryKey: ['trips'] });
+            setSelectedSeat('');
+            setPassengerName('');
+            setPassengerPhone('');
+            setPassengerEmail('');
+            setEmergencyContact('');
+            setPassengerUserId('');
+            setActiveSection('manifest');
+        } catch (err) {
+            const msg = extractErrorMessage(err, 'Walk-in booking failed.');
+            if (msg.toLowerCase().includes('phone') || msg.toLowerCase().includes('email')) {
+                setWalkInError(`${msg} Enter the passenger's User ID if they already have an account.`);
+            } else {
+                setWalkInError(msg);
+            }
+        } finally {
+            setWalkInSaving(false);
+        }
+    };
+
+    const handleSaveTrip = async (e) => {
         e.preventDefault();
         setTripError('');
         if (!addRouteId || !addBusId || !addDate || !addTime || !addArrival || !addPrice) return;
 
-        // Backend requires full ISO 8601 datetime strings for departureTime and arrivalTime
-        const toISO = (date, time) => new Date(`${date}T${time}:00`).toISOString();
+        setCreatingTrip(true);
+        try {
+            const departureISO = parseTripDateTime(addDate, addTime);
+            const arrivalISO = buildArrivalDateTime(addDate, addArrival, departureISO);
+            const bus = buses.find((b) => b.id === addBusId);
+            await ensureBusSeatsReady(addBusId, bus?.totalSeats ?? 45);
+            const created = await tripsApi.createTrip({
+                routeId:       addRouteId,
+                busId:         addBusId,
+                date:          toTripDateISO(addDate),
+                departureTime: departureISO,
+                arrivalTime:   arrivalISO,
+                price:         Number(addPrice),
+                amenities:     parseAmenities(addAmenities),
+                status:        'SCHEDULED',
+            });
 
-        createTrip({
-            routeId:       addRouteId,
-            busId:         addBusId,
-            date:          addDate,
-            departureTime: toISO(addDate, addTime),
-            arrivalTime:   toISO(addDate, addArrival),
-            price:         Number(addPrice),
-            amenities:     addAmenities.split(',').map(s => s.trim()).filter(Boolean),
-            status:        'SCHEDULED',
-        }, {
-            onSuccess: () => {
-                setIsAddTripModalOpen(false);
-                setShowNewRoute(false);
-                setAddRouteId(''); setAddBusId(''); setAddDate('');
-                setAddTime(''); setAddArrival(''); setAddPrice('');
-                setTripError('');
-            },
-            onError: (err) => {
-                setTripError(extractErrorMessage(err, 'Failed to create trip.'));
-            },
-        });
+            setIsAddTripModalOpen(false);
+            setShowNewRoute(false);
+            setAddRouteId('');
+            setAddBusId('');
+            setAddDate('');
+            setAddTime('');
+            setAddArrival('');
+            setAddPrice('');
+            setTripError('');
+            if (created?.id) setSelectedTrip(created.id);
+            queryClient.invalidateQueries({ queryKey: ['trips'] });
+            if (addBusId) {
+                queryClient.invalidateQueries({ queryKey: ['seats'] });
+            }
+        } catch (err) {
+            if (err?.code === 'NO_BUS_SEATS') {
+                setTripError(err.message);
+            } else {
+                const msg = extractErrorMessage(err, 'Failed to create trip.');
+                const status = err?.response?.status;
+                setTripError(
+                    status
+                        ? `Could not create trip (${status}): ${msg}`
+                        : msg
+                );
+            }
+        } finally {
+            setCreatingTrip(false);
+        }
     };
 
     return (
@@ -161,17 +291,17 @@ export default function BookingManagement() {
                 <div className="lg:col-span-1 space-y-4">
                     <div className="flex items-center justify-between">
                         <div className="font-bold text-gray-800 text-sm tracking-wide">Available Trips</div>
-                        <Badge variant="secondary" className="bg-blue-50 text-blue-600 font-bold">{trips.length} Active</Badge>
+                        <Badge variant="secondary" className="bg-blue-50 text-blue-600 font-bold">{tripList.length} Active</Badge>
                     </div>
                     <div className="space-y-2 h-[600px] overflow-y-auto pr-2">
                         {tripsLoading ? (
                             <div className="text-center py-8 text-gray-400 text-sm">Loading trips…</div>
-                        ) : trips.length === 0 ? (
+                        ) : tripList.length === 0 ? (
                             <div className="text-center py-8 text-gray-400 text-sm">No trips found</div>
-                        ) : trips.map(trip => (
+                        ) : tripList.map(trip => (
                             <div key={trip.id} onClick={() => setSelectedTrip(trip.id)}
                                 className={cn("p-4 rounded-2xl border-2 cursor-pointer transition-all duration-200 group relative",
-                                    (selectedTrip ?? trips[0]?.id) === trip.id
+                                    highlightedTripId === trip.id
                                         ? "bg-white border-primary shadow-lg shadow-primary/5"
                                         : "bg-white border-transparent hover:border-gray-200 hover:bg-gray-50")}>
                                 <div className="flex justify-between items-start mb-2">
@@ -180,13 +310,13 @@ export default function BookingManagement() {
                                             {trip.bus?.make ?? 'Standard'}
                                         </div>
                                         <span className={cn("font-extrabold text-sm block",
-                                            (selectedTrip ?? trips[0]?.id) === trip.id ? "text-primary" : "text-gray-900")}>
-                                            {tripFrom(trip).split(',')[0]} → {tripTo(trip).split(',')[0]}
+                                            highlightedTripId === trip.id ? "text-primary" : "text-gray-900")}>
+                                            {tripCityLabel(tripFrom(trip))} → {tripCityLabel(tripTo(trip))}
                                         </span>
                                     </div>
                                     <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors shrink-0",
-                                        (selectedTrip ?? trips[0]?.id) === trip.id ? "border-primary bg-primary" : "border-gray-200 bg-white")}>
-                                        {(selectedTrip ?? trips[0]?.id) === trip.id && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                        highlightedTripId === trip.id ? "border-primary bg-primary" : "border-gray-200 bg-white")}>
+                                        {highlightedTripId === trip.id && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3 text-[10px] font-bold text-gray-500 mb-3">
@@ -281,72 +411,64 @@ export default function BookingManagement() {
                                 {/* Seat Map */}
                                 <div className="space-y-4">
                                     <h3 className="text-lg font-bold text-gray-900">Choose Seat</h3>
-                                    <div className="flex flex-col items-center">
-                                        <div className="w-full max-w-[240px] h-14 border-x-4 border-t-4 border-gray-100 rounded-t-[50px] mb-10 relative bg-gray-50/30 flex items-center justify-center">
-                                            <span className="text-[10px] text-gray-300 font-bold uppercase tracking-[0.25em] mb-2">Driver Cabin</span>
-                                            <div className="absolute top-4 right-6 w-10 h-10 rounded-full border-2 border-gray-100 flex items-center justify-center bg-white shadow-sm">
-                                                <div className="w-5 h-5 rounded-full bg-gray-100"></div>
-                                            </div>
-                                        </div>
-                                        <div className="grid gap-y-4 gap-x-5 p-10 border-l-4 border-r-4 border-gray-100 bg-gray-50/20 rounded-[3rem] shadow-inner shadow-gray-100">
-                                            {BUS_LAYOUT.map((row, rowIndex) => (
-                                                <div key={rowIndex} className="flex gap-4">
-                                                    {row.map((type, colIndex) => {
-                                                        if (type === 0) return <div key={`aisle-${rowIndex}-${colIndex}`} className="w-10" />;
-                                                        const seatLabel = getSeatLabel(rowIndex, colIndex);
-                                                        const isOccupied = occupiedSeats.includes(seatLabel);
-                                                        const isSelected = selectedSeat === seatLabel;
-                                                        return (
-                                                            <button key={seatLabel} type="button" disabled={isOccupied}
-                                                                onClick={() => setSelectedSeat(seatLabel)}
-                                                                className={cn("w-10 h-10 rounded-t-lg rounded-b-md border flex items-center justify-center text-xs font-bold transition-all relative group cursor-pointer",
-                                                                    isOccupied ? "bg-gray-300 border-gray-400 text-gray-500 cursor-not-allowed"
-                                                                        : isSelected ? "bg-primary border-primary text-white transform scale-105 shadow-md"
-                                                                        : "bg-white border-gray-300 text-gray-700 hover:border-primary hover:text-primary")}
-                                                                title={isOccupied ? "Occupied" : `Seat ${seatLabel}`}>
-                                                                {seatLabel}
-                                                                <div className={cn("absolute -bottom-1 w-[80%] h-1 rounded-sm",
-                                                                    isOccupied ? "bg-gray-400" : isSelected ? "bg-blue-900 bg-opacity-40" : "bg-gray-400")}></div>
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                            ))}
-                                        </div>
-                                        <div className="flex gap-8 mt-12 text-[10px] font-bold uppercase tracking-[0.1em] text-gray-400">
-                                            <div className="flex items-center gap-2.5"><div className="w-4 h-4 rounded-md border-2 border-gray-100 bg-white shadow-sm"></div><span>Available</span></div>
-                                            <div className="flex items-center gap-2.5"><div className="w-4 h-4 rounded-md bg-primary shadow-md shadow-primary/20"></div><span>Selected</span></div>
-                                            <div className="flex items-center gap-2.5"><div className="w-4 h-4 rounded-md bg-gray-200 border-2 border-gray-100"></div><span>Booked</span></div>
-                                        </div>
-                                    </div>
+                                    {walkInSeatMessage && (
+                                        <p className="text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-xl p-3">
+                                            {walkInSeatMessage}
+                                        </p>
+                                    )}
+                                    <BusLayout
+                                        selectedSeats={selectedSeat ? [selectedSeat] : []}
+                                        onToggleSeat={(label) => setSelectedSeat((prev) => (prev === label ? '' : label))}
+                                        bookedSeats={occupiedSeats}
+                                        tripSeats={tripSeats}
+                                        disabled={!canWalkInBook}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => refetchTripSeats()}
+                                        className="text-xs font-bold text-primary"
+                                    >
+                                        Refresh seat availability
+                                    </button>
                                 </div>
                                 {/* Passenger Form */}
                                 <div className="space-y-4">
                                     <h3 className="text-lg font-bold text-gray-900">Passenger Details</h3>
-                                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-xs font-semibold">
-                                        Manual in-person bookings require a seat reservation ID from the system. Please direct walk-in passengers to complete booking through the main booking flow, or contact platform support.
-                                    </div>
+                                    <p className="text-xs text-gray-500">
+                                        Walk-in booking uses POST /v1/bookings/for-user. A guest account is created automatically unless you provide an existing User ID.
+                                    </p>
+                                    {walkInError && (
+                                        <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">{walkInError}</div>
+                                    )}
                                     <div>
                                         <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Selected Seat</label>
                                         <div className="h-11 px-4 bg-gray-50 border border-gray-200 rounded-xl flex items-center font-bold text-gray-800">
-                                            {selectedSeat ? `Seat ${selectedSeat}` : "None Selected (Click a seat on the left)"}
+                                            {selectedSeat
+                                                ? `Seat ${selectedSeat}${seatIdMap[selectedSeat] ? '' : ' (no trip seat — recreate trip after adding bus seats)'}`
+                                                : 'None selected'}
                                         </div>
                                     </div>
-                                    <Input label="Passenger Name" placeholder="e.g. Abebe Kebede" value={passengerName} onChange={e => setPassengerName(e.target.value)} className="rounded-xl h-11" />
-                                    <Input label="Phone Number" placeholder="e.g. 0911223344" value={passengerPhone} onChange={e => setPassengerPhone(e.target.value)} className="rounded-xl h-11" />
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
-                                            <select value={passengerGender} onChange={e => setPassengerGender(e.target.value)}
-                                                className="w-full h-11 rounded-xl border border-gray-300 px-3 py-2 text-sm focus:ring-primary focus:border-primary focus:outline-none">
-                                                <option value="Male">Male</option>
-                                                <option value="Female">Female</option>
-                                            </select>
-                                        </div>
-                                        <Input type="number" label="Age" placeholder="e.g. 30" value={passengerAge} onChange={e => setPassengerAge(e.target.value)} className="rounded-xl h-11" />
+                                    <Input label="Passenger Name *" placeholder="e.g. Abebe Kebede" value={passengerName} onChange={e => setPassengerName(e.target.value)} className="rounded-xl h-11" />
+                                    <Input label="Phone Number *" placeholder="e.g. 0911223344" value={passengerPhone} onChange={e => setPassengerPhone(e.target.value)} className="rounded-xl h-11" />
+                                    <Input label="Email" placeholder="optional" value={passengerEmail} onChange={e => setPassengerEmail(e.target.value)} className="rounded-xl h-11" />
+                                    <Input label="Emergency Contact *" placeholder="e.g. 0911000000" value={emergencyContact} onChange={e => setEmergencyContact(e.target.value)} className="rounded-xl h-11" />
+                                    <Input label="Existing User ID (optional)" placeholder="UUID if passenger already registered" value={passengerUserId} onChange={e => setPassengerUserId(e.target.value)} className="rounded-xl h-11 font-mono text-xs" />
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
+                                        <select value={walkInPayment} onChange={e => setWalkInPayment(e.target.value)}
+                                            className="w-full h-11 rounded-xl border border-gray-300 px-3 text-sm focus:ring-primary focus:border-primary outline-none">
+                                            <option value="chapa">Chapa</option>
+                                            <option value="telebirr">Telebirr</option>
+                                            <option value="cbe">CBE Birr</option>
+                                        </select>
                                     </div>
-                                    <Button type="button" disabled className="w-full bg-gray-300 text-gray-500 font-bold h-11 rounded-xl mt-6 cursor-not-allowed">
-                                        Confirm & Save Booking (Requires System Integration)
+                                    <Button
+                                        type="button"
+                                        disabled={walkInSaving || !selectedSeat || !seatIdMap[selectedSeat]}
+                                        onClick={handleWalkInBooking}
+                                        className="w-full bg-primary hover:bg-primary/90 text-white font-bold h-11 rounded-xl mt-4"
+                                    >
+                                        {walkInSaving ? 'Booking…' : 'Confirm Walk-in Booking'}
                                     </Button>
                                 </div>
                             </div>
@@ -473,6 +595,11 @@ export default function BookingManagement() {
                         </select>
                         {buses.length === 0 && (
                             <p className="text-xs text-amber-600 mt-1">No buses registered. Add buses in Bus Management first.</p>
+                        )}
+                        {addBusId && !selectedBusSeatsLoading && selectedBusSeats.length === 0 && (
+                            <p className="text-xs text-amber-600 mt-1">
+                                This bus has no seat layout yet. Saving will generate seats automatically, or use Fleet → Generate seats first.
+                            </p>
                         )}
                     </div>
 

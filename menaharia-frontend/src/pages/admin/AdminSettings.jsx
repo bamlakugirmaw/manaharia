@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
-import { Settings, Globe, CreditCard, Bell, Shield, Save, RefreshCw } from 'lucide-react';
+import { Settings, Globe, CreditCard, Bell, Shield, Save, AlertTriangle } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 export default function AdminSettings() {
@@ -16,12 +16,20 @@ export default function AdminSettings() {
 
     return (
         <div className="space-y-6">
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm flex items-start gap-3">
+                <AlertTriangle className="shrink-0 mt-0.5" size={18} />
+                <p>
+                    Platform settings are not persisted yet — there is no settings API in OpenAPI.
+                    This page is a UI preview only; changes cannot be saved to the backend.
+                </p>
+            </div>
+
             <div className="flex justify-between items-center">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">System Settings</h1>
                     <p className="text-gray-500 text-sm">Configure global platform parameters and integration keys.</p>
                 </div>
-                <Button className="flex items-center gap-2">
+                <Button className="flex items-center gap-2" disabled title="No backend settings endpoint">
                     <Save size={18} /> Save All Changes
                 </Button>
             </div>

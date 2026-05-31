@@ -1,16 +1,30 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { Search, Filter, CreditCard, Wallet, Landmark, Download, MoreHorizontal, User, Calendar } from 'lucide-react';
+import { Search, CreditCard, Wallet, Landmark, MoreHorizontal, User, Calendar } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import DetailModal, { ModalDataRow } from '../../components/admin/DetailModal';
+import { usePayments } from '../../hooks/usePayments';
 
-const MOCK_PAYMENTS = [
-    { id: 'PAY-8821', user: 'Abebe Kebede', amount: 'ETB 1,700', method: 'Telebirr', date: 'Dec 15, 2025, 10:30 AM', status: 'completed' },
-    { id: 'PAY-8822', user: 'Tigist Alemu', amount: 'ETB 900', method: 'CBE Birr', date: 'Dec 15, 2025, 11:45 AM', status: 'completed' },
-    { id: 'PAY-8823', user: 'Dawit Haile', amount: 'ETB 2,550', method: 'Chapa', date: 'Dec 15, 2025, 12:20 PM', status: 'pending' },
-    { id: 'PAY-8824', user: 'Sara Tesfaye', amount: 'ETB 1,500', method: 'Telebirr', date: 'Dec 16, 2025, 09:15 AM', status: 'failed' },
-];
+const METHOD_LABEL = { TELEBIRR: 'Telebirr', CBE: 'CBE Birr', CHAPA: 'Chapa' };
+
+function normalisePaymentRow(p) {
+    const statusMap = { SUCCESS: 'completed', PENDING: 'pending', FAILED: 'failed' };
+    return {
+        id: p.id,
+        user: p.booking?.travelers?.[0]?.fullName ?? p.user?.fullName ?? p.userId ?? '—',
+        amount: `ETB ${(p.amount ?? 0).toLocaleString()}`,
+        method: METHOD_LABEL[p.method] ?? p.method ?? '—',
+        date: p.createdAt
+            ? new Date(p.createdAt).toLocaleString('en-US', {
+                month: 'short', day: 'numeric', year: 'numeric',
+                hour: '2-digit', minute: '2-digit',
+            })
+            : '—',
+        status: statusMap[p.status] ?? (p.status ?? '').toLowerCase(),
+        _raw: p,
+    };
+}
 
 export default function AdminPayments() {
     const [searchQuery, setSearchQuery] = useState('');
@@ -18,10 +32,17 @@ export default function AdminPayments() {
     const [selectedPayment, setSelectedPayment] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    const filteredPayments = MOCK_PAYMENTS.filter(payment => {
+    const { data: rawPayments = [], isLoading, isError } = usePayments({ limit: 100 });
+
+    const payments = useMemo(
+        () => (Array.isArray(rawPayments) ? rawPayments : []).map(normalisePaymentRow),
+        [rawPayments]
+    );
+
+    const filteredPayments = payments.filter((payment) => {
         const matchesSearch =
             payment.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            payment.user.toLowerCase().includes(searchQuery.toLowerCase());
+            String(payment.user).toLowerCase().includes(searchQuery.toLowerCase());
 
         const matchesMethod = methodFilter === 'all' || payment.method === methodFilter;
 
@@ -45,7 +66,6 @@ export default function AdminPayments() {
     return (
         <div className="space-y-6">
 
-            {/* Filters */}
             <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
                 <div className="relative w-full md:w-96">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
@@ -73,6 +93,17 @@ export default function AdminPayments() {
                 </div>
             </div>
 
+            {isLoading && (
+                <div className="flex justify-center py-16">
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary" />
+                </div>
+            )}
+
+            {isError && (
+                <p className="text-center text-red-500 text-sm py-8">Failed to load payments.</p>
+            )}
+
+            {!isLoading && !isError && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left">
@@ -82,48 +113,67 @@ export default function AdminPayments() {
                                 <th className="px-6 py-4 font-bold">User</th>
                                 <th className="px-6 py-4 font-bold">Amount</th>
                                 <th className="px-6 py-4 font-bold">Method</th>
-                                <th className="px-6 py-4 font-bold">Date & Time</th>
+                                <th className="px-6 py-4 font-bold">Date</th>
                                 <th className="px-6 py-4 font-bold">Status</th>
+                                <th className="px-6 py-4 font-bold text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
                             {filteredPayments.map((payment) => (
                                 <tr key={payment.id} className="hover:bg-gray-50 transition-colors group">
-                                    <td className="px-6 py-4 text-[10px] font-mono font-bold text-gray-500 uppercase tracking-tighter">
-                                        {payment.id}
+                                    <td className="px-6 py-4">
+                                        <span className="text-[10px] font-mono text-primary font-bold uppercase tracking-tighter">{payment.id}</span>
                                     </td>
-                                    <td className="px-6 py-4 text-sm font-semibold text-gray-900">
-                                        {payment.user}
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500">
+                                                <User size={14} />
+                                            </div>
+                                            <span className="text-sm font-semibold text-gray-900">{payment.user}</span>
+                                        </div>
                                     </td>
-                                    <td className="px-6 py-4 text-sm font-bold text-gray-900">
-                                        {payment.amount}
+                                    <td className="px-6 py-4">
+                                        <span className="text-sm font-bold text-gray-900">{payment.amount}</span>
                                     </td>
-                                    <td className="px-6 py-4 text-sm">
-                                        <div className="flex items-center gap-2 text-gray-600">
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center gap-2 text-sm text-gray-600">
                                             {getMethodIcon(payment.method)}
                                             {payment.method}
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4 text-xs text-gray-500">
-                                        {payment.date}
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                                            <Calendar size={14} className="text-gray-400" />
+                                            {payment.date}
+                                        </div>
                                     </td>
                                     <td className="px-6 py-4">
                                         <Badge
                                             variant={
                                                 payment.status === 'completed' ? 'success' :
-                                                    payment.status === 'pending' ? 'warning' : 'failed'
+                                                    payment.status === 'pending' ? 'blue' : 'destructive'
                                             }
                                             className="font-bold text-[10px] uppercase tracking-widest px-2 py-0.5"
                                         >
                                             {payment.status}
                                         </Badge>
                                     </td>
+                                    <td className="px-6 py-4 text-right">
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleViewPayment(payment)}
+                                            className="text-gray-400 hover:text-gray-600"
+                                        >
+                                            <MoreHorizontal size={16} />
+                                        </Button>
+                                    </td>
                                 </tr>
                             ))}
                             {filteredPayments.length === 0 && (
                                 <tr>
-                                    <td colSpan="6" className="px-6 py-12 text-center text-gray-500">
-                                        No transactions found matching your criteria.
+                                    <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
+                                        No payments found matching your criteria.
                                     </td>
                                 </tr>
                             )}
@@ -131,33 +181,26 @@ export default function AdminPayments() {
                     </table>
                 </div>
             </div>
+            )}
 
-            {/* Payment Details Modal */}
             {selectedPayment && (
                 <DetailModal
                     isOpen={isModalOpen}
                     onClose={() => setIsModalOpen(false)}
-                    title={`Transaction ${selectedPayment.id}`}
+                    title={`Payment ${selectedPayment.id}`}
                     footer={
                         <Button variant="outline" onClick={() => setIsModalOpen(false)}>Close</Button>
                     }
                 >
-                    <div className="space-y-6">
-                        <div className="p-6 bg-green-50 rounded-2xl text-center border border-green-100">
-                            <span className="block text-3xl font-bold text-green-700 mb-1">{selectedPayment.amount}</span>
-                            <span className="text-xs font-bold uppercase text-green-600 tracking-widest">Successful Payment</span>
-                        </div>
-
-                        <div className="grid grid-cols-1 gap-2">
-                            <ModalDataRow label="Paid By" value={selectedPayment.user} icon={User} />
-                            <ModalDataRow label="Payment Method" value={selectedPayment.method} icon={Wallet} />
-                            <ModalDataRow label="Transaction Time" value={selectedPayment.date} icon={Calendar} />
-                            <ModalDataRow label="Reference ID" value={selectedPayment.id} />
-                        </div>
+                    <div className="space-y-4">
+                        <ModalDataRow label="User" value={selectedPayment.user} />
+                        <ModalDataRow label="Amount" value={selectedPayment.amount} />
+                        <ModalDataRow label="Method" value={selectedPayment.method} />
+                        <ModalDataRow label="Date" value={selectedPayment.date} />
+                        <ModalDataRow label="Status" value={selectedPayment.status} />
                     </div>
                 </DetailModal>
             )}
         </div>
     );
 }
-

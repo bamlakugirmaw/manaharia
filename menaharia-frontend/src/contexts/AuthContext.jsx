@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authApi } from '../api/auth.api';
+import { operatorsApi } from '../api/operators.api';
 import { api } from '../lib/api';
 
 const AuthContext = createContext();
@@ -58,8 +59,19 @@ const normaliseUser = (raw) => {
         phone:      raw.phone ?? '',
         role:       normaliseRole(raw.roles),
         operatorId: raw.operatorId ?? raw.operator?.id ?? null,
+        avatarUrl:  raw.profilePhoto ?? raw.avatarUrl ?? raw.avatar ?? null,
         roles:      raw.roles ?? [],
     };
+};
+
+const resolveOperatorAvatar = async (user) => {
+    if (!user?.operatorId) return user;
+    try {
+        const res = await operatorsApi.getOperatorById(user.operatorId);
+        const op = res?.data ?? res;
+        if (op?.logo) return { ...user, avatarUrl: op.logo };
+    } catch { /* non-fatal */ }
+    return user;
 };
 
 // ─── Extract tokens + user from login/register response ───────────────────────
@@ -116,6 +128,10 @@ export function AuthProvider({ children }) {
                     } catch { /* non-fatal */ }
                 }
 
+                if (u?.role === 'operator') {
+                    u = await resolveOperatorAvatar(u);
+                }
+
                 setUser(u);
             })
             .catch(() => {
@@ -170,6 +186,10 @@ export function AuthProvider({ children }) {
                 } catch {
                     // Non-fatal — operator dashboard will show empty state
                 }
+            }
+
+            if (resolvedUser?.role === 'operator') {
+                resolvedUser = await resolveOperatorAvatar(resolvedUser);
             }
 
             setUser(resolvedUser);
@@ -231,6 +251,11 @@ export function AuthProvider({ children }) {
         }
     }, []);
 
+    // ── setAvatarUrl ──────────────────────────────────────────────────────────
+    const setAvatarUrl = useCallback((avatarUrl) => {
+        setUser((prev) => (prev ? { ...prev, avatarUrl: avatarUrl || null } : prev));
+    }, []);
+
     // ── changePassword ────────────────────────────────────────────────────────
     const changePassword = useCallback(async (data) => {
         try {
@@ -252,6 +277,7 @@ export function AuthProvider({ children }) {
                 logout,
                 signup,
                 updateProfile,
+                setAvatarUrl,
                 changePassword,
             }}
         >

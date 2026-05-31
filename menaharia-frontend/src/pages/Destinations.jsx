@@ -1,55 +1,68 @@
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { TRIPS, OPERATORS, DESTINATIONS } from '../data/mock-db';
-import { MapPin, TrendingUp, Users, Search } from 'lucide-react';
-import { useState } from 'react';
+import { MapPin, TrendingUp, Users, Search, LogIn } from 'lucide-react';
+import { useState, useMemo } from 'react';
 import heroBg from '../assets/hero-bus-bg.png';
+import { usePublicDestinations } from '../hooks/useDestinations';
+import { useAllTrips } from '../hooks/useTrips';
+import { tripOrigin, tripDest } from '../lib/tripHelpers';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Destinations() {
     const navigate = useNavigate();
+    const { isAuthenticated } = useAuth();
     const [searchQuery, setSearchQuery] = useState('');
 
-    // Calculate stats for each destination
-    const getDestinationStats = (cityName) => {
-        const cityTrips = TRIPS.filter(trip =>
-            trip.from === cityName || trip.to === cityName
-        );
+    const { data: destPayload, isLoading: destLoading, isError: destError } = usePublicDestinations({ limit: 100 });
+    const { data: trips = [], isLoading: tripsLoading } = useAllTrips({ limit: 200, status: 'SCHEDULED' });
 
-        const operators = new Set(cityTrips.map(trip => trip.operatorId));
-        const prices = cityTrips.map(trip => trip.price);
+    const apiDestinations = destPayload?.destinations ?? [];
+    const needsAuth = destPayload?.needsAuth ?? false;
 
-        return {
-            operatorCount: operators.size,
-            cheapestPrice: prices.length > 0 ? Math.min(...prices) : 0,
-            tripCount: cityTrips.length
-        };
-    };
+    const destinationsWithStats = useMemo(() => {
+        return apiDestinations.map((dest) => {
+            const cityTrips = trips.filter(
+                (t) => tripOrigin(t) === dest.name || tripDest(t) === dest.name
+            );
+            const operatorIds = new Set(
+                cityTrips.map((t) => t.bus?.operatorId ?? t.bus?.operator?.id).filter(Boolean)
+            );
+            const prices = cityTrips.map((t) => t.price).filter((p) => p != null);
 
-    const destinationsWithStats = DESTINATIONS.map(dest => ({
-        ...dest,
-        ...getDestinationStats(dest.name)
-    }));
+            return {
+                id: dest.id,
+                name: dest.name,
+                description: dest.description ?? '',
+                image: dest.image ?? '/images/destinations/addis_ababa.jpg',
+                highlights: dest.highlights ?? [],
+                operatorCount: operatorIds.size,
+                cheapestPrice: prices.length > 0 ? Math.min(...prices) : null,
+                tripCount: cityTrips.length,
+            };
+        });
+    }, [apiDestinations, trips]);
 
-    // Filter destinations based on search
-    const filteredDestinations = destinationsWithStats.filter(dest => {
+    const isLoading = destLoading || tripsLoading;
+
+    const filteredDestinations = destinationsWithStats.filter((dest) => {
         const query = searchQuery.toLowerCase();
-        return dest.name.toLowerCase().includes(query) ||
-            dest.description.toLowerCase().includes(query);
+        return (
+            dest.name.toLowerCase().includes(query) ||
+            dest.description.toLowerCase().includes(query)
+        );
     });
 
-    const handleViewTrips = (cityName) => {
-        navigate(`/destinations/${encodeURIComponent(cityName)}`);
+    const handleViewTrips = (destination) => {
+        navigate(`/destinations/${destination.id}`);
     };
 
     return (
         <div className="min-h-screen bg-gray-50 pb-20">
-            {/* Hero Search Section */}
             <div
                 className="px-4 pt-20 pb-24 text-center rounded-b-[5rem] relative overflow-hidden"
                 style={{ backgroundImage: `url(${heroBg})`, backgroundSize: 'cover', backgroundPosition: 'center 55%' }}
             >
-                {/* Subtle overlay to ensure readability */}
                 <div className="absolute inset-0 bg-white/30" />
 
                 <div className="relative max-w-2xl mx-auto space-y-6">
@@ -57,7 +70,7 @@ export default function Destinations() {
                         Explore Destinations
                     </h1>
                     <p className="text-lg text-dark/70 font-medium max-w-xl mx-auto">
-                        Discover amazing cities across Ethiopia. From historical wonders to vibrant metropolises.
+                        Destination guides from the platform catalog, with live trip availability.
                     </p>
 
                     <div className="relative max-w-xl mx-auto mt-8">
@@ -73,12 +86,37 @@ export default function Destinations() {
                 </div>
             </div>
 
-            {/* Destinations Grid */}
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-12 relative z-10">
+                {needsAuth && !isAuthenticated && (
+                    <Card className="mb-6 p-6 bg-blue-50 border border-blue-100 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div className="text-left">
+                            <p className="font-bold text-gray-900">Sign in to view destinations</p>
+                            <p className="text-sm text-gray-600 mt-1">
+                                Destination content is loaded from GET /v1/destinations and requires an account.
+                            </p>
+                        </div>
+                        <Button className="gap-2 shrink-0" onClick={() => navigate('/login', { state: { from: { pathname: '/destinations' } } })}>
+                            <LogIn size={18} /> Sign In
+                        </Button>
+                    </Card>
+                )}
+
+                {destError && (
+                    <p className="text-center text-red-600 text-sm py-8">Failed to load destinations.</p>
+                )}
+
+                {isLoading && (
+                    <div className="flex justify-center py-20">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
+                    </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredDestinations.map((destination) => (
-                        <Card key={destination.id} className="bg-white border-none shadow-[0_2px_20px_rgba(0,0,0,0.04)] rounded-3xl overflow-hidden hover:shadow-[0_8px_30px_rgba(0,0,0,0.08)] transition-all duration-300 group">
-                            {/* Destination Image */}
+                    {!isLoading && !destError && filteredDestinations.map((destination) => (
+                        <Card
+                            key={destination.id}
+                            className="bg-white border-none shadow-[0_2px_20px_rgba(0,0,0,0.04)] rounded-3xl overflow-hidden hover:shadow-[0_8px_30px_rgba(0,0,0,0.08)] transition-all duration-300 group"
+                        >
                             <div className="relative h-48 overflow-hidden group">
                                 <img
                                     src={destination.image}
@@ -91,11 +129,9 @@ export default function Destinations() {
                                 </div>
                             </div>
 
-                            {/* Destination Info */}
                             <div className="p-6">
                                 <p className="text-sm text-gray-500 mb-6 line-clamp-2">{destination.description}</p>
 
-                                {/* Stats */}
                                 <div className="space-y-3 mb-6">
                                     <div className="flex items-center justify-between text-sm">
                                         <span className="text-gray-400 text-xs font-bold flex items-center gap-2">
@@ -113,20 +149,19 @@ export default function Destinations() {
                                     </div>
                                 </div>
 
-                                {/* Price and CTA */}
                                 <div className="pt-4 border-t border-gray-100">
                                     <div className="flex items-center justify-between mb-4">
                                         <div>
                                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">From</p>
                                             <p className="text-xl font-extrabold text-primary">
                                                 <span className="text-xs font-semibold mr-1 opacity-60">ETB</span>
-                                                {destination.cheapestPrice || 'N/A'}
+                                                {destination.cheapestPrice ?? '—'}
                                             </p>
                                         </div>
                                     </div>
                                     <Button
                                         fullWidth
-                                        onClick={() => handleViewTrips(destination.name)}
+                                        onClick={() => handleViewTrips(destination)}
                                         className="h-11 bg-primary hover:bg-primary/90 text-white font-semibold rounded-xl shadow-md shadow-primary/10 transition-all"
                                     >
                                         View Trips
@@ -137,12 +172,13 @@ export default function Destinations() {
                     ))}
                 </div>
 
-                {/* Empty State */}
-                {filteredDestinations.length === 0 && (
+                {!isLoading && !destError && filteredDestinations.length === 0 && !needsAuth && (
                     <div className="text-center py-20 bg-white rounded-3xl shadow-sm">
                         <MapPin className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                         <h3 className="text-xl font-extrabold text-gray-900 mb-2">No destinations found</h3>
-                        <p className="text-gray-400 text-xs font-bold uppercase tracking-wider">Try adjusting your search query</p>
+                        <p className="text-gray-400 text-xs font-bold uppercase tracking-wider">
+                            {searchQuery ? 'Try adjusting your search' : 'No destinations in the catalog yet'}
+                        </p>
                     </div>
                 )}
             </div>

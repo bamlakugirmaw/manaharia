@@ -1,26 +1,45 @@
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { Clock, Bus, Star, Heart, Scale } from 'lucide-react';
-import { OPERATORS } from '../../data/mock-db';
 
 /**
- * TripCard
+ * TripCard — works with both backend API shape and legacy mock shape.
  *
- * Accepts a trip object from either the backend API or the mock-db.
- * Backend trips embed the operator relation: trip.operator = { id, name, rating, ... }
- * Mock trips reference by operatorId and we fall back to the OPERATORS array.
+ * Backend shape (from GET /v1/trips):
+ *   trip.route.origin / trip.route.destination
+ *   trip.bus.operator.companyName / trip.bus.operator.rating
+ *   trip.availableSeatCount
+ *   trip.departureTime / trip.arrivalTime  — full ISO strings
+ *   trip.bus.totalSeats
  */
 export default function TripCard({ trip, onSelect }) {
-    // Prefer the embedded operator object from the backend response.
-    // Fall back to the mock-db lookup for local development / mock data.
-    const operator = trip.operator ?? OPERATORS.find(op => op.id === trip.operatorId);
+    // ── Operator ──────────────────────────────────────────────────────────────
+    // Backend: trip.bus.operator  |  Legacy: trip.operator
+    const operator = trip.bus?.operator ?? trip.operator ?? null;
+    const operatorName = operator?.companyName ?? operator?.name ?? 'Unknown';
+    const operatorRating = operator?.rating ?? null;
 
-    // Backend uses route.origin / route.destination; mock uses trip.from / trip.to directly.
-    const from = trip.from ?? trip.route?.origin ?? '';
-    const to   = trip.to   ?? trip.route?.destination ?? '';
+    // ── Route ─────────────────────────────────────────────────────────────────
+    const from = trip.route?.origin      ?? trip.from ?? '';
+    const to   = trip.route?.destination ?? trip.to   ?? '';
 
-    // Seats available: backend may return seatsAvailable or availableSeats
-    const seatsAvailable = trip.seatsAvailable ?? trip.availableSeats ?? 0;
+    // ── Seats ─────────────────────────────────────────────────────────────────
+    // Backend returns availableSeatCount directly on the trip object
+    const seatsAvailable = trip.availableSeatCount ?? trip.seatsAvailable ?? trip.availableSeats ?? 0;
+
+    // ── Times ─────────────────────────────────────────────────────────────────
+    // Backend returns full ISO strings; strip to HH:MM for display
+    const fmtTime = (s) => {
+        if (!s) return '—';
+        const part = s.includes('T') ? s.split('T')[1] : s;
+        const [h, m] = part.split(':');
+        return `${h}:${m}`;
+    };
+    const departureTime = fmtTime(trip.departureTime);
+    const arrivalTime   = fmtTime(trip.arrivalTime);
+
+    // ── Bus type label ────────────────────────────────────────────────────────
+    const busType = trip.busType ?? trip.bus?.make ?? 'Standard';
 
     return (
         <Card className="overflow-hidden bg-white border border-gray-100/90 shadow-[0_8px_30px_rgba(0,0,0,0.015)] rounded-[2rem] hover:shadow-md hover:border-gray-200/50 transition-all duration-300 group">
@@ -34,17 +53,17 @@ export default function TripCard({ trip, onSelect }) {
                         </div>
                         <div className="flex flex-col">
                             <span className="font-extrabold text-dark text-[17px] tracking-tight leading-tight mb-1">
-                                {operator?.name ?? operator?.companyName ?? 'Unknown'}
+                                {operatorName}
                             </span>
                             <div className="flex items-center gap-2">
                                 <div className="flex items-center gap-0.5 text-yellow-500">
                                     <Star size={12} fill="currentColor" className="text-yellow-400" />
                                     <span className="text-[11px] font-bold text-gray-600">
-                                        {operator?.rating ?? '4.5'}
+                                        {operatorRating != null ? operatorRating : '—'}
                                     </span>
                                 </div>
                                 <span className="px-2.5 py-0.5 rounded-full bg-gray-50 border border-gray-100/70 text-[9px] font-bold text-gray-400 uppercase tracking-widest">
-                                    {trip.busType ?? 'Standard'}
+                                    {busType}
                                 </span>
                             </div>
                         </div>
@@ -53,7 +72,7 @@ export default function TripCard({ trip, onSelect }) {
                     {/* Timeline Section */}
                     <div className="flex-1 flex items-center justify-between gap-4 md:gap-8 px-2 md:px-6 w-full md:w-auto">
                         <div className="text-left md:text-center min-w-[90px]">
-                            <div className="text-2xl font-black text-dark tracking-tight leading-none">{trip.departureTime}</div>
+                            <div className="text-2xl font-black text-dark tracking-tight leading-none">{departureTime}</div>
                             <div className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1.5">{from}</div>
                         </div>
 
@@ -71,7 +90,7 @@ export default function TripCard({ trip, onSelect }) {
                         </div>
 
                         <div className="text-right md:text-center min-w-[90px]">
-                            <div className="text-2xl font-black text-dark tracking-tight leading-none">{trip.arrivalTime}</div>
+                            <div className="text-2xl font-black text-dark tracking-tight leading-none">{arrivalTime}</div>
                             <div className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1.5">{to}</div>
                         </div>
                     </div>

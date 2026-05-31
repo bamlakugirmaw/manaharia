@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { loadBookingFlow, saveBookingFlow } from '../lib/bookingFlow';
 import { Button } from '../components/ui/Button';
 import { ArrowRight, User, Mail, Phone, Info } from 'lucide-react';
 import ProgressStepper from '../components/booking/ProgressStepper';
@@ -11,10 +12,20 @@ export default function PassengerDetails() {
     // selectedSeats is now an array of { label, tripSeatId } objects (from SeatSelection).
     // We keep backward compatibility: if it's still a plain string array (mock flow),
     // we wrap each entry so the rest of the page works uniformly.
-    const { trip, tripId, selectedSeats: rawSeats, totalPrice } = location.state || {};
-    const selectedSeats = (rawSeats ?? []).map(s =>
+    const saved = loadBookingFlow();
+    const flow = location.state ?? saved ?? {};
+    const { trip, tripId, selectedSeats: rawSeats, totalPrice } = flow;
+    const selectedSeats = (rawSeats ?? []).map((s) =>
         typeof s === 'string' ? { label: s, tripSeatId: null } : s
     );
+
+    useEffect(() => {
+        if (!tripId && !trip) {
+            const id = saved?.tripId;
+            if (id) navigate(`/booking/seats/${id}`, { replace: true });
+            else navigate('/search', { replace: true });
+        }
+    }, [tripId, trip, saved, navigate]);
 
     const [formData, setFormData] = useState({
         fullName: '',
@@ -24,21 +35,20 @@ export default function PassengerDetails() {
     });
 
     if (!tripId && !trip) {
-        navigate('/');
         return null;
     }
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        navigate('/booking/payment', {
-            state: {
-                trip,
-                tripId: tripId ?? trip?.id,
-                selectedSeats,
-                totalPrice,
-                passengerDetails: formData,
-            },
-        });
+        const payload = {
+            trip,
+            tripId: tripId ?? trip?.id,
+            selectedSeats,
+            totalPrice,
+            passengerDetails: formData,
+        };
+        saveBookingFlow({ ...payload, step: 'payment' });
+        navigate('/booking/payment', { state: payload });
     };
 
     return (

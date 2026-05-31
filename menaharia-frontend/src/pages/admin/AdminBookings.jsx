@@ -1,16 +1,31 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { Search, Filter, User, Ticket, Calendar, MoreHorizontal } from 'lucide-react';
+import { Search, User, Ticket, Calendar, MoreHorizontal } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import DetailModal, { ModalDataRow } from '../../components/admin/DetailModal';
+import { useBookings } from '../../hooks/useBookings';
+import { tripOrigin, tripDest } from '../../lib/tripHelpers';
 
-const MOCK_BOOKINGS = [
-    { id: 'BKG-1023', passenger: 'Abebe Kebede', email: 'abebe@example.com', trip: 'Addis Ababa → Bahir Dar', date: 'Dec 15, 2025', seat: '12A', amount: 'ETB 1,200', status: 'confirmed' },
-    { id: 'BKG-1024', passenger: 'Tigist Alemu', email: 'tigist@example.com', trip: 'Addis Ababa → Hawassa', date: 'Dec 16, 2025', seat: '4B', amount: 'ETB 850', status: 'confirmed' },
-    { id: 'BKG-1025', passenger: 'Dawit Haile', email: 'dawit@example.com', trip: 'Bahir Dar → Addis Ababa', date: 'Dec 17, 2025', seat: '5C', amount: 'ETB 1,200', status: 'pending' },
-    { id: 'BKG-1026', passenger: 'Sara Tesfaye', email: 'sara@example.com', trip: 'Mekelle → Addis Ababa', date: 'Dec 18, 2025', seat: '1A', amount: 'ETB 1,500', status: 'cancelled' },
-];
+function normaliseBookingRow(b) {
+    const trip = b.trip ?? {};
+    const traveler = b.travelers?.[0] ?? {};
+    const from = tripOrigin(trip);
+    const to = tripDest(trip);
+    return {
+        id: b.id,
+        passenger: traveler.fullName ?? '—',
+        email: traveler.email ?? b.user?.email ?? '—',
+        trip: `${from} → ${to}`,
+        date: trip.date
+            ? new Date(trip.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : '—',
+        seat: traveler.seat?.seatNumber ?? traveler.seatNumber ?? '—',
+        amount: `ETB ${(b.payment?.amount ?? trip.price ?? 0).toLocaleString()}`,
+        status: (b.status ?? 'PENDING').toLowerCase(),
+        _raw: b,
+    };
+}
 
 export default function AdminBookings() {
     const [searchQuery, setSearchQuery] = useState('');
@@ -18,7 +33,14 @@ export default function AdminBookings() {
     const [selectedBooking, setSelectedBooking] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    const filteredBookings = MOCK_BOOKINGS.filter(booking => {
+    const { data: rawBookings = [], isLoading, isError } = useBookings({ limit: 100 });
+
+    const bookings = useMemo(
+        () => (Array.isArray(rawBookings) ? rawBookings : []).map(normaliseBookingRow),
+        [rawBookings]
+    );
+
+    const filteredBookings = bookings.filter((booking) => {
         const matchesSearch =
             booking.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
             booking.passenger.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -37,7 +59,6 @@ export default function AdminBookings() {
     return (
         <div className="space-y-6">
 
-            {/* Search and Filters */}
             <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
                 <div className="relative w-full md:w-96">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
@@ -65,6 +86,17 @@ export default function AdminBookings() {
                 </div>
             </div>
 
+            {isLoading && (
+                <div className="flex justify-center py-16">
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary" />
+                </div>
+            )}
+
+            {isError && (
+                <p className="text-center text-red-500 text-sm py-8">Failed to load bookings. Please try again.</p>
+            )}
+
+            {!isLoading && !isError && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left">
@@ -81,42 +113,40 @@ export default function AdminBookings() {
                         </thead>
                         <tbody className="divide-y divide-gray-50">
                             {filteredBookings.map((booking) => (
-                                <tr key={booking.id} className="hover:bg-gray-50 transition-colors group text-sm">
-                                    <td className="px-6 py-4 font-mono text-xs font-bold text-primary uppercase">
-                                        {booking.id}
+                                <tr key={booking.id} className="hover:bg-gray-50 transition-colors group">
+                                    <td className="px-6 py-4">
+                                        <span className="text-[10px] font-mono text-primary font-bold uppercase tracking-tighter">{booking.id}</span>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 font-bold text-xs">
-                                                {booking.passenger.split(' ').map(n => n[0]).join('')}
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500">
+                                                <User size={14} />
                                             </div>
-                                            <div className="flex flex-col">
-                                                <span className="font-semibold text-gray-900 text-sm">{booking.passenger}</span>
-                                                <span className="text-[9px] text-gray-400 font-mono tracking-tighter uppercase">{booking.email}</span>
+                                            <div>
+                                                <p className="text-sm font-semibold text-gray-900">{booking.passenger}</p>
+                                                <p className="text-xs text-gray-400">{booking.email}</p>
                                             </div>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="flex flex-col">
-                                            <span className="text-gray-900 font-medium">{booking.trip}</span>
-                                            <div className="flex items-center gap-1 text-[10px] text-gray-500 mt-1">
-                                                <Calendar size={10} /> {booking.date}
-                                            </div>
+                                            <span className="text-sm font-semibold text-gray-900">{booking.trip}</span>
+                                            <span className="text-xs text-gray-400 flex items-center gap-1 mt-1">
+                                                <Calendar size={12} /> {booking.date}
+                                            </span>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <Badge variant="outline" className="bg-gray-50 text-gray-600 border-gray-200 font-bold text-[10px] uppercase tracking-widest px-2 py-0.5">
-                                            {booking.seat}
-                                        </Badge>
+                                        <span className="text-sm font-mono font-bold text-gray-700">{booking.seat}</span>
                                     </td>
-                                    <td className="px-6 py-4 font-semibold text-gray-900 text-sm">
-                                        {booking.amount}
+                                    <td className="px-6 py-4">
+                                        <span className="text-sm font-bold text-gray-900">{booking.amount}</span>
                                     </td>
                                     <td className="px-6 py-4">
                                         <Badge
                                             variant={
                                                 booking.status === 'confirmed' ? 'success' :
-                                                    booking.status === 'pending' ? 'warning' : 'destructive'
+                                                    booking.status === 'pending' ? 'blue' : 'destructive'
                                             }
                                             className="font-bold text-[10px] uppercase tracking-widest px-2 py-0.5"
                                         >
@@ -124,7 +154,12 @@ export default function AdminBookings() {
                                         </Badge>
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <Button variant="ghost" size="icon" className="text-gray-400 hover:text-gray-600" onClick={() => handleViewBooking(booking)}>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleViewBooking(booking)}
+                                            className="text-gray-400 hover:text-gray-600"
+                                        >
                                             <MoreHorizontal size={16} />
                                         </Button>
                                     </td>
@@ -133,7 +168,7 @@ export default function AdminBookings() {
                             {filteredBookings.length === 0 && (
                                 <tr>
                                     <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
-                                        No bookings found matching your search.
+                                        No bookings found matching your criteria.
                                     </td>
                                 </tr>
                             )}
@@ -141,42 +176,28 @@ export default function AdminBookings() {
                     </table>
                 </div>
             </div>
+            )}
 
-            {/* Booking Detail Modal */}
             {selectedBooking && (
                 <DetailModal
                     isOpen={isModalOpen}
                     onClose={() => setIsModalOpen(false)}
-                    title={`Booking Details #${selectedBooking.id}`}
+                    title={`Booking ${selectedBooking.id}`}
                     footer={
-                        <div className="flex gap-2">
-                            <Button variant="outline" onClick={() => setIsModalOpen(false)}>Close</Button>
-                            <Button variant="destructive">Cancel Booking</Button>
-                        </div>
+                        <Button variant="outline" onClick={() => setIsModalOpen(false)}>Close</Button>
                     }
                 >
-                    <div className="space-y-6">
-                        <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
-                            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
-                                {selectedBooking.passenger.charAt(0)}
-                            </div>
-                            <div>
-                                <h3 className="font-bold text-gray-900">{selectedBooking.passenger}</h3>
-                                <p className="text-sm text-gray-500">{selectedBooking.email}</p>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <ModalDataRow label="Trip" value={selectedBooking.trip} icon={Ticket} />
-                            <ModalDataRow label="Travel Date" value={selectedBooking.date} icon={Calendar} />
-                            <ModalDataRow label="Seat Number" value={selectedBooking.seat} />
-                            <ModalDataRow label="Payment Status" value={selectedBooking.status} />
-                            <ModalDataRow label="Amount Paid" value={selectedBooking.amount} />
-                        </div>
+                    <div className="space-y-4">
+                        <ModalDataRow label="Passenger" value={selectedBooking.passenger} />
+                        <ModalDataRow label="Email" value={selectedBooking.email} />
+                        <ModalDataRow label="Trip" value={selectedBooking.trip} />
+                        <ModalDataRow label="Travel Date" value={selectedBooking.date} />
+                        <ModalDataRow label="Seat" value={selectedBooking.seat} />
+                        <ModalDataRow label="Amount" value={selectedBooking.amount} />
+                        <ModalDataRow label="Status" value={selectedBooking.status} />
                     </div>
                 </DetailModal>
             )}
         </div>
     );
 }
-

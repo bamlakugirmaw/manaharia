@@ -8,7 +8,7 @@ import {
     CheckCircle, Clock, ChevronLeft, MapPin, PlusCircle, Star,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { useBookings } from '../../hooks/useBookings';
+import { useBookings, useCancelBooking } from '../../hooks/useBookings';
 import { useCreateDispute } from '../../hooks/useDisputes';
 import { cn } from '../../lib/utils';
 
@@ -124,30 +124,18 @@ export default function UserBookings() {
     const navigate = useNavigate();
     const { user } = useAuth();
     const { mutate: createDispute, isPending: filingDispute } = useCreateDispute();
+    const { mutate: cancelBooking, isPending: cancelling } = useCancelBooking();
 
-    // GET /v1/bookings?userId= — fetch the current user's bookings
-    const { data: bookingsResponse, isLoading, isError } = useBookings(
-        user?.id ? { userId: user.id, limit: 50 } : {}
+    // GET /v1/bookings — returns the authenticated traveller's bookings
+    const { data: rawBookings = [], isLoading, isError, refetch } = useBookings(
+        user?.id ? { userId: user.id, limit: 50, enabled: true } : { enabled: false }
     );
-
-    // Backend envelope: { success, data: [...], timestamp }
-    // or plain array, or { data: { data: [...] } } — handle all shapes defensively
-    const rawBookings = (() => {
-        if (!bookingsResponse) return [];
-        // Plain array
-        if (Array.isArray(bookingsResponse)) return bookingsResponse;
-        // { success, data: [...] }
-        if (Array.isArray(bookingsResponse.data)) return bookingsResponse.data;
-        // { success, data: { data: [...] } } — paginated
-        if (Array.isArray(bookingsResponse.data?.data)) return bookingsResponse.data.data;
-        return [];
-    })();
 
     // Normalise backend shape → flat UI shape
     const bookings = rawBookings.map(normaliseBooking);
 
     // Derived stats
-    const completedCount = bookings.filter(b => b.status === 'confirmed' || b.status === 'completed').length;
+    const pendingCount = bookings.filter((b) => b.status === 'pending').length;
     const totalSpent     = bookings.reduce((sum, b) => sum + (b.amount ?? 0), 0);
 
     const [selectedBooking, setSelectedBooking] = useState(null);
@@ -190,17 +178,38 @@ export default function UserBookings() {
     const closeModal = () => { setSelectedBooking(null); setShowChat(false); setChatMsg(''); };
     const openBookingDetail = (b) => { setSelectedBooking(b); setShowChat(false); setChatMsg(''); };
 
+    const canCancelBooking = (b) =>
+        ['pending', 'confirmed', 'paid'].includes((b.status ?? '').toLowerCase());
+
+    const handleCancelBooking = () => {
+        if (!selectedBooking || !canCancelBooking(selectedBooking)) return;
+        if (!window.confirm('Cancel this booking? Refund rules may apply per operator policy.')) return;
+        cancelBooking(selectedBooking.id, {
+            onSuccess: () => closeModal(),
+        });
+    };
+
     return (
         <div className="space-y-6">
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <Card className="p-6 flex items-center gap-4 bg-white border border-gray-100/50 shadow-[0_8px_30px_rgba(0,0,0,0.02)] rounded-3xl">
                     <div className="bg-[#EBFDF5] p-4 rounded-2xl text-[#10B981] shrink-0"><Ticket size={24} /></div>
                     <div className="flex flex-col">
                         <div className="text-2xl font-bold text-gray-900 leading-none mb-1">
-                            {isLoading ? '—' : completedCount}
+                            {isLoading ? '—' : bookings.length}
                         </div>
-                        <div className="text-[13px] font-medium text-gray-400">Completed Trips</div>
+                        <div className="text-[13px] font-medium text-gray-400">Total Bookings</div>
+                    </div>
+                </Card>
+
+                <Card className="p-6 flex items-center gap-4 bg-white border border-gray-100/50 shadow-[0_8px_30px_rgba(0,0,0,0.02)] rounded-3xl">
+                    <div className="bg-amber-50 p-4 rounded-2xl text-amber-500 shrink-0"><Clock size={24} /></div>
+                    <div className="flex flex-col">
+                        <div className="text-2xl font-bold text-gray-900 leading-none mb-1">
+                            {isLoading ? '—' : pendingCount}
+                        </div>
+                        <div className="text-[13px] font-medium text-gray-400">Pending Payment</div>
                     </div>
                 </Card>
 
@@ -239,6 +248,7 @@ export default function UserBookings() {
                         <Ticket size={40} className="text-gray-200 mx-auto mb-4" />
                         <p className="text-gray-500 font-bold">Could not load bookings</p>
                         <p className="text-gray-400 text-sm mt-1">Check your connection and try again.</p>
+                        <Button className="mt-4" onClick={() => refetch()}>Retry</Button>
                     </div>
                 ) : bookings.length === 0 ? (
                     <div className="p-12 text-center">
@@ -254,6 +264,7 @@ export default function UserBookings() {
                                 <th className="px-6 py-4">Operator</th>
                                 <th className="px-6 py-4">Route</th>
                                 <th className="px-6 py-4">Date</th>
+                                <th className="px-6 py-4">Status</th>
                                 <th className="px-6 py-4">Rating</th>
                                 <th className="px-6 py-4 text-right">Amount</th>
                                 <th className="px-6 py-4 text-center">Actions</th>
@@ -266,6 +277,20 @@ export default function UserBookings() {
                                     <td className="px-6 py-4 font-medium">{booking.operator}</td>
                                     <td className="px-6 py-4 text-gray-600">{booking.route}</td>
                                     <td className="px-6 py-4 text-gray-600">{booking.date}</td>
+                                    <td className="px-6 py-4">
+                                        <span
+                                            className={cn(
+                                                'text-[10px] font-bold uppercase px-2.5 py-1 rounded-full',
+                                                booking.status === 'confirmed' || booking.status === 'paid'
+                                                    ? 'bg-emerald-100 text-emerald-700'
+                                                    : booking.status === 'cancelled'
+                                                      ? 'bg-gray-100 text-gray-500'
+                                                      : 'bg-amber-100 text-amber-700'
+                                            )}
+                                        >
+                                            {booking.status}
+                                        </span>
+                                    </td>
                                     <td className="px-6 py-4">
                                         <StarRating bookingId={booking.id} ratings={ratings} setRatings={setRatings} />
                                     </td>
@@ -293,7 +318,7 @@ export default function UserBookings() {
                         {/* Modal Header */}
                         <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 shrink-0">
                             {showChat && (
-                                <button onClick={() => { setShowChat(false); setActiveCmpId(null); }}
+                                <button onClick={() => setShowChat(false)}
                                     className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center transition-colors mr-1">
                                     <ChevronLeft size={17} className="text-gray-500" />
                                 </button>
@@ -421,6 +446,16 @@ export default function UserBookings() {
                                 <Button variant="outline" onClick={closeModal} className="h-10 px-5 rounded-xl text-sm font-semibold border-gray-200">
                                     Close
                                 </Button>
+                                {canCancelBooking(selectedBooking) && (
+                                    <Button
+                                        variant="outline"
+                                        onClick={handleCancelBooking}
+                                        disabled={cancelling}
+                                        className="h-10 px-5 rounded-xl text-sm font-semibold border-rose-200 text-rose-600 hover:bg-rose-50"
+                                    >
+                                        {cancelling ? 'Cancelling…' : 'Cancel Booking'}
+                                    </Button>
+                                )}
                                 <button onClick={openComplaintChat}
                                     className={cn('h-10 px-5 rounded-xl text-sm font-bold flex items-center gap-2 text-white shadow-sm transition-all hover:opacity-90',
                                         existingComplaint ? 'bg-orange-500 shadow-orange-200/60' : 'bg-rose-500 shadow-rose-200/60')}>

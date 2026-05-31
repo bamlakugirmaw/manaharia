@@ -1,32 +1,51 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { Search, Filter, Calendar, MapPin, Bus, X, MoreHorizontal } from 'lucide-react';
-import { Card } from '../../components/ui/Card';
-import { Input } from '../../components/ui/Input';
-import DetailModal, { ModalDataRow } from '../../components/admin/DetailModal';
+import { Search, Calendar, Bus, MoreHorizontal } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import DetailModal, { ModalDataRow } from '../../components/admin/DetailModal';
+import { useAllTrips, useUpdateTrip } from '../../hooks/useTrips';
+import { tripOrigin, tripDest, tripOperatorName } from '../../lib/tripHelpers';
 
-const MOCK_TRIPS = [
-    { id: 'TRIP-001', operator: 'Selam Bus', route: 'Addis Ababa → Bahir Dar', date: 'Dec 15, 2025', occupancy: '70%', revenue: 'ETB 23,800', status: 'scheduled' },
-    { id: 'TRIP-002', operator: 'Sky Bus', route: 'Addis Ababa → Hawassa', date: 'Dec 15, 2025', occupancy: '85%', revenue: 'ETB 19,500', status: 'scheduled' },
-    { id: 'TRIP-003', operator: 'Golden Bus', route: 'Bahir Dar → Mekelle', date: 'Dec 16, 2025', occupancy: '45%', revenue: 'ETB 15,600', status: 'completed' },
-    { id: 'TRIP-004', operator: 'Selam Bus', route: 'Addis Ababa → Jimma', date: 'Dec 17, 2025', occupancy: '90%', revenue: 'ETB 28,200', status: 'scheduled' },
-    { id: 'TRIP-005', operator: 'Sky Bus', route: 'Hawassa → Addis Ababa', date: 'Dec 17, 2025', occupancy: '0%', revenue: 'ETB 0', status: 'cancelled' },
-];
+const STATUS_UI_TO_API = {
+    scheduled: 'SCHEDULED',
+    completed: 'COMPLETED',
+    cancelled: 'CANCELLED',
+};
+
+function normaliseTripRow(t) {
+    const total = t.bus?.totalSeats ?? 0;
+    const available = t.availableSeatCount ?? 0;
+    const filled = total > 0 ? Math.round(((total - available) / total) * 100) : 0;
+    return {
+        id: t.id,
+        operator: tripOperatorName(t),
+        route: `${tripOrigin(t)} → ${tripDest(t)}`,
+        date: t.date
+            ? new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : '—',
+        occupancy: `${filled}%`,
+        revenue: `ETB ${((total - available) * (t.price ?? 0)).toLocaleString()}`,
+        status: (t.status ?? 'SCHEDULED').toLowerCase(),
+        _raw: t,
+    };
+}
 
 export default function AdminTrips() {
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
-    const [trips, setTrips] = useState(MOCK_TRIPS);
-    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [selectedTrip, setSelectedTrip] = useState(null);
     const [isManageModalOpen, setIsManageModalOpen] = useState(false);
 
-    // Create Trip Form State
-    const [newTrip, setNewTrip] = useState({ route: '', operator: '', date: '', price: '' });
+    const { data: rawTrips = [], isLoading, isError } = useAllTrips({ limit: 200 });
+    const { mutate: updateTrip, isPending: updating } = useUpdateTrip();
 
-    const filteredTrips = trips.filter(trip => {
+    const trips = useMemo(
+        () => (Array.isArray(rawTrips) ? rawTrips : []).map(normaliseTripRow),
+        [rawTrips]
+    );
+
+    const filteredTrips = trips.filter((trip) => {
         const matchesSearch =
             trip.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
             trip.operator.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -37,35 +56,27 @@ export default function AdminTrips() {
         return matchesSearch && matchesStatus;
     });
 
-    const handleCreateTrip = () => {
-        const trip = {
-            id: `TRIP-00${trips.length + 1}`,
-            operator: newTrip.operator || 'Selam Bus',
-            route: newTrip.route,
-            date: newTrip.date || 'Dec 25, 2025',
-            occupancy: '0%',
-            revenue: 'ETB 0',
-            status: 'scheduled'
-        };
-        setTrips([trip, ...trips]); // Add to top
-        setIsCreateModalOpen(false);
-        setNewTrip({ route: '', operator: '', date: '', price: '' });
-    };
-
     const handleManage = (trip) => {
         setSelectedTrip(trip);
         setIsManageModalOpen(true);
     };
 
-    const updateStatus = (status) => {
-        setTrips(trips.map(t => t.id === selectedTrip.id ? { ...t, status } : t));
-        setSelectedTrip({ ...selectedTrip, status });
+    const updateStatus = (statusUi) => {
+        if (!selectedTrip) return;
+        const apiStatus = STATUS_UI_TO_API[statusUi];
+        updateTrip(
+            { id: selectedTrip.id, status: apiStatus },
+            {
+                onSuccess: () => {
+                    setSelectedTrip({ ...selectedTrip, status: statusUi });
+                },
+            }
+        );
     };
 
     return (
         <div className="space-y-6 relative">
 
-            {/* Filters Bar */}
             <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
                 <div className="relative w-full md:w-96">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
@@ -93,6 +104,17 @@ export default function AdminTrips() {
                 </div>
             </div>
 
+            {isLoading && (
+                <div className="flex justify-center py-16">
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary" />
+                </div>
+            )}
+
+            {isError && (
+                <p className="text-center text-red-500 text-sm py-8">Failed to load trips.</p>
+            )}
+
+            {!isLoading && !isError && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left">
@@ -131,7 +153,7 @@ export default function AdminTrips() {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <div className="w-full max-w-[100px]">
+                                        <div className="w-full max-w-[100px] mx-auto">
                                             <div className="flex justify-between text-[9px] mb-1">
                                                 <span className="text-gray-400 font-bold uppercase tracking-widest">Filled</span>
                                                 <span className="font-bold text-gray-600">{trip.occupancy}</span>
@@ -139,19 +161,19 @@ export default function AdminTrips() {
                                             <div className="h-1 w-full bg-gray-100 rounded-full overflow-hidden">
                                                 <div
                                                     className={cn(
-                                                        "h-full rounded-full",
-                                                        parseInt(trip.occupancy) > 80 ? "bg-green-500" :
-                                                            parseInt(trip.occupancy) > 40 ? "bg-primary" : "bg-orange-400"
+                                                        'h-full rounded-full',
+                                                        parseInt(trip.occupancy, 10) > 80 ? 'bg-green-500' :
+                                                            parseInt(trip.occupancy, 10) > 40 ? 'bg-primary' : 'bg-orange-400'
                                                     )}
                                                     style={{ width: trip.occupancy }}
-                                                ></div>
+                                                />
                                             </div>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="flex flex-col">
                                             <span className="text-sm font-bold text-gray-900">{trip.revenue}</span>
-                                            <span className="text-[10px] text-gray-400">Total Net</span>
+                                            <span className="text-[10px] text-gray-400">Est. gross</span>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
@@ -188,52 +210,8 @@ export default function AdminTrips() {
                     </table>
                 </div>
             </div>
-
-            {/* Create Trip Modal */}
-            {isCreateModalOpen && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                    <Card className="w-full max-w-md bg-white p-6 relative animate-in fade-in zoom-in duration-200">
-                        <button
-                            onClick={() => setIsCreateModalOpen(false)}
-                            className="absolute right-4 top-4 text-gray-400 hover:text-gray-600"
-                        >
-                            <X size={20} />
-                        </button>
-                        <h2 className="text-xl font-bold mb-1">Create New Trip</h2>
-                        <p className="text-sm text-gray-500 mb-6">Schedule a new trip on the network.</p>
-
-                        <div className="space-y-4">
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">Route</label>
-                                <Input
-                                    placeholder="e.g. Addis Ababa - Bahir Dar"
-                                    value={newTrip.route}
-                                    onChange={(e) => setNewTrip({ ...newTrip, route: e.target.value })}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">Operator</label>
-                                <Input
-                                    placeholder="e.g. Selam Bus"
-                                    value={newTrip.operator}
-                                    onChange={(e) => setNewTrip({ ...newTrip, operator: e.target.value })}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">Date</label>
-                                <Input
-                                    type="date"
-                                    value={newTrip.date}
-                                    onChange={(e) => setNewTrip({ ...newTrip, date: e.target.value })}
-                                />
-                            </div>
-                            <Button className="w-full mt-2" onClick={handleCreateTrip}>Schedule Trip</Button>
-                        </div>
-                    </Card>
-                </div>
             )}
 
-            {/* Manage Trip Modal */}
             {selectedTrip && (
                 <DetailModal
                     isOpen={isManageModalOpen}
@@ -255,15 +233,15 @@ export default function AdminTrips() {
 
                         <div>
                             <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Update Status</h4>
-                            <div className="flex gap-2">
-                                <Button size="sm" variant={selectedTrip.status === 'scheduled' ? 'default' : 'outline'} onClick={() => updateStatus('scheduled')}>Scheduled</Button>
-                                <Button size="sm" variant={selectedTrip.status === 'completed' ? 'success' : 'outline'} onClick={() => updateStatus('completed')}>Completed</Button>
-                                <Button size="sm" variant={selectedTrip.status === 'cancelled' ? 'destructive' : 'outline'} onClick={() => updateStatus('cancelled')}>Cancelled</Button>
+                            <div className="flex gap-2 flex-wrap">
+                                <Button size="sm" disabled={updating} variant={selectedTrip.status === 'scheduled' ? 'default' : 'outline'} onClick={() => updateStatus('scheduled')}>Scheduled</Button>
+                                <Button size="sm" disabled={updating} variant={selectedTrip.status === 'completed' ? 'success' : 'outline'} onClick={() => updateStatus('completed')}>Completed</Button>
+                                <Button size="sm" disabled={updating} variant={selectedTrip.status === 'cancelled' ? 'destructive' : 'outline'} onClick={() => updateStatus('cancelled')}>Cancelled</Button>
                             </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
-                            <ModalDataRow label="Revenue" value={selectedTrip.revenue} />
+                            <ModalDataRow label="Revenue (est.)" value={selectedTrip.revenue} />
                             <ModalDataRow label="Occupancy" value={selectedTrip.occupancy} />
                         </div>
                     </div>
@@ -272,4 +250,3 @@ export default function AdminTrips() {
         </div>
     );
 }
-
