@@ -1,26 +1,23 @@
 import React from 'react';
 import { MapPin, Calendar, Clock, ShieldCheck } from 'lucide-react';
-import { TRIPS, OPERATORS } from '../../data/mock-db';
 
 /**
  * BookingSummary
  *
  * Props:
- *   trip          — full trip object (preferred, from API or parent state)
- *   tripId        — fallback: looked up in mock-db when `trip` is not provided
- *   selectedSeats — array of seat labels e.g. ['A1', 'B2']
+ *   trip          — full trip object (from API or parent state)
+ *   tripId        — optional display fallback when trip is loading
+ *   selectedSeats — array of seat labels or { label } objects
  *   showEncryption — unused legacy prop, kept for API compatibility
  */
 export default function BookingSummary({ trip: tripProp, tripId, selectedSeats = [], showEncryption = false }) {
-    // Prefer the directly-passed trip object; fall back to mock-db lookup.
-    const trip = tripProp
-        ?? TRIPS.find(t => t.id === tripId)
-        ?? TRIPS[0];
+    const trip = tripProp;
 
-    // Operator name: backend embeds operator object; mock uses operatorId lookup.
-    const operatorName = trip?.operator?.name
+    const operatorName = trip?.bus?.operator?.companyName
+        ?? trip?.bus?.operator?.name
         ?? trip?.operator?.companyName
-        ?? OPERATORS.find(op => op.id === trip?.operatorId)?.name
+        ?? trip?.operator?.name
+        ?? trip?.operatorName
         ?? 'Unknown Operator';
 
     // Route fields: backend uses route.origin/destination; mock uses from/to directly.
@@ -28,11 +25,16 @@ export default function BookingSummary({ trip: tripProp, tripId, selectedSeats =
     const to   = trip?.to   ?? trip?.route?.destination ?? '';
 
     if (!trip) {
-        console.error('BookingSummary: No trip data available');
-        return null;
+        return (
+            <div className="bg-white rounded-[2rem] border border-slate-100 p-8 text-sm text-slate-500">
+                Loading trip summary…
+            </div>
+        );
     }
 
-    const seatsToDisplay = selectedSeats.length > 0 ? selectedSeats : ['3-A', '3-B'];
+    const seatsToDisplay = selectedSeats.length > 0
+        ? selectedSeats.map((s) => (typeof s === 'object' ? s.label : s))
+        : [];
     const pricePerSeat   = trip.price ?? 0;
     const subtotal       = pricePerSeat * seatsToDisplay.length;
     const total          = subtotal; // service fee is free

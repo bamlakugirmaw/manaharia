@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { routesApi } from '../api';
 
 export const routeKeys = {
@@ -33,5 +33,24 @@ export function useRoute(routeId) {
         queryFn: async () => unwrapSingle(await routesApi.getRouteById(routeId)),
         enabled: !!routeId,
         staleTime: 30 * 60 * 1000,
+    });
+}
+
+export function useCreateRoute() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (data) => routesApi.createRoute(data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: routeKeys.all }),
+    });
+}
+
+export function useUpdateRoute() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, ...data }) => routesApi.updateRoute(id, data),
+        onSuccess: (_data, { id }) => {
+            qc.invalidateQueries({ queryKey: routeKeys.all });
+            qc.invalidateQueries({ queryKey: routeKeys.detail(id) });
+        },
     });
 }

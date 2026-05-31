@@ -5,10 +5,14 @@ import { Logo } from '../components/ui/Logo';
 import { LayoutDashboard, Ticket, User, LogOut, Settings, History, CreditCard, Bus, Calendar as CalendarIcon, Map, Shield, Users, Activity, MessageSquare } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../contexts/AuthContext';
+import { useProfileImage } from '../hooks/useProfileImage';
+import ProfileAvatar from '../components/profile/ProfileAvatar';
 
 // Sidebar Items for Traveller
 const TRAVELLER_NAV = [
     { name: 'My Bookings', href: '/traveller/bookings', icon: Ticket },
+    { name: 'Upcoming Trips', href: '/traveller/upcoming', icon: CalendarIcon },
+    { name: 'Payment History', href: '/traveller/payments', icon: CreditCard },
     { name: 'Complaints', href: '/traveller/complaints', icon: MessageSquare },
     { name: 'Profile Settings', href: '/traveller/profile', icon: User },
 ];
@@ -18,6 +22,7 @@ const OPERATOR_NAV = [
     { name: 'Overview', href: '/operator/dashboard', icon: LayoutDashboard },
     { name: 'Bus Management', href: '/operator/fleet', icon: Bus },
     { name: 'Bookings', href: '/operator/bookings', icon: Ticket },
+    { name: 'Routes', href: '/operator/routes', icon: Map },
     { name: 'Revenue Reports', href: '/operator/reports', icon: CreditCard },
     { name: 'Disputes', href: '/operator/disputes', icon: Shield },
     { name: 'Payout History', href: '/operator/payouts', icon: History },
@@ -29,14 +34,19 @@ const ADMIN_NAV = [
     { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
     { name: 'Manage Operators', href: '/admin/operators', icon: Bus },
     { name: 'Manage Users', href: '/admin/users', icon: Users },
+    { name: 'All Bookings', href: '/admin/bookings', icon: Ticket },
+    { name: 'All Trips', href: '/admin/trips', icon: CalendarIcon },
+    { name: 'Destinations', href: '/admin/destinations', icon: Map },
     { name: 'Payment Logs', href: '/admin/payments', icon: CreditCard },
     { name: 'System Logs', href: '/admin/logs', icon: Activity },
+    { name: 'Profile Settings', href: '/admin/profile', icon: User },
 ];
 
 export default function DashboardLayout({ children }) {
     const location = useLocation();
     const navigate = useNavigate();
     const { user: authUser, logout } = useAuth();
+    const avatarUrl = useProfileImage();
 
     const handleLogout = () => {
         logout();
@@ -80,12 +90,15 @@ export default function DashboardLayout({ children }) {
                     <div className="p-6 overflow-y-auto">
                         {/* Role Specific Profile Card */}
                         <div className="bg-white rounded-3xl border border-gray-100 p-5 flex flex-col items-center text-center shadow-[0_8px_30px_rgba(0,0,0,0.03)] mb-6">
-                            <div className={cn(
-                                "w-14 h-14 rounded-2xl flex items-center justify-center mb-3 transition-transform hover:scale-105 shadow-inner",
-                                isAdmin ? "bg-blue-500 text-white" : isOperator ? "bg-sky-500 text-white" : "bg-primary text-white"
-                            )}>
-                                {isAdmin ? <Shield size={28} /> : <Bus size={28} />}
-                            </div>
+                            <ProfileAvatar
+                                src={avatarUrl}
+                                name={user.name}
+                                size="md"
+                                className={cn(
+                                    'mb-3 transition-transform hover:scale-105 shadow-inner border-0',
+                                    !avatarUrl && (isAdmin ? 'bg-blue-500 text-white' : isOperator ? 'bg-sky-500 text-white' : 'bg-primary text-white'),
+                                )}
+                            />
                             <h3 className="font-bold text-gray-900 text-base leading-tight">{user.name}</h3>
                             <p className="text-gray-400 text-xs font-semibold mt-1">{user.email}</p>
                         </div>

@@ -4,9 +4,13 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Mail, Phone, MessageCircle, ArrowLeft, Send } from 'lucide-react';
 import { useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { notificationsApi } from '../api/notifications.api';
+import { extractErrorMessage } from '../lib/api';
 
 export default function ContactSupport() {
     const navigate = useNavigate();
+    const { user, isAuthenticated } = useAuth();
     const [formData, setFormData] = useState({
         name: '',
         email: '',
@@ -14,6 +18,8 @@ export default function ContactSupport() {
         message: ''
     });
     const [submitted, setSubmitted] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState('');
 
     const handleChange = (e) => {
         setFormData({
@@ -22,15 +28,31 @@ export default function ContactSupport() {
         });
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        // In a real app, this would send to an API
-        console.log('Form submitted:', formData);
-        setSubmitted(true);
-        setTimeout(() => {
-            setSubmitted(false);
-            setFormData({ name: '', email: '', category: 'general', message: '' });
-        }, 3000);
+        setError('');
+        setSubmitting(true);
+
+        try {
+            if (isAuthenticated) {
+                await notificationsApi.sendNotification({
+                    channel: 'email',
+                    email: formData.email || user?.email,
+                    phone: user?.phone,
+                    subject: `[${formData.category}] Support request from ${formData.name}`,
+                    message: formData.message,
+                });
+            }
+            setSubmitted(true);
+            setTimeout(() => {
+                setSubmitted(false);
+                setFormData({ name: '', email: '', category: 'general', message: '' });
+            }, 3000);
+        } catch (err) {
+            setError(extractErrorMessage(err, 'Could not send your message. Please try again.'));
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
@@ -165,9 +187,14 @@ export default function ContactSupport() {
                                         />
                                     </div>
 
+                                    {error && (
+                                        <p className="text-sm text-red-600 font-medium">{error}</p>
+                                    )}
+
                                     <Button
                                         type="submit"
                                         fullWidth
+                                        disabled={submitting}
                                         className="h-12 bg-primary hover:bg-primary/90 text-white font-semibold rounded-xl"
                                     >
                                         <Send className="w-5 h-5 mr-2" />

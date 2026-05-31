@@ -1,4 +1,4 @@
-import { api, unwrap } from '../lib/api';
+import { api, unwrap, unwrapEnvelope, sanitizeListParams } from '../lib/api';
 
 /**
  * Buses API  (all endpoints require auth)
@@ -19,7 +19,7 @@ import { api, unwrap } from '../lib/api';
  * }} params
  */
 export const listBuses = (params = {}) =>
-    api.get('/buses', { params }).then(unwrap);
+    api.get('/buses', { params: sanitizeListParams(params) }).then(unwrap);
 
 /**
  * @param {string} id
@@ -37,7 +37,7 @@ export const getBusById = (id) =>
  * }} data
  */
 export const createBus = (data) =>
-    api.post('/buses', data).then(unwrap);
+    api.post('/buses', data).then(unwrapEnvelope);
 
 /**
  * @param {string} id

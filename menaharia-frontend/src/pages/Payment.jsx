@@ -1,14 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import chapaLogo from '../assets/chapa-logo.jpg';
 import { Button } from '../components/ui/Button';
 import { ArrowRight } from 'lucide-react';
 import ProgressStepper from '../components/booking/ProgressStepper';
 import BookingSummary from '../components/booking/BookingSummary';
-import { bookingsApi } from '../api/bookings.api';
-import { paymentsApi } from '../api/payments.api';
+import { useCreateBooking } from '../hooks/useBookings';
+import { useAuth } from '../contexts/AuthContext';
+import { extractErrorMessage } from '../lib/api';
+import { fetchTripSeatContext, resolveSelectedSeats } from '../lib/tripSeats';
+import { loadBookingFlow, clearBookingFlow } from '../lib/bookingFlow';
 
-// Payment method → backend enum value
 const METHOD_MAP = {
     chapa: 'CHAPA',
     telebirr: 'TELEBIRR',
@@ -16,25 +18,44 @@ const METHOD_MAP = {
 };
 
 export default function Payment() {
-    const location = useLocation();
+    const loc = useLocation();
     const navigate = useNavigate();
+    const { isAuthenticated } = useAuth();
 
+    const saved = loadBookingFlow();
+    const state = loc.state ?? saved ?? {};
     const {
         trip,
         tripId: stateTripId,
-        selectedSeats = [],   // array of { label, tripSeatId } or plain strings
+        selectedSeats = [],
         totalPrice,
         passengerDetails,
-    } = location.state || {};
+    } = state;
 
     const tripId = stateTripId ?? trip?.id;
 
-    const [loading,       setLoading]       = useState(false);
+    const { mutateAsync: createBooking, isPending: loading } = useCreateBooking();
+
     const [paymentMethod, setPaymentMethod] = useState('chapa');
-    const [errorMsg,      setErrorMsg]      = useState('');
+    const [errorMsg, setErrorMsg] = useState('');
+
+    useEffect(() => {
+        if (!tripId) {
+            navigate('/search');
+            return;
+        }
+        if (!isAuthenticated) {
+            navigate('/login', {
+                state: { from: { pathname: '/booking/payment', state } },
+            });
+            return;
+        }
+        if (!selectedSeats?.length || !passengerDetails) {
+            navigate(`/booking/seats/${tripId}`);
+        }
+    }, [tripId, isAuthenticated, navigate, state, selectedSeats, passengerDetails]);
 
     if (!tripId) {
-        navigate('/');
         return null;
     }
 
@@ -42,87 +63,62 @@ export default function Payment() {
         {
             id: 'chapa',
             name: 'Chapa',
-            description: 'Pay securely with your Card, Telebirr, CBE Birr, and more via Chapa',
+            description: 'Payment gateway coming soon — seats reserved on confirm (pending payment)',
             iconUrl: chapaLogo,
         },
     ];
 
-    const handlePayment = async () => {
-        setLoading(true);
+    const handleConfirmBooking = async () => {
         setErrorMsg('');
 
         try {
-            // ── Step 1: Build travelers array ─────────────────────────────────
-            // Each seat needs a tripSeatId. If it's null (seats API didn't load),
-            // we still send the request — the backend will reject with a clear error.
-            const travelers = selectedSeats.map(seat => {
-                const seatLabel   = typeof seat === 'object' ? seat.label   : seat;
-                const tripSeatId  = typeof seat === 'object' ? seat.tripSeatId : null;
-                return {
-                    tripSeatId:       tripSeatId,
-                    fullName:         passengerDetails?.fullName         ?? '',
-                    email:            passengerDetails?.email            ?? '',
-                    phone:            passengerDetails?.phone            ?? '',
-                    emergencyContact: passengerDetails?.emergencyContact ?? '',
-                    // Keep seatLabel for display purposes (not sent to backend)
-                    _seatLabel: seatLabel,
-                };
-            });
+            const ctx = await fetchTripSeatContext(tripId);
+            const resolved = resolveSelectedSeats(selectedSeats, ctx.seatIdMap);
+            const missing = resolved.filter((s) => !s.tripSeatId);
 
-            // ── Step 2: Create booking ────────────────────────────────────────
-            // POST /v1/bookings — reserves seats, creates booking, inits payment
-            const bookingPayload = {
+            if (missing.length > 0) {
+                setErrorMsg(
+                    ctx.unavailableMessage ??
+                        'Selected seats are no longer available. Go back and choose different seats.'
+                );
+                return;
+            }
+
+            const travelers = resolved.map((seat) => ({
+                tripSeatId: seat.tripSeatId,
+                fullName: passengerDetails?.fullName ?? '',
+                email: passengerDetails?.email ?? '',
+                phone: passengerDetails?.phone ?? '',
+                emergencyContact: passengerDetails?.emergencyContact ?? '',
+            }));
+
+            const booking = await createBooking({
                 tripId,
                 paymentMethod: METHOD_MAP[paymentMethod] ?? 'CHAPA',
-                travelers: travelers.map(({ _seatLabel, ...t }) => t),
-            };
+                travelers,
+            });
 
-            const booking = await bookingsApi.createBooking(bookingPayload);
-            const bookingId = booking.id ?? booking.bookingId;
-
-            // ── Step 3: Initiate payment ──────────────────────────────────────
-            // POST /v1/payments/initiate — returns a payment URL or reference
-            let paymentUrl = null;
-            try {
-                const paymentResult = await paymentsApi.initiatePayment({
-                    method:    METHOD_MAP[paymentMethod] ?? 'CHAPA',
-                    bookingId: bookingId,
-                });
-                paymentUrl = paymentResult?.paymentUrl ?? paymentResult?.checkoutUrl ?? null;
-            } catch (payErr) {
-                // Payment initiation failed but booking was created.
-                // Navigate to ticket page anyway — the booking exists as PENDING.
-                console.warn('Payment initiation failed:', payErr);
+            const bookingId = booking?.id ?? booking?.bookingId;
+            if (!bookingId) {
+                throw new Error('Booking was saved but no booking ID was returned.');
             }
 
-            // ── Step 4: Navigate ──────────────────────────────────────────────
-            // If the gateway returned a redirect URL, open it.
-            // Otherwise go straight to the ticket confirmation page.
-            if (paymentUrl) {
-                window.location.href = paymentUrl;
-            } else {
-                navigate(`/booking/ticket/${bookingId}`, {
-                    state: {
-                        bookingId,
-                        booking,
-                        trip,
-                        tripId,
-                        selectedSeats,
-                        passengerDetails,
-                        totalPrice,
-                    },
-                });
-            }
+            clearBookingFlow();
+
+            navigate(`/booking/ticket/${bookingId}`, {
+                state: {
+                    bookingId,
+                    booking,
+                    trip: ctx.trip ?? trip,
+                    tripId,
+                    selectedSeats: resolved,
+                    passengerDetails,
+                    totalPrice,
+                    paymentSkipped: true,
+                },
+            });
         } catch (err) {
-            const msg =
-                err?.response?.data?.message ??
-                (Array.isArray(err?.response?.data?.message)
-                    ? err.response.data.message.join('. ')
-                    : null) ??
-                'Payment failed. Please try again.';
-            setErrorMsg(Array.isArray(msg) ? msg.join('. ') : msg);
-        } finally {
-            setLoading(false);
+            setErrorMsg(extractErrorMessage(err, 'Could not complete booking. Please try again.'));
         }
     };
 
@@ -132,10 +128,13 @@ export default function Payment() {
 
             <div className="max-w-6xl mx-auto px-6 py-8">
                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-                    {/* Payment Panel */}
                     <div className="lg:col-span-3">
                         <div className="bg-white rounded-2xl shadow-sm p-8">
-                            <h1 className="text-2xl font-bold text-gray-900 mb-6">Select Payment Method</h1>
+                            <h1 className="text-2xl font-bold text-gray-900 mb-2">Confirm Your Booking</h1>
+                            <p className="text-sm text-gray-500 mb-6">
+                                POST /bookings reserves your seats and creates a pending booking. Payment gateway
+                                integration will complete the flow later.
+                            </p>
 
                             {errorMsg && (
                                 <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">
@@ -144,11 +143,12 @@ export default function Payment() {
                             )}
 
                             <div className="space-y-4 mb-8">
-                                {paymentMethods.map(method => {
+                                {paymentMethods.map((method) => {
                                     const isSelected = paymentMethod === method.id;
                                     return (
                                         <button
                                             key={method.id}
+                                            type="button"
                                             onClick={() => setPaymentMethod(method.id)}
                                             className={`w-full p-4 border-2 rounded-xl flex items-center gap-4 transition-all ${
                                                 isSelected
@@ -157,59 +157,45 @@ export default function Payment() {
                                             }`}
                                         >
                                             <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 bg-[#0B1536] overflow-hidden shadow-sm border border-gray-100 p-1">
-                                                <img src={method.iconUrl} alt={method.name} className="w-full h-full object-contain" />
+                                                <img
+                                                    src={method.iconUrl}
+                                                    alt={method.name}
+                                                    className="w-full h-full object-contain"
+                                                />
                                             </div>
                                             <div className="flex-1 text-left">
                                                 <div className="font-bold text-gray-900 text-base">{method.name}</div>
                                                 <div className="text-sm text-gray-600">{method.description}</div>
-                                            </div>
-                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'border-[#0EA5E9]' : 'border-gray-300'}`}>
-                                                {isSelected && <div className="w-3 h-3 rounded-full bg-[#0EA5E9]" />}
                                             </div>
                                         </button>
                                     );
                                 })}
                             </div>
 
-                            {/* Instructions */}
-                            <div className="bg-gray-50 rounded-xl p-6">
-                                <h3 className="font-bold text-base text-gray-900 mb-4">Payment Instructions</h3>
-                                <div className="space-y-3">
-                                    {[
-                                        'Click "Proceed to Payment" below',
-                                        `You will be redirected to ${paymentMethods.find(m => m.id === paymentMethod)?.name} payment page`,
-                                        'Complete your transaction securely on the Chapa gateway',
-                                        'You will receive confirmation via SMS and email',
-                                    ].map((step, i) => (
-                                        <div key={i} className="flex items-start gap-3">
-                                            <div className="w-6 h-6 bg-[#0EA5E9] text-white rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0">
-                                                {i + 1}
-                                            </div>
-                                            <p className="text-sm text-gray-700 pt-0.5">{step}</p>
-                                        </div>
-                                    ))}
-                                </div>
+                            <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 text-sm text-amber-800 mb-6">
+                                Stale reservations are released by the backend job{' '}
+                                <code className="text-xs">POST /jobs/expire-seat-reservations</code>. Complete payment
+                                when the gateway is enabled.
                             </div>
 
                             <Button
                                 fullWidth
-                                className="h-12 bg-[#0EA5E9] hover:bg-[#0284C7] text-white font-semibold text-sm rounded-lg shadow-sm transition-colors mt-6"
-                                onClick={handlePayment}
-                                disabled={loading}
+                                className="h-12 bg-[#0EA5E9] hover:bg-[#0284C7] text-white font-semibold text-sm rounded-lg"
+                                onClick={handleConfirmBooking}
+                                disabled={loading || !isAuthenticated}
                                 isLoading={loading}
                             >
-                                {loading ? 'Processing Payment...' : `Pay ETB ${totalPrice?.toLocaleString() ?? 0}`}
+                                {loading ? 'Reserving seats…' : `Confirm Booking — ETB ${totalPrice?.toLocaleString() ?? 0}`}
                                 {!loading && <ArrowRight className="w-4 h-4 ml-2" />}
                             </Button>
                         </div>
                     </div>
 
-                    {/* Booking Summary Sidebar */}
                     <div className="lg:col-span-2">
                         <BookingSummary
                             trip={trip}
                             tripId={tripId}
-                            selectedSeats={selectedSeats.map(s => (typeof s === 'object' ? s.label : s))}
+                            selectedSeats={selectedSeats.map((s) => (typeof s === 'object' ? s.label : s))}
                             showEncryption
                         />
                     </div>

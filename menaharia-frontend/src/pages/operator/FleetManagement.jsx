@@ -2,12 +2,16 @@ import { useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
-import { Plus, Bus, Settings, AlertTriangle, X } from 'lucide-react';
+import { Plus, Bus, Settings, AlertTriangle, X, LayoutGrid } from 'lucide-react';
 import { Input } from '../../components/ui/Input';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBuses } from '../../hooks/useBuses';
+import { useSeats } from '../../hooks/useSeats';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { busesApi } from '../../api/buses.api';
+import { seatsApi } from '../../api/seats.api';
+import { buildSeatDefinitionsForBus } from '../../lib/seatLayout';
+import { extractErrorMessage } from '../../lib/api';
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 function useCreateBus() {
@@ -41,6 +45,89 @@ const statusLabel = (s) => {
     return 'Inactive';
 };
 
+function BusFleetCard({ bus, onEdit }) {
+    const qc = useQueryClient();
+    const { data: seats = [], isLoading: seatsLoading } = useSeats(bus.id);
+    const [seeding, setSeeding] = useState(false);
+    const [seedError, setSeedError] = useState('');
+
+    const totalSeats = parseInt(bus.totalSeats, 10) || 0;
+    const needsSeats = !seatsLoading && seats.length === 0 && totalSeats > 0;
+
+    const handleGenerateSeats = async () => {
+        setSeeding(true);
+        setSeedError('');
+        try {
+            await seatsApi.createSeatBatch({
+                busId: bus.id,
+                seats: buildSeatDefinitionsForBus(totalSeats),
+            });
+            qc.invalidateQueries({ queryKey: ['seats', 'list', { busId: bus.id }] });
+        } catch (err) {
+            setSeedError(extractErrorMessage(err, 'Failed to generate seats.'));
+        } finally {
+            setSeeding(false);
+        }
+    };
+
+    return (
+        <Card className="overflow-hidden bg-white border-none shadow-[0_8px_30px_rgba(0,0,0,0.02)] rounded-2xl hover:shadow-md transition-shadow">
+            <div className="bg-gray-50/50 p-4 border-b border-gray-50 flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 bg-white border border-gray-100 rounded-lg flex items-center justify-center text-gray-400">
+                        <Bus size={14} />
+                    </div>
+                    <span className="font-bold text-gray-900 text-sm font-mono">{bus.plateNumber}</span>
+                </div>
+                <Badge variant={statusVariant(bus.status)} className="text-[9px] uppercase tracking-wider font-bold">
+                    {statusLabel(bus.status)}
+                </Badge>
+            </div>
+            <div className="p-4 space-y-2.5 text-[11px] font-semibold">
+                <div className="flex justify-between items-center">
+                    <span className="text-gray-400">Make / Model</span>
+                    <span className="text-gray-700">{bus.make ?? '—'}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                    <span className="text-gray-400">Total Seats</span>
+                    <span className="text-gray-900 font-bold">{bus.totalSeats ?? '—'}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                    <span className="text-gray-400">Layout seats</span>
+                    <span className="text-gray-900 font-bold">
+                        {seatsLoading ? '…' : seats.length}
+                    </span>
+                </div>
+                <div className="flex justify-between items-center">
+                    <span className="text-gray-400">Bus ID</span>
+                    <span className="text-gray-400 font-mono text-[10px]">{bus.id}</span>
+                </div>
+                {seedError && <p className="text-[10px] text-red-600">{seedError}</p>}
+                <div className="pt-3 space-y-2">
+                    {needsSeats && (
+                        <Button
+                            variant="outline"
+                            className="h-8 text-[10px] font-bold w-full gap-1.5"
+                            onClick={handleGenerateSeats}
+                            disabled={seeding}
+                        >
+                            <LayoutGrid size={12} />
+                            {seeding ? 'Generating…' : 'Generate seats'}
+                        </Button>
+                    )}
+                    <Button
+                        variant="ghost"
+                        className="h-8 text-[10px] font-bold bg-gray-50 text-gray-600 hover:bg-primary hover:text-white rounded-lg transition-colors w-full"
+                        onClick={() => onEdit({ ...bus })}
+                    >
+                        Edit Details
+                    </Button>
+                </div>
+            </div>
+        </Card>
+    );
+}
+
 export default function FleetManagement() {
     const { user } = useAuth();
     const operatorId = user?.operatorId ?? null;
@@ -53,17 +140,54 @@ export default function FleetManagement() {
     const [editingBus,  setEditingBus]  = useState(null);
 
     const [newBus, setNewBus] = useState({ plateNumber: '', make: '', totalSeats: '', status: 'ACTIVE' });
+    const [addError, setAddError] = useState('');
+    const [seedingSeats, setSeedingSeats] = useState(false);
 
     const handleAdd = () => {
         if (!operatorId) return;
+        setAddError('');
+        const totalSeats = parseInt(newBus.totalSeats, 10) || 0;
+        if (!newBus.plateNumber || !newBus.make || totalSeats < 1) {
+            setAddError('Plate, make, and seat count are required.');
+            return;
+        }
         createBus({
             operatorId,
             plateNumber: newBus.plateNumber,
             make:        newBus.make,
-            totalSeats:  parseInt(newBus.totalSeats) || 0,
+            totalSeats,
             status:      newBus.status,
         }, {
-            onSuccess: () => { setIsAddOpen(false); setNewBus({ plateNumber: '', make: '', totalSeats: '', status: 'ACTIVE' }); },
+            onSuccess: async (res) => {
+                const bus = res?.data ?? res;
+                const busId = bus?.id;
+                if (busId) {
+                    setSeedingSeats(true);
+                    try {
+                        await seatsApi.createSeatBatch({
+                            busId,
+                            seats: buildSeatDefinitionsForBus(totalSeats),
+                        });
+                    } catch (seatErr) {
+                        setAddError(
+                            extractErrorMessage(
+                                seatErr,
+                                'Bus created but seat layout failed. Add seats manually or retry from fleet.'
+                            )
+                        );
+                        setSeedingSeats(false);
+                        return;
+                    }
+                    setSeedingSeats(false);
+                }
+                setIsAddOpen(false);
+                setNewBus({ plateNumber: '', make: '', totalSeats: '', status: 'ACTIVE' });
+                setAddError('');
+                window.alert(
+                    'Bus and seat layout saved. Create a new trip schedule for this bus so travellers can book (trip seats are materialized when the trip is created).'
+                );
+            },
+            onError: (err) => setAddError(extractErrorMessage(err, 'Failed to add bus.')),
         });
     };
 
@@ -132,41 +256,8 @@ export default function FleetManagement() {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {buses.map(bus => (
-                        <Card key={bus.id} className="overflow-hidden bg-white border-none shadow-[0_8px_30px_rgba(0,0,0,0.02)] rounded-2xl hover:shadow-md transition-shadow">
-                            <div className="bg-gray-50/50 p-4 border-b border-gray-50 flex justify-between items-center">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-7 h-7 bg-white border border-gray-100 rounded-lg flex items-center justify-center text-gray-400">
-                                        <Bus size={14} />
-                                    </div>
-                                    <span className="font-bold text-gray-900 text-sm font-mono">{bus.plateNumber}</span>
-                                </div>
-                                <Badge variant={statusVariant(bus.status)} className="text-[9px] uppercase tracking-wider font-bold">
-                                    {statusLabel(bus.status)}
-                                </Badge>
-                            </div>
-                            <div className="p-4 space-y-2.5 text-[11px] font-semibold">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-gray-400">Make / Model</span>
-                                    <span className="text-gray-700">{bus.make ?? '—'}</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-gray-400">Total Seats</span>
-                                    <span className="text-gray-900 font-bold">{bus.totalSeats ?? '—'}</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-gray-400">Bus ID</span>
-                                    <span className="text-gray-400 font-mono text-[10px]">{bus.id}</span>
-                                </div>
-                                <div className="pt-3">
-                                    <Button variant="ghost"
-                                        className="h-8 text-[10px] font-bold bg-gray-50 text-gray-600 hover:bg-primary hover:text-white rounded-lg transition-colors w-full"
-                                        onClick={() => setEditingBus({ ...bus })}>
-                                        Edit Details
-                                    </Button>
-                                </div>
-                            </div>
-                        </Card>
+                    {buses.map((bus) => (
+                        <BusFleetCard key={bus.id} bus={bus} onEdit={setEditingBus} />
                     ))}
                 </div>
             )}
@@ -196,8 +287,11 @@ export default function FleetManagement() {
                                         onChange={e => setNewBus(p => ({ ...p, totalSeats: e.target.value }))} />
                                 </div>
                             </div>
-                            <Button className="w-full mt-6 bg-primary" onClick={handleAdd} disabled={creating}>
-                                {creating ? 'Adding…' : 'Add Vehicle'}
+                            {addError && (
+                                <p className="text-sm text-red-600">{addError}</p>
+                            )}
+                            <Button className="w-full mt-6 bg-primary" onClick={handleAdd} disabled={creating || seedingSeats}>
+                                {creating || seedingSeats ? (seedingSeats ? 'Creating seats…' : 'Adding…') : 'Add Vehicle'}
                             </Button>
                         </div>
                     </Card>

@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
-import { Building, Phone, Mail, CreditCard, Lock, Upload, Check } from 'lucide-react';
+import { Building, Phone, Mail, CreditCard, Lock, Check } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useOperator } from '../../hooks/useOperators';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { operatorsApi } from '../../api/operators.api';
 import { operatorKeys } from '../../hooks/useOperators';
+import ProfileAvatarUpload from '../../components/profile/ProfileAvatarUpload';
 
 function useUpdateOperator() {
     const qc = useQueryClient();
@@ -17,11 +18,12 @@ function useUpdateOperator() {
 }
 
 export default function OperatorSettings() {
-    const { user, changePassword } = useAuth();
+    const { user, changePassword, setAvatarUrl } = useAuth();
     const operatorId = user?.operatorId ?? null;
 
-    const fileInputRef = useRef(null);
-    const [logo, setLogo] = useState(() => localStorage.getItem('operatorLogo') || null);
+    const [logo, setLogo] = useState(null);
+    const [logoError, setLogoError] = useState('');
+    const [logoSuccess, setLogoSuccess] = useState(false);
 
     // ── Fetch operator data ───────────────────────────────────────────────────
     const { data: rawOperator, isLoading: opLoading } = useOperator(operatorId);
@@ -44,10 +46,46 @@ export default function OperatorSettings() {
                 companyEmail: operator.companyEmail ?? '',
                 address:      operator.address      ?? '',
             });
+            setLogo(operator.logo ?? null);
         }
     }, [operator]);
 
-    const { mutate: updateOp } = useUpdateOperator();
+    const { mutateAsync: updateOp } = useUpdateOperator();
+
+    const persistLogo = async (logoUrl) => {
+        if (!operatorId) throw new Error('Operator profile not found.');
+        await updateOp({ id: operatorId, logo: logoUrl || '' });
+        setLogo(logoUrl || null);
+        setAvatarUrl(logoUrl || null);
+    };
+
+    const handleLogoUploaded = async ({ url }) => {
+        setLogoError('');
+        setLogoSuccess(false);
+        try {
+            await persistLogo(url);
+            setLogoSuccess(true);
+            setTimeout(() => setLogoSuccess(false), 3000);
+        } catch (err) {
+            const msg = err?.response?.data?.message ?? err?.message ?? 'Logo update failed.';
+            setLogoError(Array.isArray(msg) ? msg.join('. ') : msg);
+            throw err;
+        }
+    };
+
+    const handleLogoRemove = async () => {
+        setLogoError('');
+        setLogoSuccess(false);
+        try {
+            await persistLogo('');
+            setLogoSuccess(true);
+            setTimeout(() => setLogoSuccess(false), 3000);
+        } catch (err) {
+            const msg = err?.response?.data?.message ?? err?.message ?? 'Logo removal failed.';
+            setLogoError(Array.isArray(msg) ? msg.join('. ') : msg);
+            throw err;
+        }
+    };
 
     const handleSaveProfile = () => {
         if (!operatorId) return;
@@ -106,50 +144,35 @@ export default function OperatorSettings() {
         }
     };
 
-    // ── Logo ──────────────────────────────────────────────────────────────────
-    const handleLogoUpload = (e) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setLogo(reader.result);
-                localStorage.setItem('operatorLogo', reader.result);
-            };
-            reader.readAsDataURL(file);
-        }
-    };
-    const handleLogoRemove = () => {
-        setLogo(null);
-        localStorage.removeItem('operatorLogo');
-        if (fileInputRef.current) fileInputRef.current.value = '';
-    };
-
+    // ── Logo (upload → PATCH /operators/:id) ─────────────────────────────────
     const displayName = operator?.companyName ?? operator?.name ?? user?.name ?? 'Operator';
 
     return (
         <div className="space-y-8 max-w-4xl mx-auto">
             {/* Profile Header */}
             <Card className="p-6 border-none shadow-sm flex flex-col md:flex-row items-center gap-6">
-                <div className="w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center text-primary text-2xl font-bold border-4 border-white shadow-sm overflow-hidden">
-                    {logo
-                        ? <img src={logo} alt="Company Logo" className="w-full h-full object-cover" />
-                        : displayName.slice(0, 2).toUpperCase()
-                    }
-                </div>
+                <ProfileAvatarUpload
+                    value={logo}
+                    name={displayName}
+                    folder="operators"
+                    uploadLabel="Change Logo"
+                    removeLabel="Remove Logo"
+                    onUploaded={handleLogoUploaded}
+                    onRemoved={handleLogoRemove}
+                />
                 <div className="flex-1 text-center md:text-left">
                     <h2 className="text-xl font-bold">{opLoading ? '…' : displayName}</h2>
                     <p className="text-gray-500">
                         {operator?.status ? `${operator.status} Operator` : 'Verified Operator'}
                     </p>
-                    <div className="flex justify-center md:justify-start gap-3 mt-4">
-                        <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleLogoUpload} />
-                        <Button size="sm" onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2">
-                            <Upload size={16} /> Change Logo
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={handleLogoRemove} className="text-red-500 hover:text-red-600 hover:bg-red-50 border-red-100">
-                            Remove
-                        </Button>
-                    </div>
+                    {logoError && (
+                        <p className="mt-3 text-sm text-red-600">{logoError}</p>
+                    )}
+                    {logoSuccess && (
+                        <p className="mt-3 text-sm text-green-700 flex items-center justify-center md:justify-start gap-1">
+                            <Check size={14} /> Logo updated successfully!
+                        </p>
+                    )}
                 </div>
             </Card>
 

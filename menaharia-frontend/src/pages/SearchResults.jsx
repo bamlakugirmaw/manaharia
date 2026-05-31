@@ -3,10 +3,25 @@ import { useState, useEffect, useMemo } from 'react';
 import TripCard from '../components/tickets/TripCard';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
-import { Bus, Check, Sparkles, MapPin, Calendar, Search, ChevronUp, ChevronDown, RefreshCw, Clock, ArrowUpDown, Star, TrendingUp } from 'lucide-react';
+import {
+    Bus, Check, Sparkles, MapPin, Calendar, Search,
+    ChevronUp, ChevronDown, RefreshCw, Clock, ArrowUpDown, Star, TrendingUp,
+} from 'lucide-react';
+import { useAllTrips } from '../hooks/useTrips';
+import { useRoutes } from '../hooks/useRoutes';
 import { LOCATIONS } from '../data/mock-db';
-import { useTrips } from '../hooks/useTrips';
+import { tripOrigin, tripDest, tripOperatorName } from '../lib/tripHelpers';
 import heroBg from '../assets/hero-bus-bg.png';
+
+const tripOperatorId = (t) =>
+    t?.bus?.operator?.id ?? t?.bus?.operatorId ?? t?.operator?.id ?? t?.operatorId ?? '';
+
+// Extract hour from ISO datetime or "HH:MM"
+const isoHour = (s) => {
+    if (!s) return -1;
+    const part = s.includes('T') ? s.split('T')[1] : s;
+    return parseInt(part.split(':')[0], 10);
+};
 
 export default function SearchResults() {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -16,12 +31,10 @@ export default function SearchResults() {
     const to   = searchParams.get('to')   || '';
     const date = searchParams.get('date') || '';
 
-    // Local form states (inline search bar)
     const [fromVal, setFromVal] = useState(from);
     const [toVal,   setToVal]   = useState(to);
     const [dateVal, setDateVal] = useState(date);
 
-    // Client-side filter / sort states
     const [selectedTime,      setSelectedTime]      = useState('');
     const [selectedOperators, setSelectedOperators] = useState([]);
     const [sortBy,            setSortBy]            = useState('earliest');
@@ -29,75 +42,105 @@ export default function SearchResults() {
     const [timeOpen,          setTimeOpen]          = useState(true);
     const [operatorsOpen,     setOperatorsOpen]     = useState(true);
 
-    // Sync form fields when URL params change (e.g. browser back/forward)
     useEffect(() => {
         setFromVal(from);
         setToVal(to);
         setDateVal(date);
     }, [from, to, date]);
 
-    // ── Fetch trips from backend ──────────────────────────────────────────────
-    // GET /v1/trips?origin=&destination=&date= (public endpoint)
-    const { data: tripsResponse, isLoading, isError } = useTrips({
-        origin:      from || undefined,
-        destination: to   || undefined,
-        date:        date || undefined,
-        limit:       100,
+    // ── Fetch all scheduled trips from every operator (public GET /trips) ─────
+    const { data: rawTrips = [], isLoading, isError, refetch } = useAllTrips({
+        ...(from ? { origin: from } : {}),
+        ...(to ? { destination: to } : {}),
+        ...(date ? { date } : {}),
+        limit: 100,
+        status: 'SCHEDULED',
     });
 
-    // Backend returns { data: [...], total, page, limit } or just an array.
-    // Normalise to always be an array.
-    const rawTrips = useMemo(() => {
-        if (!tripsResponse) return [];
-        return Array.isArray(tripsResponse) ? tripsResponse : (tripsResponse.data ?? []);
-    }, [tripsResponse]);
+    const { data: apiRoutes = [] } = useRoutes({ limit: 100 });
+
+    // Location options: routes catalog + trip cities (fallback to mock list)
+    const locations = useMemo(() => {
+        const set = new Set();
+        apiRoutes.forEach((r) => {
+            if (r.origin) set.add(r.origin);
+            if (r.destination) set.add(r.destination);
+        });
+        rawTrips.forEach((t) => {
+            const o = tripOrigin(t);
+            const d = tripDest(t);
+            if (o) set.add(o);
+            if (d) set.add(d);
+        });
+        const fromApi = [...set].sort();
+        return fromApi.length > 0 ? fromApi : LOCATIONS;
+    }, [apiRoutes, rawTrips]);
 
     // ── Client-side filtering + sorting ──────────────────────────────────────
-    // Filtering by time band and operator is done locally so the UI stays
-    // instant — no extra network round-trips for each filter toggle.
     const trips = useMemo(() => {
         let filtered = [...rawTrips];
+
+        // Route filter using backend field names
+        if (from) {
+            filtered = filtered.filter(t =>
+                tripOrigin(t).toLowerCase().includes(from.toLowerCase())
+            );
+        }
+        if (to) {
+            filtered = filtered.filter(t =>
+                tripDest(t).toLowerCase().includes(to.toLowerCase())
+            );
+        }
+
+        // Date filter — trip.date is a full ISO string e.g. "2026-04-30T00:00:00.000Z"
+        if (date) {
+            filtered = filtered.filter(t => {
+                if (!t.date) return true;
+                return t.date.startsWith(date);
+            });
+        }
 
         // Time band filter
         if (selectedTime) {
             filtered = filtered.filter(t => {
-                const hour = parseInt((t.departureTime || '').split(':')[0], 10);
-                if (selectedTime === 'Before 6:00 AM')      return hour < 6;
-                if (selectedTime === '6:00 AM - 12:00 PM')  return hour >= 6  && hour < 12;
-                if (selectedTime === '12:00 PM - 6:00 PM')  return hour >= 12 && hour < 18;
-                if (selectedTime === 'After 6:00 PM')       return hour >= 18;
+                const h = isoHour(t.departureTime);
+                if (selectedTime === 'Before 6:00 AM')      return h >= 0 && h < 6;
+                if (selectedTime === '6:00 AM - 12:00 PM')  return h >= 6  && h < 12;
+                if (selectedTime === '12:00 PM - 6:00 PM')  return h >= 12 && h < 18;
+                if (selectedTime === 'After 6:00 PM')       return h >= 18;
                 return true;
             });
         }
 
-        // Operator filter — backend trip has operator.id or operatorId
+        // Operator filter
         if (selectedOperators.length > 0) {
-            filtered = filtered.filter(t => {
-                const opId = t.operator?.id ?? t.operatorId ?? '';
-                return selectedOperators.includes(opId);
-            });
+            filtered = filtered.filter(t => selectedOperators.includes(tripOperatorId(t)));
         }
 
         // Sorting
-        if (sortBy === 'earliest')   filtered.sort((a, b) => (a.departureTime ?? '').localeCompare(b.departureTime ?? ''));
-        if (sortBy === 'latest')     filtered.sort((a, b) => (b.departureTime ?? '').localeCompare(a.departureTime ?? ''));
+        if (sortBy === 'earliest')   filtered.sort((a, b) => isoHour(a.departureTime) - isoHour(b.departureTime));
+        if (sortBy === 'latest')     filtered.sort((a, b) => isoHour(b.departureTime) - isoHour(a.departureTime));
         if (sortBy === 'price-low')  filtered.sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
         if (sortBy === 'price-high') filtered.sort((a, b) => (b.price ?? 0) - (a.price ?? 0));
-        if (sortBy === 'rating')     filtered.sort((a, b) => ((b.operator?.rating ?? 0) - (a.operator?.rating ?? 0)));
+        if (sortBy === 'rating') {
+            filtered.sort((a, b) =>
+                (b.bus?.operator?.rating ?? 0) - (a.bus?.operator?.rating ?? 0)
+            );
+        }
 
         return filtered;
-    }, [rawTrips, selectedTime, selectedOperators, sortBy]);
+    }, [rawTrips, from, to, date, selectedTime, selectedOperators, sortBy]);
 
-    // Derive unique operators from the fetched trips for the filter sidebar
+    // Operators present in the current filtered result set
     const operatorsInResults = useMemo(() => {
         const seen = new Map();
-        rawTrips.forEach(t => {
-            const id   = t.operator?.id   ?? t.operatorId ?? '';
-            const name = t.operator?.name ?? t.operatorName ?? id;
-            if (id && !seen.has(id)) seen.set(id, { id, name });
+        trips.forEach((t) => {
+            const id = tripOperatorId(t);
+            const name = tripOperatorName(t);
+            if (id && !seen.has(id)) seen.set(id, { id, name: name || id });
         });
-        return [...seen.values()];
-    }, [rawTrips]);
+        return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
+    }, [trips]);
 
     const SORT_OPTIONS = [
         { value: 'earliest',   label: 'Departure: Earliest First', icon: Clock },
@@ -108,9 +151,9 @@ export default function SearchResults() {
     ];
     const activeSortLabel = SORT_OPTIONS.find(o => o.value === sortBy)?.label ?? 'Sort By';
 
-    const handleTimeSelect = (time) => setSelectedTime(prev => prev === time ? '' : time);
-    const handleOperatorSelect = (opId) => setSelectedOperators(prev =>
-        prev.includes(opId) ? prev.filter(id => id !== opId) : [...prev, opId]
+    const handleTimeSelect     = (t)   => setSelectedTime(prev => prev === t ? '' : t);
+    const handleOperatorSelect = (id)  => setSelectedOperators(prev =>
+        prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
     const handleSwap = () => { setFromVal(toVal); setToVal(fromVal); };
     const clearFilters = () => { setSelectedTime(''); setSelectedOperators([]); };
@@ -153,13 +196,18 @@ export default function SearchResults() {
 
                     {/* Inline Search Bar */}
                     <form onSubmit={handleSearchSubmit} className="flex flex-col lg:flex-row items-center gap-3 bg-white p-3 rounded-3xl shadow-sm border border-gray-100/90 w-full max-w-5xl">
+                        {/* FROM */}
                         <div className="flex-1 w-full flex items-center gap-3 px-4 py-1.5 border-r border-gray-100/70">
                             <MapPin size={20} className="text-blue-500 stroke-[2] shrink-0" />
                             <div className="flex-1 flex flex-col min-w-0">
                                 <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">FROM</span>
-                                <select className="w-full bg-transparent border-none p-0 text-[13px] font-bold text-gray-700 focus:ring-0 outline-none appearance-none cursor-pointer" value={fromVal} onChange={e => setFromVal(e.target.value)} required>
+                                <select
+                                    className="w-full bg-transparent border-none p-0 text-[13px] font-bold text-gray-700 focus:ring-0 outline-none appearance-none cursor-pointer"
+                                    value={fromVal}
+                                    onChange={e => setFromVal(e.target.value)}
+                                >
                                     <option value="">Departure location</option>
-                                    {LOCATIONS.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                                    {locations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
                                 </select>
                             </div>
                         </div>
@@ -168,22 +216,33 @@ export default function SearchResults() {
                             <span className="text-gray-500 font-extrabold text-base leading-none">⇄</span>
                         </button>
 
+                        {/* TO */}
                         <div className="flex-1 w-full flex items-center gap-3 px-4 py-1.5 border-r border-gray-100/70">
                             <MapPin size={20} className="text-blue-500 stroke-[2] shrink-0" />
                             <div className="flex-1 flex flex-col min-w-0">
                                 <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">TO</span>
-                                <select className="w-full bg-transparent border-none p-0 text-[13px] font-bold text-gray-700 focus:ring-0 outline-none appearance-none cursor-pointer" value={toVal} onChange={e => setToVal(e.target.value)} required>
+                                <select
+                                    className="w-full bg-transparent border-none p-0 text-[13px] font-bold text-gray-700 focus:ring-0 outline-none appearance-none cursor-pointer"
+                                    value={toVal}
+                                    onChange={e => setToVal(e.target.value)}
+                                >
                                     <option value="">Destination location</option>
-                                    {LOCATIONS.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                                    {locations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
                                 </select>
                             </div>
                         </div>
 
+                        {/* DATE */}
                         <div className="flex-1 w-full flex items-center gap-3 px-4 py-1.5 border-r border-gray-100/70">
                             <Calendar size={20} className="text-blue-500 stroke-[2] shrink-0" />
                             <div className="flex-1 flex flex-col min-w-0">
                                 <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">DATE</span>
-                                <input type="date" className="w-full bg-transparent border-none p-0 text-[13px] font-bold text-gray-700 focus:ring-0 outline-none cursor-pointer" value={dateVal} onChange={e => setDateVal(e.target.value)} required />
+                                <input
+                                    type="date"
+                                    className="w-full bg-transparent border-none p-0 text-[13px] font-bold text-gray-700 focus:ring-0 outline-none cursor-pointer"
+                                    value={dateVal}
+                                    onChange={e => setDateVal(e.target.value)}
+                                />
                             </div>
                         </div>
 
@@ -212,7 +271,10 @@ export default function SearchResults() {
                                     <div className="space-y-4 pl-0.5">
                                         {['Before 6:00 AM', '6:00 AM - 12:00 PM', '12:00 PM - 6:00 PM', 'After 6:00 PM'].map(time => (
                                             <label key={time} className="flex items-center gap-3 text-xs font-bold text-gray-500 hover:text-dark transition-colors cursor-pointer group">
-                                                <div className={`w-5 h-5 rounded-full border transition-all flex items-center justify-center ${selectedTime === time ? 'border-blue-500 bg-blue-500' : 'border-gray-300 bg-white'}`} onClick={e => { e.preventDefault(); handleTimeSelect(time); }}>
+                                                <div
+                                                    className={`w-5 h-5 rounded-full border transition-all flex items-center justify-center ${selectedTime === time ? 'border-blue-500 bg-blue-500' : 'border-gray-300 bg-white'}`}
+                                                    onClick={e => { e.preventDefault(); handleTimeSelect(time); }}
+                                                >
                                                     {selectedTime === time && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                                                 </div>
                                                 <span className={selectedTime === time ? 'text-dark font-extrabold' : ''} onClick={() => handleTimeSelect(time)}>{time}</span>
@@ -238,7 +300,10 @@ export default function SearchResults() {
                                             const isChecked = selectedOperators.includes(op.id);
                                             return (
                                                 <label key={op.id} className="flex items-center gap-3 text-xs font-bold text-gray-500 hover:text-dark transition-colors cursor-pointer group">
-                                                    <div className={`w-5 h-5 rounded border transition-all flex items-center justify-center ${isChecked ? 'border-blue-500 bg-blue-500' : 'border-gray-300 bg-white'}`} onClick={e => { e.preventDefault(); handleOperatorSelect(op.id); }}>
+                                                    <div
+                                                        className={`w-5 h-5 rounded border transition-all flex items-center justify-center ${isChecked ? 'border-blue-500 bg-blue-500' : 'border-gray-300 bg-white'}`}
+                                                        onClick={e => { e.preventDefault(); handleOperatorSelect(op.id); }}
+                                                    >
                                                         {isChecked && <Check size={12} className="text-white stroke-[3.5]" />}
                                                     </div>
                                                     <span className={isChecked ? 'text-dark font-extrabold' : ''} onClick={() => handleOperatorSelect(op.id)}>{op.name}</span>
@@ -289,7 +354,8 @@ export default function SearchResults() {
                                                 const Icon = option.icon;
                                                 const isActive = sortBy === option.value;
                                                 return (
-                                                    <button key={option.value} onClick={() => { setSortBy(option.value); setSortOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-xs font-bold transition-all ${isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}>
+                                                    <button key={option.value} onClick={() => { setSortBy(option.value); setSortOpen(false); }}
+                                                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-xs font-bold transition-all ${isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}>
                                                         <Icon size={14} className={isActive ? 'text-blue-500 shrink-0' : 'text-gray-400 shrink-0'} />
                                                         <span className="flex-1">{option.label}</span>
                                                         {isActive && <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />}
@@ -314,6 +380,12 @@ export default function SearchResults() {
                             </div>
                             <h3 className="text-xl font-extrabold text-gray-900">Failed to load trips</h3>
                             <p className="text-gray-400 mt-2 text-[11px] font-bold uppercase tracking-wider">Check your connection and try again</p>
+                            <Button
+                                className="mt-6 h-11 px-6 rounded-xl font-bold bg-primary text-white border-none"
+                                onClick={() => refetch()}
+                            >
+                                Retry
+                            </Button>
                         </div>
                     ) : trips.length > 0 ? (
                         <div className="space-y-6">
@@ -326,7 +398,8 @@ export default function SearchResults() {
                             </div>
                             <h3 className="text-xl font-extrabold text-gray-900">No trips found</h3>
                             <p className="text-gray-400 mt-2 text-[11px] font-bold uppercase tracking-wider">Try changing your search criteria</p>
-                            <Button className="mt-8 h-12 px-8 rounded-xl font-bold bg-gray-900 text-white hover:bg-black transition-all border-none" onClick={() => { clearFilters(); setFromVal(''); setToVal(''); setDateVal(''); setSearchParams({}); }}>
+                            <Button className="mt-8 h-12 px-8 rounded-xl font-bold bg-gray-900 text-white hover:bg-black transition-all border-none"
+                                onClick={() => { clearFilters(); setFromVal(''); setToVal(''); setDateVal(''); setSearchParams({}); }}>
                                 Clear All Search
                             </Button>
                         </div>

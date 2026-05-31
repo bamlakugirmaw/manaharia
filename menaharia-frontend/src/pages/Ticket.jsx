@@ -6,6 +6,14 @@ import {
     User, QrCode, Mail, MessageSquare, Bus, Clock,
 } from 'lucide-react';
 import { useTicketsByBooking } from '../hooks/useTickets';
+import { useBooking } from '../hooks/useBookings';
+
+const fmtTime = (s) => {
+    if (!s) return '—';
+    const part = s.includes('T') ? s.split('T')[1] : s;
+    const [h, m] = part.split(':');
+    return `${h}:${m}`;
+};
 
 export default function Ticket() {
     const { bookingId } = useParams();
@@ -22,9 +30,9 @@ export default function Ticket() {
         totalPrice,
     } = location.state || {};
 
-    // ── Fetch ticket from backend ─────────────────────────────────────────────
-    // GET /v1/tickets?bookingId= — ticket is auto-generated after payment success.
-    // We poll briefly (refetchInterval) in case the webhook hasn't fired yet.
+    const { data: bookingFromApi, isLoading: bookingLoading } = useBooking(bookingId);
+    const resolvedBooking = bookingFromApi ?? booking ?? null;
+
     const { data: ticketsResponse, isLoading: ticketLoading } = useTicketsByBooking(bookingId);
 
     const tickets = Array.isArray(ticketsResponse)
@@ -32,24 +40,26 @@ export default function Ticket() {
         : (ticketsResponse?.data ?? []);
     const ticket = tickets[0] ?? null;
 
-    // ── Resolve trip data ─────────────────────────────────────────────────────
-    // Priority: ticket.booking.trip > state.booking.trip > state.trip
     const tripData =
         ticket?.booking?.trip ??
-        booking?.trip ??
+        resolvedBooking?.trip ??
         stateTripObj ??
         null;
 
     // Normalise field names (backend vs mock)
     const from          = tripData?.from ?? tripData?.route?.origin ?? '';
     const to            = tripData?.to   ?? tripData?.route?.destination ?? '';
-    const departureTime = tripData?.departureTime ?? '';
+    const departureTime = fmtTime(tripData?.departureTime ?? '');
     const tripDate      = tripData?.date ?? '';
     const operatorName  =
         tripData?.operator?.name ??
         tripData?.operator?.companyName ??
-        booking?.operator?.name ??
+        resolvedBooking?.operator?.name ??
         '';
+
+    const bookingStatus = (resolvedBooking?.status ?? 'PENDING').toUpperCase();
+    const paymentStatus = resolvedBooking?.payment?.status ?? 'PENDING';
+    const isPaymentComplete = paymentStatus === 'SUCCESS' || bookingStatus === 'CONFIRMED';
 
     // Seat labels — from ticket travelers or from state
     const seatLabels = ticket?.travelers?.map(t => t.seatNumber ?? t.seat?.seatNumber).filter(Boolean)
@@ -58,10 +68,22 @@ export default function Ticket() {
     const passengerName  = passengerDetails?.fullName  ?? ticket?.travelers?.[0]?.fullName  ?? '';
     const passengerPhone = passengerDetails?.phone      ?? ticket?.travelers?.[0]?.phone      ?? '';
     const passengerEmail = passengerDetails?.email      ?? ticket?.travelers?.[0]?.email      ?? '';
-    const paidAmount     = totalPrice ?? booking?.totalAmount ?? 0;
+    const paidAmount =
+        totalPrice ??
+        resolvedBooking?.payment?.amount ??
+        resolvedBooking?.totalAmount ??
+        tripData?.price ??
+        0;
 
-    // If we have no trip data at all, show a minimal fallback
-    if (!tripData && !ticketLoading && !booking) {
+    if (bookingLoading && !tripData && !resolvedBooking) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
+            </div>
+        );
+    }
+
+    if (!tripData && !ticketLoading && !resolvedBooking) {
         return (
             <div className="container mx-auto px-4 py-20 text-center">
                 <h1 className="text-2xl font-bold mb-4">Booking Not Found</h1>
@@ -80,19 +102,35 @@ export default function Ticket() {
                             <CheckCircle2 size={56} strokeWidth={2.5} />
                         </div>
                     </div>
-                    <h1 className="text-4xl font-black text-gray-900 mb-3 tracking-tight">Booking Confirmed!</h1>
-                    <p className="text-lg text-gray-500 font-medium mb-4">Your ticket has been booked successfully</p>
+                    <h1 className="text-4xl font-black text-gray-900 mb-3 tracking-tight">
+                        {isPaymentComplete ? 'Booking Confirmed!' : 'Booking Reserved'}
+                    </h1>
+                    <p className="text-lg text-gray-500 font-medium mb-4">
+                        {isPaymentComplete
+                            ? 'Your ticket has been booked successfully'
+                            : 'Your seats are reserved. Complete payment when the gateway is available.'}
+                    </p>
                     <div className="inline-block px-5 py-2 bg-white border border-gray-200 rounded-xl font-mono text-sm text-gray-600 font-bold shadow-sm">
                         Booking ID: <span className="text-gray-900">{bookingId}</span>
                     </div>
 
                     <div className="flex flex-wrap gap-4 justify-center mt-8">
-                        <Button className="h-12 px-8 font-bold bg-[#0EA5E9] hover:bg-[#0284C7] text-white shadow-lg shadow-sky-100 rounded-xl transition-transform hover:scale-105">
-                            <Download className="mr-2 h-5 w-5" /> Download Ticket (PDF)
+                        <Button
+                            className="h-12 px-8 font-bold bg-[#0EA5E9] hover:bg-[#0284C7] text-white shadow-lg shadow-sky-100 rounded-xl"
+                            onClick={() => navigate('/traveller/bookings')}
+                        >
+                            View My Bookings
                         </Button>
-                        <Button variant="outline" className="h-12 px-8 font-bold border-gray-200 hover:bg-gray-50 text-gray-700 bg-white shadow-sm rounded-xl transition-transform hover:scale-105">
-                            <Calendar className="mr-2 h-5 w-5" /> Add to Calendar
-                        </Button>
+                        {isPaymentComplete && (
+                            <>
+                                <Button className="h-12 px-8 font-bold bg-[#0EA5E9] hover:bg-[#0284C7] text-white shadow-lg shadow-sky-100 rounded-xl">
+                                    <Download className="mr-2 h-5 w-5" /> Download Ticket (PDF)
+                                </Button>
+                                <Button variant="outline" className="h-12 px-8 font-bold border-gray-200 hover:bg-gray-50 text-gray-700 bg-white shadow-sm rounded-xl">
+                                    <Calendar className="mr-2 h-5 w-5" /> Add to Calendar
+                                </Button>
+                            </>
+                        )}
                     </div>
                 </div>
 
@@ -171,13 +209,20 @@ export default function Ticket() {
                                     <div className="flex justify-between">
                                         <span className="text-gray-500 text-sm font-medium">Payment Method</span>
                                         <span className="text-gray-900 font-bold text-sm">
-                                            {booking?.payment?.method ?? 'Chapa'}
+                                            {resolvedBooking?.payment?.method ?? 'Chapa'}
                                         </span>
                                     </div>
                                     <div className="flex justify-between items-center">
                                         <span className="text-gray-500 text-sm font-medium">Payment Status</span>
-                                        <span className="px-2.5 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full flex items-center gap-1">
-                                            <CheckCircle2 size={12} /> Confirmed
+                                        <span
+                                            className={`px-2.5 py-1 text-xs font-bold rounded-full flex items-center gap-1 ${
+                                                isPaymentComplete
+                                                    ? 'bg-green-100 text-green-700'
+                                                    : 'bg-amber-100 text-amber-700'
+                                            }`}
+                                        >
+                                            <CheckCircle2 size={12} />
+                                            {isPaymentComplete ? 'Confirmed' : 'Pending'}
                                         </span>
                                     </div>
                                 </div>
@@ -268,9 +313,18 @@ export default function Ticket() {
                             </div>
                         </div>
 
-                        <Button variant="ghost" className="w-full h-12 rounded-xl text-gray-500 font-bold text-sm hover:bg-gray-100" onClick={() => navigate('/')}>
-                            <Home className="mr-2 w-4 h-4" /> Return to Home
-                        </Button>
+                        <div className="flex flex-col gap-2">
+                            <Button
+                                variant="outline"
+                                className="w-full h-12 rounded-xl text-primary font-bold text-sm border-primary/30"
+                                onClick={() => navigate('/traveller/bookings')}
+                            >
+                                My Bookings
+                            </Button>
+                            <Button variant="ghost" className="w-full h-12 rounded-xl text-gray-500 font-bold text-sm hover:bg-gray-100" onClick={() => navigate('/')}>
+                                <Home className="mr-2 w-4 h-4" /> Return to Home
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </div>

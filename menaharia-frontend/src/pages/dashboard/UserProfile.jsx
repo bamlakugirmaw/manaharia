@@ -2,12 +2,23 @@ import { useState, useEffect } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Card } from '../../components/ui/Card';
-import { User, Check, AlertCircle } from 'lucide-react';
-import profileIcon from '../../assets/profile-icon.jpg';
+import { Check, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useProfileImage } from '../../hooks/useProfileImage';
+import ProfileAvatarUpload from '../../components/profile/ProfileAvatarUpload';
+
+const PROFILE_PHOTO_NOTICE =
+    'Profile photo upload is not available yet — PATCH /auth/me only accepts name, email, and phone. Your initials are shown instead.';
 
 export default function UserProfile() {
     const { user, updateProfile, changePassword } = useAuth();
+    const avatarUrl = useProfileImage();
+
+    const roleLabel = user?.role === 'admin'
+        ? 'Admin Account'
+        : user?.role === 'operator'
+            ? 'Operator Account'
+            : 'Traveller Account';
 
     // ── Profile form ──────────────────────────────────────────────────────────
     const [profileForm, setProfileForm] = useState({
@@ -19,7 +30,6 @@ export default function UserProfile() {
     const [profileSuccess, setProfileSuccess] = useState(false);
     const [profileError,   setProfileError]   = useState('');
 
-    // Pre-fill from AuthContext when user loads
     useEffect(() => {
         if (user) {
             setProfileForm({
@@ -85,25 +95,23 @@ export default function UserProfile() {
 
     return (
         <div className="max-w-2xl mx-auto space-y-6">
-            {/* Profile Info Card */}
             <Card className="p-8 border border-gray-100/50 shadow-[0_8px_30px_rgba(0,0,0,0.02)] rounded-3xl bg-white space-y-8">
-                {/* Header */}
-                <div className="flex items-center gap-6 pb-6 border-b border-gray-100/80">
-                    <div className="w-24 h-24 rounded-full border-4 border-white shadow-[0_8px_30px_rgba(0,0,0,0.08)] relative group cursor-pointer overflow-hidden bg-gray-50 shrink-0">
-                        <img src={profileIcon} alt="Profile" className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-xs font-semibold">
-                            Change
-                        </div>
-                    </div>
-                    <div>
+                <div className="flex flex-col sm:flex-row items-center gap-6 pb-6 border-b border-gray-100/80">
+                    <ProfileAvatarUpload
+                        value={avatarUrl}
+                        name={user?.name ?? ''}
+                        folder="profiles"
+                        disabled
+                        disabledReason={PROFILE_PHOTO_NOTICE}
+                    />
+                    <div className="text-center sm:text-left">
                         <h2 className="text-xl font-bold text-gray-900 leading-tight">{user?.name || '—'}</h2>
-                        <p className="text-xs font-bold text-primary uppercase tracking-wider mt-1 bg-blue-50 px-2.5 py-1 rounded-full w-fit">
-                            {user?.role === 'traveller' ? 'Traveller Account' : (user?.role ?? 'Account')}
+                        <p className="text-xs font-bold text-primary uppercase tracking-wider mt-1 bg-blue-50 px-2.5 py-1 rounded-full w-fit mx-auto sm:mx-0">
+                            {roleLabel}
                         </p>
                     </div>
                 </div>
 
-                {/* Profile form */}
                 <form onSubmit={handleProfileSave} className="space-y-6">
                     {profileSuccess && (
                         <div className="p-4 bg-emerald-50 text-emerald-700 text-sm font-semibold rounded-2xl border border-emerald-100/50 flex items-center gap-2 animate-in fade-in duration-300">
@@ -150,7 +158,6 @@ export default function UserProfile() {
                 </form>
             </Card>
 
-            {/* Change Password Card */}
             <Card className="p-8 border border-gray-100/50 shadow-[0_8px_30px_rgba(0,0,0,0.02)] rounded-3xl bg-white space-y-6">
                 <div>
                     <h3 className="font-bold text-gray-900 text-base mb-1">Change Password</h3>

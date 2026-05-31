@@ -20,10 +20,12 @@ function unwrapSingle(res) {
 }
 
 export function useBookings(params = {}) {
+    const { enabled = true, ...queryParams } = params;
     return useQuery({
-        queryKey: bookingKeys.list(params),
-        queryFn: async () => unwrapList(await bookingsApi.listBookings(params)),
-        staleTime: 0,
+        queryKey: bookingKeys.list(queryParams),
+        queryFn: async () => unwrapList(await bookingsApi.listBookings(queryParams)),
+        enabled,
+        staleTime: 30 * 1000,
     });
 }
 
@@ -40,6 +42,14 @@ export function useCreateBooking() {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (data) => bookingsApi.createBooking(data),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: bookingKeys.all }),
+    });
+}
+
+export function useCreateBookingForUser() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (data) => bookingsApi.createBookingForUser(data),
         onSuccess: () => queryClient.invalidateQueries({ queryKey: bookingKeys.all }),
     });
 }

@@ -1,4 +1,4 @@
-import { api, unwrap } from '../lib/api';
+import { api, unwrap, sanitizeListParams } from '../lib/api';
 
 /**
  * Routes API
@@ -19,7 +19,7 @@ import { api, unwrap } from '../lib/api';
  * }} params
  */
 export const listRoutes = (params = {}) =>
-    api.get('/routes', { params }).then(unwrap);
+    api.get('/routes', { params: sanitizeListParams(params) }).then(unwrap);
 
 /**
  * @param {string} id

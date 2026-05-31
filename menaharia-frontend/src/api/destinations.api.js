@@ -9,9 +9,9 @@ import { api, unwrap } from '../lib/api';
  * update  — PATCH  /v1/destinations/:id (admin)
  * remove  — DELETE /v1/destinations/:id (admin)
  *
- * NOTE: The backend requires auth for listing destinations.
- * The landing page uses the static DESTINATIONS array from mock-db.js
- * as a fallback until a public endpoint is available.
+ * NOTE: Listing requires bearer auth on the backend. Public pages use
+ * listDestinationsPublic / getDestinationByIdPublic (skipAuthRedirect) so
+ * 401 does not force a login redirect — the UI shows a sign-in prompt instead.
  */
 
 /**
@@ -24,11 +24,18 @@ import { api, unwrap } from '../lib/api';
 export const listDestinations = (params = {}) =>
     api.get('/destinations', { params }).then(unwrap);
 
+/** Same as listDestinations but safe for public routes (no login redirect on 401). */
+export const listDestinationsPublic = (params = {}) =>
+    api.get('/destinations', { params, skipAuthRedirect: true }).then(unwrap);
+
 /**
  * @param {string} id
  */
 export const getDestinationById = (id) =>
     api.get(`/destinations/${id}`).then(unwrap);
+
+export const getDestinationByIdPublic = (id) =>
+    api.get(`/destinations/${id}`, { skipAuthRedirect: true }).then(unwrap);
 
 /**
  * @param {{
@@ -56,7 +63,9 @@ export const removeDestination = (id) =>
 
 export const destinationsApi = {
     listDestinations,
+    listDestinationsPublic,
     getDestinationById,
+    getDestinationByIdPublic,
     createDestination,
     updateDestination,
     removeDestination,

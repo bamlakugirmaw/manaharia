@@ -3,7 +3,6 @@ import MainLayout from './layouts/MainLayout';
 import DashboardLayout from './layouts/DashboardLayout';
 import ScrollToTop from './components/layout/ScrollToTop';
 import { AuthProvider } from './contexts/AuthContext';
-import { ComplaintsProvider } from './contexts/ComplaintsContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 
 import LandingPage from './pages/LandingPage';
@@ -23,10 +22,14 @@ import RouteDetail from './pages/RouteDetail';
 import Help from './pages/Help';
 import FAQ from './pages/FAQ';
 import ContactSupport from './pages/ContactSupport';
+import Destinations from './pages/Destinations';
+import DestinationDetail from './pages/DestinationDetail';
 
 import UserComplaints from './pages/dashboard/UserComplaints';
 import UserBookings from './pages/dashboard/UserBookings';
 import UserProfile from './pages/dashboard/UserProfile';
+import UserPayments from './pages/dashboard/UserPayments';
+import UserUpcoming from './pages/dashboard/UserUpcoming';
 
 import OperatorRevenue from './pages/operator/OperatorRevenue';
 import OperatorPayouts from './pages/operator/OperatorPayouts';
@@ -46,11 +49,11 @@ import AdminSettings from './pages/admin/AdminSettings';
 import AdminTrips from './pages/admin/AdminTrips';
 import AdminBookings from './pages/admin/AdminBookings';
 import AdminPayments from './pages/admin/AdminPayments';
+import AdminDestinations from './pages/admin/AdminDestinations';
 
 function App() {
   return (
     <AuthProvider>
-      <ComplaintsProvider>
         <BrowserRouter>
         <ScrollToTop />
         <Routes>
@@ -68,6 +71,10 @@ function App() {
           <Route path="/routes" element={<MainLayout><RoutesPage /></MainLayout>} />
           <Route path="/routes/:from/:to" element={<MainLayout><RouteDetail /></MainLayout>} />
 
+          {/* Destinations */}
+          <Route path="/destinations" element={<MainLayout><Destinations /></MainLayout>} />
+          <Route path="/destinations/:id" element={<MainLayout><DestinationDetail /></MainLayout>} />
+
           {/* Help & Support */}
           <Route path="/help" element={<MainLayout><Help /></MainLayout>} />
           <Route path="/faq" element={<MainLayout><FAQ /></MainLayout>} />
@@ -82,8 +89,10 @@ function App() {
           {/* User Dashboard Routes */}
           <Route path="/traveller" element={<ProtectedRoute allowedRoles={['traveller']}><Navigate to="/traveller/bookings" replace /></ProtectedRoute>} />
           <Route path="/traveller/bookings" element={<ProtectedRoute allowedRoles={['traveller']}><DashboardLayout><UserBookings /></DashboardLayout></ProtectedRoute>} />
+          <Route path="/traveller/upcoming" element={<ProtectedRoute allowedRoles={['traveller']}><DashboardLayout><UserUpcoming /></DashboardLayout></ProtectedRoute>} />
           <Route path="/traveller/complaints" element={<ProtectedRoute allowedRoles={['traveller']}><DashboardLayout><UserComplaints /></DashboardLayout></ProtectedRoute>} />
           <Route path="/traveller/profile" element={<ProtectedRoute allowedRoles={['traveller']}><DashboardLayout><UserProfile /></DashboardLayout></ProtectedRoute>} />
+          <Route path="/traveller/payments" element={<ProtectedRoute allowedRoles={['traveller']}><DashboardLayout><UserPayments /></DashboardLayout></ProtectedRoute>} />
 
 
           {/* Operator Dashboard Routes */}
@@ -104,7 +113,11 @@ function App() {
           <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminUserManagement /></DashboardLayout></ProtectedRoute>} />
           <Route path="/admin/operators" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminOperatorManagement /></DashboardLayout></ProtectedRoute>} />
           <Route path="/admin/payments" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminPayments /></DashboardLayout></ProtectedRoute>} />
+          <Route path="/admin/bookings" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminBookings /></DashboardLayout></ProtectedRoute>} />
+          <Route path="/admin/trips" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminTrips /></DashboardLayout></ProtectedRoute>} />
+          <Route path="/admin/destinations" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminDestinations /></DashboardLayout></ProtectedRoute>} />
           <Route path="/admin/logs" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminLogs /></DashboardLayout></ProtectedRoute>} />
+          <Route path="/admin/profile" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><UserProfile /></DashboardLayout></ProtectedRoute>} />
           <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminSettings /></DashboardLayout></ProtectedRoute>} />
           <Route path="/admin/*" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminSystemOverview /></DashboardLayout></ProtectedRoute>} />
 
@@ -112,7 +125,6 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
-      </ComplaintsProvider>
     </AuthProvider>
   );
 }

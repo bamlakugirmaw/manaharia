@@ -10,10 +10,10 @@ import { operatorsApi } from '../../api/operators.api';
 import { operatorKeys } from '../../hooks/useOperators';
 import { authApi } from '../../api/auth.api';
 import { usersApi } from '../../api/users.api';
+import { useBusOperatorRoleId } from '../../hooks/useRoles';
 
-// BUS_OPERATOR role ID — fetched from GET /v1/roles and hardcoded here
-// since roles are seeded and stable.
-const BUS_OPERATOR_ROLE_ID = '3acd06f2-f7ac-4ee9-b6bf-c8648dac39e3';
+// Fallback if roles API is unavailable (seeded production id).
+const BUS_OPERATOR_ROLE_FALLBACK = '3acd06f2-f7ac-4ee9-b6bf-c8648dac39e3';
 
 const statusVariant = (s) => {
     const v = (s ?? '').toUpperCase();
@@ -50,8 +50,11 @@ export default function AdminOperatorManagement() {
     const [submitting,  setSubmitting]  = useState(false);
 
     const { data: operators = [], isLoading } = useOperators({ limit: 100 });
+    const { data: busOperatorRoleId, isLoading: roleLoading } = useBusOperatorRoleId();
     const { mutate: updateOp, isPending: updating } = useUpdateOperator();
     const qc = useQueryClient();
+
+    const operatorRoleId = busOperatorRoleId ?? BUS_OPERATOR_ROLE_FALLBACK;
 
     const filtered = operators.filter(op => {
         const q = searchQuery.toLowerCase();
@@ -102,7 +105,10 @@ export default function AdminOperatorManagement() {
             if (!newUserId) throw new Error('Registration succeeded but no user ID was returned.');
 
             // Step 2 — Assign BUS_OPERATOR role
-            await usersApi.addUserRole(newUserId, { roleId: BUS_OPERATOR_ROLE_ID });
+            if (!operatorRoleId) {
+                throw new Error('BUS_OPERATOR role not found. Please try again later.');
+            }
+            await usersApi.addUserRole(newUserId, { roleId: operatorRoleId });
 
             // Step 3 — Create operator company record
             await operatorsApi.createOperator({

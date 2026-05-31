@@ -18,3 +18,7 @@ export { usersApi } from './users.api';
 export { busesApi } from './buses.api';
 export { adminApi } from './admin.api';
 export { travelersApi } from './travelers.api';
+export { disputesApi } from './disputes.api';
+export { notificationsApi } from './notifications.api';
+export { rolesApi } from './roles.api';
+export { storageApi } from './storage.api';

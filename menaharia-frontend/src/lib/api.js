@@ -48,6 +48,9 @@ api.interceptors.response.use(
 
             const refreshToken = localStorage.getItem('refreshToken');
             if (!refreshToken) {
+                if (original.skipAuthRedirect) {
+                    return Promise.reject(error);
+                }
                 return handleAuthFailure();
             }
 
@@ -73,6 +76,9 @@ api.interceptors.response.use(
                 original.headers.Authorization = `Bearer ${newAccess}`;
                 return api(original);
             } catch {
+                if (original.skipAuthRedirect) {
+                    return Promise.reject(error);
+                }
                 return handleAuthFailure();
             }
         }
@@ -95,20 +101,59 @@ function handleAuthFailure() {
     return Promise.reject(new Error('Session expired. Please log in again.'));
 }
 
+/** Backend caps page size (requests above this return 400). */
+export const API_MAX_LIMIT = 100;
+
 /**
- * Convenience helper — extract the data payload from an Axios response.
- * Usage: const data = await api.get('/trips').then(unwrap)
+ * Strip empty values and internal hook flags; clamp `limit` to API_MAX_LIMIT.
+ */
+export function sanitizeListParams(params = {}) {
+    const { enabled, _all, ...rest } = params;
+    const clean = {};
+    for (const [key, value] of Object.entries(rest)) {
+        if (value !== undefined && value !== null && value !== '') {
+            clean[key] = value;
+        }
+    }
+    if (clean.limit != null) {
+        const n = Number(clean.limit);
+        clean.limit = Math.min(Math.max(1, Number.isFinite(n) ? n : 1), API_MAX_LIMIT);
+    }
+    return clean;
+}
+
+/**
+ * Convenience helper — raw Axios body (often `{ success, data, timestamp }`).
  */
 export const unwrap = (response) => response.data;
+
+/**
+ * Inner `data` from the standard API envelope.
+ * Usage: const booking = await api.post('/bookings', body).then(unwrapEnvelope);
+ */
+export function unwrapEnvelope(response) {
+    const body = unwrap(response);
+    if (body && typeof body === 'object' && body.data !== undefined && body.success !== undefined) {
+        return body.data;
+    }
+    return body?.data ?? body;
+}
 
 /**
  * Extract a human-readable error message from any Axios error.
  * Handles NestJS nested error shape: { message: { message, error, statusCode } }
  * and flat shape: { message: "string" } or { message: ["a", "b"] }
  */
+/**
+ * Extract a human-readable error message from any Axios error.
+ * Handles NestJS nested error shape: { message: { message, error, statusCode } }
+ * and flat shape: { message: "string" } or { message: ["a", "b"] }
+ */
 export const extractErrorMessage = (err, fallback = 'An error occurred.') => {
-    const raw = err?.response?.data?.message ?? err?.message;
+    const data = err?.response?.data;
+    const raw = data?.message ?? err?.message;
     if (!raw) return fallback;
+
     if (typeof raw === 'string') return raw;
     if (Array.isArray(raw)) return raw.join('. ');
     // NestJS nested: { message: "...", error: "...", statusCode: 400 }

@@ -12,14 +12,16 @@ export const operatorKeys = {
  * @param {{
  *   page?: number,
  *   limit?: number,
- *   status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED'
+ *   status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED',
+ *   enabled?: boolean
  * }} params
  */
 export function useOperators(params = {}) {
+    const { enabled = true, ...queryParams } = params;
     return useQuery({
-        queryKey: operatorKeys.list(params),
+        queryKey: operatorKeys.list(queryParams),
         queryFn: async () => {
-            const response = await operatorsApi.listOperators(params);
+            const response = await operatorsApi.listOperators(queryParams);
             // Backend envelope: { success, data: { items: [], meta: {} } }
             // Normalise to always return an array
             const payload = response?.data ?? response;
@@ -28,6 +30,7 @@ export function useOperators(params = {}) {
             if (Array.isArray(payload?.data)) return payload.data;
             return [];
         },
+        enabled,
         staleTime: 10 * 60 * 1000,
     });
 }

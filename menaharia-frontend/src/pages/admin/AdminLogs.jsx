@@ -29,6 +29,14 @@ export default function AdminLogs() {
     return (
         <div className="space-y-6">
 
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm flex items-start gap-3">
+                <AlertTriangle className="shrink-0 mt-0.5" size={18} />
+                <p>
+                    System audit logs are not available from the API yet (no <code className="text-xs">/v1/logs</code> endpoint in OpenAPI).
+                    The entries below are sample data for UI preview only.
+                </p>
+            </div>
+
             <Card className="p-4 border-none shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center">
                 <div className="flex items-center gap-2 w-full md:w-auto">
                     <div className="relative flex-1 md:w-80">

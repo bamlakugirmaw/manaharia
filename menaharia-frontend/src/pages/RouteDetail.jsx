@@ -1,22 +1,66 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { TRIPS, OPERATORS } from '../data/mock-db';
-import { MapPin, ArrowLeft, Clock, Users, DollarSign, Bus } from 'lucide-react';
-import { useState } from 'react';
+import { MapPin, ArrowLeft, Clock, Users, Bus } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { useAllTrips } from '../hooks/useTrips';
+import { tripOrigin, tripDest, tripOperatorName, tripSeatsLeft } from '../lib/tripHelpers';
+
+const formatTime = (iso) => {
+    if (!iso) return '—';
+    try {
+        return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    } catch {
+        return iso;
+    }
+};
 
 export default function RouteDetail() {
     const { from, to } = useParams();
     const navigate = useNavigate();
-    const [busTypeFilter, setBusTypeFilter] = useState('all');
     const [sortBy, setSortBy] = useState('price');
 
-    // Get all trips for this route
-    const routeTrips = TRIPS.filter(trip =>
-        trip.from === from && trip.to === to
+    const fromCity = decodeURIComponent(from ?? '');
+    const toCity   = decodeURIComponent(to ?? '');
+
+    const { data: rawTrips = [], isLoading, isError } = useAllTrips({
+        origin: fromCity,
+        destination: toCity,
+        status: 'SCHEDULED',
+        limit: 100,
+    });
+
+    const routeTrips = useMemo(
+        () => rawTrips.filter((t) => tripOrigin(t) === fromCity && tripDest(t) === toCity),
+        [rawTrips, fromCity, toCity]
     );
 
-    if (routeTrips.length === 0) {
+    const distance = routeTrips[0]?.route?.distance ?? 0;
+
+    const sortedTrips = useMemo(() => {
+        return [...routeTrips].sort((a, b) => {
+            switch (sortBy) {
+                case 'price':
+                    return (a.price ?? 0) - (b.price ?? 0);
+                case 'time':
+                    return String(a.departureTime).localeCompare(String(b.departureTime));
+                case 'seats':
+                    return tripSeatsLeft(b) - tripSeatsLeft(a);
+                default:
+                    return 0;
+            }
+        });
+    }, [routeTrips, sortBy]);
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
+            </div>
+        );
+    }
+
+    if (isError || routeTrips.length === 0) {
         return (
             <div className="min-h-screen bg-gray-50 py-12">
                 <div className="container mx-auto px-4 max-w-6xl text-center">
@@ -26,28 +70,6 @@ export default function RouteDetail() {
             </div>
         );
     }
-
-    const distance = routeTrips[0]?.distance || 0;
-
-    // Filter trips
-    let filteredTrips = routeTrips;
-    if (busTypeFilter !== 'all') {
-        filteredTrips = filteredTrips.filter(trip => trip.busType === busTypeFilter);
-    }
-
-    // Sort trips
-    const sortedTrips = [...filteredTrips].sort((a, b) => {
-        switch (sortBy) {
-            case 'price':
-                return a.price - b.price;
-            case 'time':
-                return a.departureTime.localeCompare(b.departureTime);
-            case 'seats':
-                return b.seatsAvailable - a.seatsAvailable;
-            default:
-                return 0;
-        }
-    });
 
     const handleBook = (tripId) => {
         navigate(`/booking/seats/${tripId}`);
@@ -74,7 +96,7 @@ export default function RouteDetail() {
                                     <MapPin className="w-6 h-6 text-primary" />
                                 </div>
                                 <div>
-                                    <h1 className="text-2xl font-extrabold text-gray-900">{from}</h1>
+                                    <h1 className="text-2xl font-extrabold text-gray-900">{fromCity}</h1>
                                 </div>
                             </div>
                             <div className="text-gray-400 text-2xl font-bold">→</div>
@@ -83,7 +105,7 @@ export default function RouteDetail() {
                                     <MapPin className="w-6 h-6 text-secondary" />
                                 </div>
                                 <div>
-                                    <h1 className="text-2xl font-extrabold text-gray-900">{to}</h1>
+                                    <h1 className="text-2xl font-extrabold text-gray-900">{toCity}</h1>
                                 </div>
                             </div>
                         </div>
@@ -131,7 +153,7 @@ export default function RouteDetail() {
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {sortedTrips.map((trip) => {
-                                    const operator = OPERATORS.find(op => op.id === trip.operatorId);
+                                    const seatsLeft = tripSeatsLeft(trip);
                                     return (
                                         <tr key={trip.id} className="hover:bg-gray-50 transition-colors">
                                             <td className="px-6 py-4">
@@ -140,24 +162,23 @@ export default function RouteDetail() {
                                                         <Bus className="w-5 h-5 text-primary" />
                                                     </div>
                                                     <div>
-                                                        <p className="font-semibold text-gray-900">{operator?.name}</p>
-                                                        <p className="text-xs text-gray-400">★ {operator?.rating}</p>
+                                                        <p className="font-semibold text-gray-900">{tripOperatorName(trip)}</p>
                                                     </div>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-2">
                                                     <Clock className="w-4 h-4 text-gray-400" />
-                                                    <span className="font-semibold text-gray-900">{trip.departureTime}</span>
+                                                    <span className="font-semibold text-gray-900">{formatTime(trip.departureTime)}</span>
                                                 </div>
                                             </td>
 
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-2">
                                                     <Users className="w-4 h-4 text-gray-400" />
-                                                    <span className={`font-bold ${trip.seatsAvailable < 5 ? 'text-red-600' : 'text-green-600'
+                                                    <span className={`font-bold ${seatsLeft < 5 ? 'text-red-600' : 'text-green-600'
                                                         }`}>
-                                                        {trip.seatsAvailable}
+                                                        {seatsLeft}
                                                     </span>
                                                 </div>
                                             </td>
@@ -185,7 +206,7 @@ export default function RouteDetail() {
                     {/* Mobile Cards */}
                     <div className="md:hidden divide-y divide-gray-100">
                         {sortedTrips.map((trip) => {
-                            const operator = OPERATORS.find(op => op.id === trip.operatorId);
+                            const seatsLeft = tripSeatsLeft(trip);
                             return (
                                 <div key={trip.id} className="p-6">
                                     <div className="flex items-center justify-between mb-4">
@@ -194,8 +215,7 @@ export default function RouteDetail() {
                                                 <Bus className="w-5 h-5 text-primary" />
                                             </div>
                                             <div>
-                                                <p className="font-semibold text-gray-900">{operator?.name}</p>
-                                                <p className="text-xs text-gray-400">★ {operator?.rating}</p>
+                                                <p className="font-semibold text-gray-900">{tripOperatorName(trip)}</p>
                                             </div>
                                         </div>
 
@@ -203,12 +223,12 @@ export default function RouteDetail() {
                                     <div className="grid grid-cols-2 gap-4 mb-4">
                                         <div>
                                             <p className="text-xs text-gray-500 mb-1">Departure</p>
-                                            <p className="font-semibold text-gray-900">{trip.departureTime}</p>
+                                            <p className="font-semibold text-gray-900">{formatTime(trip.departureTime)}</p>
                                         </div>
                                         <div>
                                             <p className="text-xs text-gray-500 mb-1">Seats Left</p>
-                                            <p className={`font-semibold ${trip.seatsAvailable < 5 ? 'text-red-600' : 'text-green-600'}`}>
-                                                {trip.seatsAvailable}
+                                            <p className={`font-semibold ${seatsLeft < 5 ? 'text-red-600' : 'text-green-600'}`}>
+                                                {seatsLeft}
                                             </p>
                                         </div>
                                     </div>
