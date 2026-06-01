@@ -59,13 +59,17 @@ export function normaliseInitiatePaymentResponse(payload) {
 export function normaliseBookingDetail(payload) {
     if (!payload) return null;
     if (payload.booking) {
+        const booking = payload.booking;
         return {
-            ...payload.booking,
-            payment: payload.payment ?? payload.booking.payment,
-            travelers: payload.travelers ?? payload.booking.travelers,
-            trip: payload.trip ?? payload.booking.trip,
-            tickets: payload.tickets ?? payload.booking.tickets,
+            ...booking,
+            payment: payload.payment ?? booking.payment ?? (Array.isArray(payload.payments) ? payload.payments[0] : null),
+            travelers: payload.travelers ?? booking.travelers ?? booking.bookingTravelers ?? [],
+            trip: payload.trip ?? booking.trip,
+            tickets: payload.tickets ?? booking.tickets,
         };
     }
-    return payload;
+    return {
+        ...payload,
+        travelers: payload.travelers ?? payload.bookingTravelers ?? [],
+    };
 }

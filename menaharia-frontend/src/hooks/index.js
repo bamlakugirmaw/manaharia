@@ -11,6 +11,9 @@ export { useRoutes, useRoute, routeKeys, useCreateRoute, useUpdateRoute, useRemo
 export { useBuses, useBus, useRemoveBus, busKeys } from './useBuses';
 export { useSeats, seatKeys } from './useSeats';
 export { useBookings, useOperatorBookings, useBooking, useCreateBooking, useCancelBooking, bookingKeys } from './useBookings';
+export { useEnrichedBooking } from './useEnrichedBooking';
+export { useTripManifest } from './useTripManifest';
+export { useTravelersByBooking, travelerKeys } from './useTravelers';
 export { usePayments, usePayment, useInitiatePayment, paymentKeys } from './usePayments';
 export { useTickets, useTicketsByBooking, useTicket, ticketKeys } from './useTickets';
 export { useUsers, useUser, useUpdateUserStatus, useRemoveUser, useHardRemoveUser, useRemoveUserRole, userKeys } from './useUsers';
@@ -31,3 +34,12 @@ export { useCreateSeatBatch } from './useSeats';
 export { useProfileImage } from './useProfileImage';
 export { useConfirmDialog } from './useConfirmDialog.jsx';
 export { useDisputes, useUpdateDispute, useRemoveDispute, DISPUTE_STATUS_LABEL } from './useDisputes';
+export {
+    useOperatorRatings,
+    useOperatorRating,
+    useCreateOperatorRating,
+    useUpdateOperatorRating,
+    useDeleteOperatorRating,
+    useMyRatingsByBooking,
+    ratingKeys,
+} from './useOperatorRatings';

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import PaymentReceiptCard from '../../components/PaymentReceiptCard';
@@ -9,44 +9,19 @@ import {
     CheckCircle, Clock, ChevronLeft, MapPin, PlusCircle, Star,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { useBookings, useBooking, useCancelBooking } from '../../hooks/useBookings';
+import { useBookings, useCancelBooking } from '../../hooks/useBookings';
+import { useEnrichedBooking } from '../../hooks/useEnrichedBooking';
 import { useCreateDispute, useDisputes, DISPUTE_STATUS_LABEL } from '../../hooks/useDisputes';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { normaliseBookingForUI } from '../../lib/bookingUi';
 import { getPaymentReceipt } from '../../lib/paymentReceipt';
 import { extractErrorMessage } from '../../lib/api';
+import { canRateBooking } from '../../lib/ratingHelpers';
+import { useMyRatingsByBooking } from '../../hooks/useOperatorRatings';
+import BookingOperatorRating from '../../components/ratings/BookingOperatorRating';
 import { cn } from '../../lib/utils';
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
-
-function StarRating({ bookingId, ratings, setRatings }) {
-    const [hovered, setHovered] = useState(null);
-    const current = ratings[bookingId] ?? 0;
-
-    const handleRate = (star) => {
-        const updated = { ...ratings, [bookingId]: star };
-        setRatings(updated);
-        localStorage.setItem('bookingRatings', JSON.stringify(updated));
-    };
-
-    return (
-        <div className="flex items-center gap-0.5" onMouseLeave={() => setHovered(null)}>
-            {[1, 2, 3, 4, 5].map(star => {
-                const filled = star <= (hovered ?? current);
-                return (
-                    <button key={star} type="button" onMouseEnter={() => setHovered(star)} onClick={() => handleRate(star)}
-                        className="p-0.5 rounded transition-transform hover:scale-125 focus:outline-none"
-                        title={`Rate ${star} star${star > 1 ? 's' : ''}`}>
-                        <Star size={16} className={`transition-colors ${filled ? 'fill-amber-400 text-amber-400' : 'fill-gray-200 text-gray-200'}`} />
-                    </button>
-                );
-            })}
-            {current > 0 && hovered === null && (
-                <span className="ml-1 text-[10px] font-bold text-amber-500">{current}.0</span>
-            )}
-        </div>
-    );
-}
 
 function ComplaintStatusBadge({ status }) {
     const label = DISPUTE_STATUS_LABEL[status] ?? status;
@@ -85,7 +60,8 @@ function BookingStatusBadge({ rowStatus, paymentStatus }) {
     );
 }
 
-function InfoTile({ icon: Icon, label, value, accent }) {
+function InfoTile({ icon: Icon, label, value, accent, hideIfEmpty }) {
+    if (hideIfEmpty && (!value || value === '—')) return null;
     return (
         <div className="bg-gray-50 rounded-xl p-3.5 border border-gray-100/70">
             <div className="flex items-center gap-1.5 mb-1.5">
@@ -104,7 +80,21 @@ function InfoTile({ icon: Icon, label, value, accent }) {
 
 export default function UserBookings() {
     const navigate = useNavigate();
+    const location = useLocation();
     const { user } = useAuth();
+
+    const [paymentSuccess, setPaymentSuccess] = useState(() => location.state?.paymentSuccess ?? false);
+    const [successReceipt, setSuccessReceipt] = useState(() => location.state?.receipt ?? null);
+    const [successBookingId, setSuccessBookingId] = useState(() => location.state?.bookingId ?? null);
+
+    useEffect(() => {
+        if (location.state?.paymentSuccess) {
+            setSuccessBookingId(location.state.bookingId ?? null);
+            setSuccessReceipt(location.state.receipt ?? null);
+            setPaymentSuccess(true);
+            navigate(location.pathname, { replace: true, state: {} });
+        }
+    }, [location.state, location.pathname, navigate]);
     const { mutate: createDispute, isPending: filingDispute } = useCreateDispute();
     const { mutate: cancelBooking, isPending: cancelling } = useCancelBooking();
     const { confirm, ConfirmDialogHost } = useConfirmDialog();
@@ -135,26 +125,21 @@ export default function UserBookings() {
         .reduce((sum, b) => sum + (b.amount ?? 0), 0);
 
     const [selectedBooking, setSelectedBooking] = useState(null);
-    const { data: selectedBookingDetail } = useBooking(
-        selectedBooking?.id && selectedBooking.operator === 'Unknown' ? selectedBooking.id : null,
-    );
+    const {
+        data: enrichedBooking,
+        isLoading: enrichedLoading,
+    } = useEnrichedBooking(selectedBooking?.id, !!selectedBooking);
     const [showChat,        setShowChat]        = useState(false);
     const [chatMsg,         setChatMsg]         = useState('');
     const [disputeError,    setDisputeError]    = useState('');
     const chatEndRef = useRef(null);
 
-    const [ratings, setRatings] = useState(() => {
-        try { return JSON.parse(localStorage.getItem('bookingRatings') ?? '{}'); }
-        catch { return {}; }
-    });
+    const { byBookingId: ratingsByBookingId, isLoading: ratingsLoading } = useMyRatingsByBooking(
+        user?.id,
+        { enabled: !!user?.id },
+    );
 
-    const displayBooking = useMemo(() => {
-        if (!selectedBooking) return null;
-        if (selectedBookingDetail && selectedBooking.operator === 'Unknown') {
-            return normaliseBookingForUI(selectedBookingDetail);
-        }
-        return selectedBooking;
-    }, [selectedBooking, selectedBookingDetail]);
+    const displayBooking = enrichedBooking ?? selectedBooking;
 
     const existingComplaint = displayBooking
         ? disputeByBookingId[displayBooking.id] ?? null
@@ -222,6 +207,52 @@ export default function UserBookings() {
     return (
         <div className="space-y-6">
             <ConfirmDialogHost />
+
+            {paymentSuccess && (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 relative">
+                    <button
+                        type="button"
+                        onClick={() => setPaymentSuccess(false)}
+                        className="absolute right-3 top-3 text-emerald-600 hover:text-emerald-800"
+                        aria-label="Dismiss"
+                    >
+                        <X size={18} />
+                    </button>
+                    <div className="flex items-start gap-3 pr-8">
+                        <CheckCircle className="text-emerald-600 shrink-0 mt-0.5" size={22} />
+                        <div className="flex-1 min-w-0">
+                            <p className="font-bold text-emerald-900">Payment successful</p>
+                            <p className="text-sm text-emerald-800 mt-1">
+                                Your trip is booked. Details are below — you can also update your profile anytime.
+                            </p>
+                            <div className="flex flex-wrap gap-3 mt-3">
+                                <Button
+                                    size="sm"
+                                    className="h-9"
+                                    onClick={() => navigate(`/booking/ticket/${successBookingId}`)}
+                                    disabled={!successBookingId}
+                                >
+                                    View ticket
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-9 border-emerald-300 text-emerald-800"
+                                    onClick={() => navigate('/traveller/profile')}
+                                >
+                                    My profile
+                                </Button>
+                            </div>
+                            {successReceipt && (
+                                <div className="mt-4">
+                                    <PaymentReceiptCard receipt={successReceipt} compact />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <Card className="p-6 flex items-center gap-4 bg-white border border-gray-100/50 shadow-[0_8px_30px_rgba(0,0,0,0.02)] rounded-3xl">
@@ -315,7 +346,18 @@ export default function UserBookings() {
                                         />
                                     </td>
                                     <td className="px-6 py-4">
-                                        <StarRating bookingId={booking.id} ratings={ratings} setRatings={setRatings} />
+                                        {ratingsLoading ? (
+                                            <span className="text-[10px] text-gray-400">…</span>
+                                        ) : (
+                                            <BookingOperatorRating
+                                                bookingId={booking.id}
+                                                operatorId={booking.operatorId}
+                                                operatorName={booking.operator}
+                                                existingRating={ratingsByBookingId[booking.id]}
+                                                canRate={canRateBooking(booking)}
+                                                compact
+                                            />
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 text-right font-medium text-gray-900">
                                         ETB {(booking.amount ?? 0).toLocaleString()}
@@ -354,7 +396,9 @@ export default function UserBookings() {
                                     {showChat ? `Complaint — ${displayBooking.busName}` : displayBooking.busName}
                                 </h2>
                                 <p className="text-[10px] text-gray-400 font-mono mt-0.5">
-                                    {showChat ? (activeComplaint?.id ?? 'New Complaint') : displayBooking.ticketId}
+                                    {showChat
+                                        ? (activeComplaint?.id ?? 'New Complaint')
+                                        : (displayBooking.bookingReference ?? displayBooking.ticketId)}
                                 </p>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
@@ -369,6 +413,9 @@ export default function UserBookings() {
                         <div className="flex-1 overflow-hidden flex flex-col min-h-0">
                             {!showChat && (
                                 <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                                    {enrichedLoading && (
+                                        <p className="text-xs text-gray-400 text-center py-2">Loading booking details…</p>
+                                    )}
                                     {/* Route Banner */}
                                     <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-5 border border-blue-100/60">
                                         <p className="text-[9px] font-extrabold text-blue-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
@@ -398,12 +445,17 @@ export default function UserBookings() {
                                         <InfoTile icon={Bus}        label="Bus Name"     value={displayBooking.busName} />
                                         <InfoTile icon={User}       label="Operator"     value={displayBooking.operator} />
                                         <InfoTile icon={Ticket}     label="Ticket ID"    value={displayBooking.ticketId} />
-                                        <InfoTile icon={Hash}       label="Seat Number"  value={displayBooking.seatNumber} accent="blue" />
+                                        <InfoTile icon={Hash}       label="Seat Number"  value={displayBooking.seatNumber} accent="blue" hideIfEmpty />
                                         <InfoTile icon={Calendar}   label="Travel Date"  value={displayBooking.date} />
                                         <InfoTile icon={Calendar}   label="Booking Date" value={displayBooking.bookingDate} />
-                                        <InfoTile icon={User}       label="Passenger"    value={displayBooking.passengerName} />
-                                        <InfoTile icon={Phone}      label="Phone"        value={displayBooking.passengerPhone} />
-                                        <InfoTile icon={CreditCard} label="Payment"      value={displayBooking.paymentStatus} accent="green" />
+                                        <InfoTile icon={User}       label="Passenger"    value={displayBooking.passengerName} hideIfEmpty />
+                                        <InfoTile icon={Phone}      label="Phone"        value={displayBooking.passengerPhone} hideIfEmpty />
+                                        <InfoTile
+                                            icon={CreditCard}
+                                            label="Payment"
+                                            value={displayBooking.paymentStatus}
+                                            accent={displayBooking.isPaid ? 'green' : undefined}
+                                        />
                                         <InfoTile icon={CreditCard} label="Amount Paid"  value={`ETB ${(displayBooking.amount ?? 0).toLocaleString()}`} />
                                         {displayBooking.driverContact && (
                                             <InfoTile icon={Phone} label="Driver Contact" value={displayBooking.driverContact} />
@@ -414,6 +466,23 @@ export default function UserBookings() {
                                     {selectedReceipt && (
                                         <PaymentReceiptCard receipt={selectedReceipt} compact />
                                     )}
+
+                                    <div className="p-4 rounded-2xl border border-amber-100 bg-amber-50/40">
+                                        <p className="text-[9px] font-extrabold text-amber-600 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                                            <Star size={10} /> Rate your trip
+                                        </p>
+                                        <p className="text-xs text-gray-600 mb-3">
+                                            Share feedback for {displayBooking.operator}. Your rating helps other travellers.
+                                        </p>
+                                        <BookingOperatorRating
+                                            bookingId={displayBooking.id}
+                                            operatorId={displayBooking.operatorId}
+                                            operatorName={displayBooking.operator}
+                                            existingRating={ratingsByBookingId[displayBooking.id]}
+                                            canRate={canRateBooking(displayBooking)}
+                                            showComment
+                                        />
+                                    </div>
 
                                     {existingComplaint && (
                                         <div className="flex items-center gap-3 p-3.5 bg-amber-50 border border-amber-100 rounded-xl">

@@ -17,10 +17,11 @@ export const paymentKeys = {
  * }} params
  */
 export function usePayments(params = {}) {
+    const { enabled = true, ...queryParams } = params;
     return useQuery({
-        queryKey: paymentKeys.list(params),
+        queryKey: paymentKeys.list(queryParams),
         queryFn: async () => {
-            const res = await paymentsApi.listPayments(params);
+            const res = await paymentsApi.listPayments(queryParams);
             // Backend envelope: { success, data: { items: [], meta: {} } }
             const payload = res?.data ?? res;
             if (Array.isArray(payload))        return payload;
@@ -28,6 +29,7 @@ export function usePayments(params = {}) {
             if (Array.isArray(payload?.data))  return payload.data;
             return [];
         },
+        enabled,
         staleTime: 0,
     });
 }

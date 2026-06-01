@@ -12,6 +12,8 @@ import { authApi } from '../../api/auth.api';
 import { useOperatorTrips, useRemoveTrip } from '../../hooks/useTrips';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { tripOrigin, tripDest, tripCityLabel, parseTripDateTime, buildArrivalDateTime, parseAmenities, toTripDateISO } from '../../lib/tripHelpers';
+import { formatTripTime } from '../../lib/operatorHelpers';
+import { useTripManifest } from '../../hooks/useTripManifest';
 import { useBuses } from '../../hooks/useBuses';
 import { useRoutes } from '../../hooks/useRoutes';
 import { tripsApi } from '../../api/trips.api';
@@ -131,20 +133,29 @@ export default function BookingManagement() {
         refetchTrip: refetchTripSeats,
     } = useTripSeatContext(seatContextTripId);
 
-    const filteredManifest = useMemo(() => {
-        if (!effectiveTripId) return [];
-        return bookings.filter(b => b.trip?.id === effectiveTripId || b.tripId === effectiveTripId);
-    }, [bookings, effectiveTripId]);
+    const {
+        rows: manifestRows,
+        bookedSeatCount: manifestBookedSeats,
+        isLoading: manifestLoading,
+        refetch: refetchManifest,
+    } = useTripManifest({
+        tripId: effectiveTripId,
+        operatorId,
+        operatorBusIds,
+        bookings,
+        tripSeats,
+        enabled: !!effectiveTripId && !!operatorId,
+    });
 
     const totalSeats = tripSeats.length > 0
         ? tripSeats.length
         : currentTripObj?.bus?.totalSeats ?? 45;
-    const bookedSeatsCount = filteredManifest.length;
+    const bookedSeatsCount = manifestBookedSeats;
     const emptySeatsCount = Math.max(0, totalSeats - bookedSeatsCount);
 
-    const bookedSeatLabels = filteredManifest.map(b =>
-        b.travelers?.[0]?.seat?.seatNumber ?? b.travelers?.[0]?.seatNumber ?? ''
-    ).filter(Boolean);
+    const bookedSeatLabels = manifestRows
+        .map((r) => r.seatLabel)
+        .filter((s) => s && s !== '—');
     const occupiedSeats = [...new Set([...bookedSeatLabels, ...tripBookedLabels])];
     const walkInTripPrice = currentTripObj?.price ?? 0;
     const walkInSeatTypeMap = buildSeatTypeMap(tripSeats);
@@ -214,7 +225,9 @@ export default function BookingManagement() {
                 }],
             });
             await queryClient.invalidateQueries({ queryKey: ['bookings'] });
+            await queryClient.invalidateQueries({ queryKey: ['travelers'] });
             await queryClient.invalidateQueries({ queryKey: ['trips'] });
+            refetchManifest();
             setSelectedSeat('');
             setPassengerName('');
             setPassengerPhone('');
@@ -314,7 +327,7 @@ export default function BookingManagement() {
                     </h1>
                     <p className="text-gray-500 font-medium text-sm mt-1">
                         {currentTripObj
-                            ? `${new Date(currentTripObj.date).toDateString()} • ${currentTripObj.departureTime}`
+                            ? `${new Date(currentTripObj.date).toDateString()} • ${formatTripTime(currentTripObj.departureTime)}`
                             : 'Manage passenger lists, tickets, and check-ins.'}
                     </p>
                 </div>
@@ -368,7 +381,7 @@ export default function BookingManagement() {
                                 </div>
                                 <div className="flex items-center gap-3 text-[10px] font-bold text-gray-500 mb-3">
                                     <span className="bg-gray-100 px-2.5 py-1 rounded-lg">{new Date(trip.date).toLocaleDateString()}</span>
-                                    <span className="bg-gray-100 px-2.5 py-1 rounded-lg">{trip.departureTime}</span>
+                                    <span className="bg-gray-100 px-2.5 py-1 rounded-lg">{formatTripTime(trip.departureTime)}</span>
                                 </div>
                                 <div className="flex justify-between items-center text-xs">
                                     <span className="text-gray-400 font-medium">{trip.bus?.plateNumber ?? '—'}</span>
@@ -405,50 +418,89 @@ export default function BookingManagement() {
                                     </div>
                                     <div className="p-4 bg-green-50/65 border border-green-100 rounded-2xl text-green-700 flex flex-col justify-between">
                                         <span className="text-xs font-extrabold uppercase tracking-wider opacity-70 mb-1">Booked</span>
-                                        <span className="text-3xl font-black">{bookingsLoading ? '—' : bookedSeatsCount}</span>
+                                        <span className="text-3xl font-black">{manifestLoading ? '—' : bookedSeatsCount}</span>
                                     </div>
                                     <div className="p-4 bg-gray-50/65 border border-gray-200 rounded-2xl text-gray-700 flex flex-col justify-between">
                                         <span className="text-xs font-extrabold uppercase tracking-wider opacity-70 mb-1">Empty</span>
-                                        <span className="text-3xl font-black">{bookingsLoading ? '—' : emptySeatsCount}</span>
+                                        <span className="text-3xl font-black">{manifestLoading ? '—' : emptySeatsCount}</span>
                                     </div>
                                 </div>
                                 <div className="overflow-x-auto rounded-2xl border border-gray-100">
                                     <table className="w-full text-left text-sm">
                                         <thead className="bg-gray-50/80 border-b border-gray-100 text-gray-400 uppercase font-bold text-[10px] tracking-wider">
                                             <tr>
-                                                <th className="px-6 py-4">Ticket Info</th>
-                                                <th className="px-6 py-4">Passenger Details</th>
-                                                <th className="px-6 py-4">Seat</th>
-                                                <th className="px-6 py-4">Contact</th>
+                                                <th className="px-5 py-4">Ticket / Booking</th>
+                                                <th className="px-5 py-4">Passenger</th>
+                                                <th className="px-5 py-4">Seat</th>
+                                                <th className="px-5 py-4">Contact</th>
+                                                <th className="px-5 py-4">Payment</th>
+                                                <th className="px-5 py-4">Booked by</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-50 text-gray-700">
-                                            {bookingsLoading ? (
-                                                <tr><td colSpan={4} className="text-center py-10 text-gray-400">Loading…</td></tr>
-                                            ) : filteredManifest.length === 0 ? (
-                                                <tr><td colSpan={4} className="text-center py-10 text-gray-400 font-medium">No passengers booked for this trip yet.</td></tr>
-                                            ) : filteredManifest.map((b) => {
-                                                const t = b.travelers?.[0];
-                                                const seat = t?.seat?.seatNumber ?? t?.seatNumber ?? '—';
-                                                return (
-                                                    <tr key={b.id} className="hover:bg-blue-50/30 transition-colors">
-                                                        <td className="px-6 py-4">
-                                                            <div className="font-bold text-gray-900 font-mono text-xs">{b.id?.slice(0,12)}…</div>
-                                                            <div className="text-xs text-gray-400">{b.status}</div>
-                                                        </td>
-                                                        <td className="px-6 py-4">
-                                                            <div className="font-bold text-gray-900">{t?.fullName ?? '—'}</div>
-                                                            <div className="text-xs text-gray-500">Passenger</div>
-                                                        </td>
-                                                        <td className="px-6 py-4">
-                                                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gray-100 font-bold text-gray-700 border border-gray-200 shadow-sm">
-                                                                {seat}
+                                            {bookingsLoading || manifestLoading ? (
+                                                <tr><td colSpan={6} className="text-center py-10 text-gray-400">Loading manifest…</td></tr>
+                                            ) : manifestRows.length === 0 ? (
+                                                <tr><td colSpan={6} className="text-center py-10 text-gray-400 font-medium">No passengers booked for this trip yet.</td></tr>
+                                            ) : manifestRows.map((row) => (
+                                                <tr key={row.id} className="hover:bg-blue-50/30 transition-colors">
+                                                    <td className="px-5 py-4">
+                                                        <div className="font-bold text-gray-900 font-mono text-xs">
+                                                            {row.ticketId ? `${String(row.ticketId).slice(0, 8)}…` : `${row.bookingId?.slice(0, 8)}…`}
+                                                        </div>
+                                                        {row.bookingReference && (
+                                                            <div className="text-[10px] text-gray-500 font-mono">{row.bookingReference}</div>
+                                                        )}
+                                                        <div className="text-xs text-gray-400 mt-0.5">{row.bookingDate}</div>
+                                                        <span className={cn(
+                                                            'inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full',
+                                                            row.bookingStatus === 'CONFIRMED' ? 'bg-emerald-100 text-emerald-700'
+                                                                : row.bookingStatus === 'CANCELLED' ? 'bg-gray-100 text-gray-500'
+                                                                    : 'bg-amber-100 text-amber-700',
+                                                        )}>
+                                                            {row.bookingStatus}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-5 py-4">
+                                                        <div className="font-bold text-gray-900">{row.passengerName}</div>
+                                                        {row.channel !== '—' && (
+                                                            <span className={cn(
+                                                                'inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full',
+                                                                row.channel === 'Walk-in' ? 'bg-violet-100 text-violet-700' : 'bg-sky-100 text-sky-700',
+                                                            )}>
+                                                                {row.channel}
                                                             </span>
-                                                        </td>
-                                                        <td className="px-6 py-4 font-mono text-xs text-gray-600">{t?.phone ?? '—'}</td>
-                                                    </tr>
-                                                );
-                                            })}
+                                                        )}
+                                                    </td>
+                                                    <td className="px-5 py-4">
+                                                        <span className="inline-flex items-center justify-center min-w-8 h-8 px-1 rounded-lg bg-gray-100 font-bold text-gray-700 border border-gray-200 shadow-sm">
+                                                            {row.seatLabel}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-5 py-4">
+                                                        <div className="font-mono text-xs text-gray-800">{row.passengerPhone}</div>
+                                                        {row.passengerEmail && row.passengerEmail !== '—' && (
+                                                            <div className="text-[10px] text-gray-500 truncate max-w-[140px]" title={row.passengerEmail}>
+                                                                {row.passengerEmail}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-5 py-4">
+                                                        <span className={cn(
+                                                            'text-xs font-bold',
+                                                            row.isPaid ? 'text-emerald-600' : row.paymentStatus === 'Failed' ? 'text-red-600' : 'text-amber-600',
+                                                        )}>
+                                                            {row.paymentStatus}
+                                                        </span>
+                                                        <div className="text-[10px] text-gray-500 mt-0.5">{row.paymentMethod}</div>
+                                                        <div className="text-xs font-bold text-gray-800 mt-0.5">{row.amount}</div>
+                                                    </td>
+                                                    <td className="px-5 py-4 text-xs text-gray-700">
+                                                        <div className="font-semibold text-gray-900">{row.bookedBy}</div>
+                                                        <div className="text-[10px] text-gray-400 mt-0.5">Account holder</div>
+                                                    </td>
+                                                </tr>
+                                            ))}
                                         </tbody>
                                     </table>
                                 </div>
