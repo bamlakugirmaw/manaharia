@@ -3,19 +3,23 @@ export const CHAPA_PAYMENT_METHOD = 'CHAPA';
 
 /**
  * Payload for POST /v1/payments/callback (Chapa return + SPA backup).
+ * Spec: { gatewayReference, status, transactionCode, callbackReference }
+ * Backend requires bookingId to look up the payment record.
+ * Note: `method` is intentionally omitted — the backend infers it from gatewayReference.
  */
 export function buildChapaCallbackPayload({
     gatewayReference,
     status,
     transactionCode,
     callbackReference,
+    bookingId,
 }) {
     return {
+        bookingId: bookingId ?? undefined,
         gatewayReference,
         status,
         transactionCode: transactionCode ?? gatewayReference,
         callbackReference: callbackReference ?? gatewayReference,
-        method: CHAPA_PAYMENT_METHOD,
     };
 }
 

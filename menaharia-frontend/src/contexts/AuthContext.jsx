@@ -178,6 +178,13 @@ export function AuthProvider({ children }) {
             setUser(resolvedUser);
             return { success: true, user: resolvedUser };
         } catch (err) {
+            // err.response is null when the backend is unreachable (network error, timeout, CORS)
+            if (!err?.response) {
+                return {
+                    success: false,
+                    message: 'Cannot reach the server. Make sure the backend is running and try again.',
+                };
+            }
             const raw = err?.response?.data?.message?.message
                 ?? err?.response?.data?.message
                 ?? err?.message

@@ -5,20 +5,24 @@ import { buildChapaCallbackPayload, CHAPA_PAYMENT_METHOD } from './paymentSync';
 
 const CALLBACK_SENT_PREFIX = 'menaharia.payment.callbackSent.';
 
-export function buildCallbackBody(chapa) {
+export function buildCallbackBody(chapa, bookingId) {
     return buildChapaCallbackPayload({
         gatewayReference: chapa.gatewayReference,
         status: chapa.apiStatus,
         transactionCode: chapa.transactionCode,
         callbackReference: chapa.callbackReference,
+        bookingId,
     });
 }
 
 /**
  * POST /v1/payments/callback from the SPA return route (backup if payment-return.html did not run).
  * payment-return.html is the primary caller; this retries when trx_ref is in the URL or stored gateway ref exists.
+ *
+ * @param {{ bookingId: string, searchParams: URLSearchParams, forceRetry?: boolean }} options
+ *   forceRetry — bypass the dedup key and send the callback again (used after polling timeout)
  */
-export async function confirmPaymentFromChapaReturn({ bookingId, searchParams }) {
+export async function confirmPaymentFromChapaReturn({ bookingId, searchParams, forceRetry = false }) {
     const chapa = resolveChapaReturnParams(searchParams, bookingId);
 
     appendPaymentCallbackAudit({
@@ -36,16 +40,18 @@ export async function confirmPaymentFromChapaReturn({ bookingId, searchParams })
     }
 
     const dedupeKey = `${CALLBACK_SENT_PREFIX}${chapa.gatewayReference}`;
-    try {
-        if (sessionStorage.getItem(dedupeKey)) {
-            return { attempted: false, chapa, skipped: 'duplicate' };
+    if (!forceRetry) {
+        try {
+            if (sessionStorage.getItem(dedupeKey)) {
+                return { attempted: false, chapa, skipped: 'duplicate' };
+            }
+        } catch {
+            /* continue */
         }
-    } catch {
-        /* continue */
     }
 
     try {
-        await paymentsApi.paymentCallbackPublic(buildCallbackBody(chapa));
+        await paymentsApi.paymentCallbackPublic(buildCallbackBody(chapa, bookingId));
         try {
             sessionStorage.setItem(dedupeKey, String(Date.now()));
         } catch {

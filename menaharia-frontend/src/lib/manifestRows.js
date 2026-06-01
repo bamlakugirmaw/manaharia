@@ -36,7 +36,40 @@ function seatSortKey(label) {
 }
 
 /**
+ * Resolve the booking source for a row.
+ *
+ * @returns {{
+ *   key: 'platform' | 'office' | 'manual',
+ *   label: 'Platform Booking' | 'Office Booking' | 'Manual / Cash',
+ *   sublabel: 'Booked via Menaharia' | 'Booked at Office' | 'In-person reservation',
+ *   variant: 'platform' | 'office' | 'manual',
+ * }}
+ */
+export function resolveBookingSource(paymentMethod, traveler) {
+    const method = (paymentMethod ?? '').toUpperCase();
+
+    // Manual / walk-in: operator booked via the dashboard
+    if (method === 'MANUAL' || isWalkInTraveler(traveler)) {
+        return {
+            key: 'office',
+            label: 'Office Booking',
+            sublabel: 'Booked at Office',
+            variant: 'office',
+        };
+    }
+
+    // All Chapa / online payment methods → platform booking
+    return {
+        key: 'platform',
+        label: 'Platform Booking',
+        sublabel: 'Booked via Menaharia',
+        variant: 'platform',
+    };
+}
+
+/**
  * Flatten trip bookings into manifest rows (one row per reserved seat).
+ * Shows all CONFIRMED bookings regardless of whether payment details are available.
  * @param {Array} bookings — bookings for this trip (already operator-scoped)
  * @param {Record<string, Array>} travelersByBookingId
  * @param {Record<string, object>} paymentsByBookingId
@@ -62,10 +95,18 @@ export function buildManifestRows(
             payment: paymentsByBookingId[booking.id] ?? booking.payment,
         });
 
-        if (!isBookingVisibleOnOperatorManifest(booking, payment)) continue;
+        // Show booking if:
+        // 1. booking.status is CONFIRMED (most reliable — set by backend after payment)
+        // 2. OR payment status indicates success (fallback when booking status lags)
+        const bookingStatus = (booking.status ?? '').toUpperCase();
+        const isConfirmed = bookingStatus === 'CONFIRMED';
+        const isPaymentSuccess = isBookingVisibleOnOperatorManifest(booking, payment);
+
+        if (!isConfirmed && !isPaymentSuccess) continue;
 
         const paymentStatus = mapPaymentDisplay(payment.status, booking.status);
         const paymentMethod = METHOD_LABEL[payment.method] ?? payment.method ?? '—';
+        const paymentMethodRaw = (payment.method ?? '').toUpperCase();
         const amount = payment.amount ?? booking.totalAmount;
         const tickets = ticketsByBookingId[booking.id] ?? booking.tickets ?? [];
         const ticketId = tickets[0]?.id ?? booking.ticketId ?? null;
@@ -79,7 +120,15 @@ export function buildManifestRows(
         const bookingDate = formatDate(booking.createdAt);
         const bookingRef = booking.bookingReference ?? booking.reference ?? null;
 
-        const pushRow = (traveler, seatLabel, channel) => {
+        const pushRow = (traveler, seatLabel) => {
+            const source = resolveBookingSource(paymentMethodRaw, traveler);
+            // Keep legacy `channel` field for backwards compat
+            const channel = paymentMethodRaw === 'MANUAL'
+                ? 'Manual'
+                : isWalkInTraveler(traveler)
+                    ? 'Walk-in'
+                    : 'Online';
+
             rows.push({
                 id: `${booking.id}-${traveler?.id ?? 'x'}-${seatLabel}`,
                 bookingId: booking.id,
@@ -95,24 +144,21 @@ export function buildManifestRows(
                 paymentStatusRaw: (payment.status ?? '').toUpperCase(),
                 paymentMethod,
                 amount: formatAmount(amount),
+                // Legacy channel field
                 channel,
+                // Structured booking source
+                bookingSource: source,
                 bookedBy,
                 isPaid: paymentStatus === 'Completed',
             });
         };
 
         if (travelers.length === 0) {
-            pushRow(null, '—', '—');
+            pushRow(null, '—');
             continue;
         }
 
         for (const traveler of travelers) {
-            const payMethod = (payment.method ?? '').toUpperCase();
-            const channel = payMethod === 'MANUAL'
-                ? 'Manual'
-                : isWalkInTraveler(traveler)
-                    ? 'Walk-in'
-                    : 'Online';
             const bookingSeats = traveler.bookingSeats ?? [];
 
             if (bookingSeats.length > 0) {
@@ -123,14 +169,14 @@ export function buildManifestRows(
                         ?? bs.tripSeat?.seatNumber
                         ?? bs.seat?.seatNumber
                         ?? '—';
-                    pushRow(traveler, seatLabel, channel);
+                    pushRow(traveler, seatLabel);
                 }
             } else {
                 const seatLabel =
                     traveler.seat?.seatNumber
                     ?? traveler.seatNumber
                     ?? '—';
-                pushRow(traveler, seatLabel, channel);
+                pushRow(traveler, seatLabel);
             }
         }
     }

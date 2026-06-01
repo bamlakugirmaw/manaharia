@@ -1,22 +1,33 @@
 import { useMemo } from 'react';
-import { useQueries } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { travelersApi } from '../api/travelers.api';
 import { usePayments } from './usePayments';
 import { ticketsApi } from '../api/tickets.api';
+import { bookingsApi } from '../api/bookings.api';
 import { ticketKeys } from './useTickets';
 import { travelerKeys } from './useTravelers';
+import { bookingKeys } from './useBookings';
 import { unwrapTravelersList, buildTripSeatLabelMap } from '../lib/bookingEnrichment';
 import { buildManifestRows, countBookedSeatsFromRows } from '../lib/manifestRows';
 import { bookingOperatorId } from '../lib/operatorHelpers';
 
+function unwrapBookingList(res) {
+    const p = res?.data ?? res;
+    if (Array.isArray(p)) return p;
+    if (Array.isArray(p?.items)) return p.items;
+    if (Array.isArray(p?.data)) return p.data;
+    return [];
+}
+
 /**
- * Passenger manifest for one trip: operator-scoped bookings + travelers + payments + tickets.
+ * Passenger manifest for one trip: fetches confirmed bookings directly by tripId,
+ * then loads travelers, payments, and tickets for each booking.
  */
 export function useTripManifest({
     tripId,
     operatorId,
     operatorBusIds = [],
-    bookings = [],
+    bookings = [],        // fallback pre-fetched bookings (used when tripId query not supported)
     tripSeats = [],
     enabled = true,
 }) {
@@ -25,9 +36,37 @@ export function useTripManifest({
         [operatorBusIds],
     );
 
+    const active = enabled && !!tripId && !!operatorId;
+
+    // Fetch confirmed bookings directly for this trip — most reliable source
+    const tripBookingsQuery = useQuery({
+        queryKey: bookingKeys.list({ tripId, status: 'CONFIRMED', limit: 200 }),
+        queryFn: async () => unwrapBookingList(
+            await bookingsApi.listBookings({ tripId, status: 'CONFIRMED', limit: 200 })
+        ),
+        enabled: active,
+        staleTime: 0,
+    });
+
+    // Also fetch all bookings for this trip (PENDING + CONFIRMED) as fallback
+    const allTripBookingsQuery = useQuery({
+        queryKey: bookingKeys.list({ tripId, limit: 200 }),
+        queryFn: async () => unwrapBookingList(
+            await bookingsApi.listBookings({ tripId, limit: 200 })
+        ),
+        enabled: active,
+        staleTime: 0,
+    });
+
+    // Merge: confirmed bookings from direct query + any confirmed ones from the pre-fetched list
     const tripBookings = useMemo(() => {
         if (!tripId || !operatorId) return [];
-        return (bookings ?? []).filter((b) => {
+
+        // Start with directly fetched confirmed bookings
+        const directConfirmed = tripBookingsQuery.data ?? [];
+
+        // Also include any confirmed bookings from the pre-fetched list (fallback)
+        const preFiltered = (bookings ?? []).filter((b) => {
             const tripMatch = (b.tripId ?? b.trip?.id) === tripId;
             if (!tripMatch) return false;
             const opId = bookingOperatorId(b);
@@ -35,7 +74,19 @@ export function useTripManifest({
             const busId = b.trip?.busId ?? b.trip?.bus?.id;
             return Boolean(busId && busIdSet.has(busId));
         });
-    }, [bookings, tripId, operatorId, busIdSet]);
+
+        // Merge by id, preferring directly fetched data
+        const merged = new Map();
+        for (const b of preFiltered) merged.set(b.id, b);
+        for (const b of directConfirmed) merged.set(b.id, b);
+
+        // Also include all bookings from the all-trip query (for payment status check)
+        for (const b of (allTripBookingsQuery.data ?? [])) {
+            if (!merged.has(b.id)) merged.set(b.id, b);
+        }
+
+        return [...merged.values()];
+    }, [bookings, tripId, operatorId, busIdSet, tripBookingsQuery.data, allTripBookingsQuery.data]);
 
     const bookingIds = useMemo(
         () => tripBookings.map((b) => b.id).filter(Boolean),
@@ -46,8 +97,6 @@ export function useTripManifest({
         const trip = { tripSeats };
         return buildTripSeatLabelMap(trip);
     }, [tripSeats]);
-
-    const active = enabled && !!tripId && !!operatorId;
 
     const travelersQueries = useQueries({
         queries: bookingIds.map((bookingId) => ({
@@ -123,9 +172,12 @@ export function useTripManifest({
 
     const travelersLoading = travelersQueries.some((q) => q.isLoading || q.isFetching);
     const ticketsLoading = ticketsQueries.some((q) => q.isLoading || q.isFetching);
-    const isLoading = travelersLoading || paymentsLoading || ticketsLoading;
+    const isLoading = tripBookingsQuery.isLoading || allTripBookingsQuery.isLoading
+        || travelersLoading || paymentsLoading || ticketsLoading;
 
     const refetch = () => {
+        tripBookingsQuery.refetch();
+        allTripBookingsQuery.refetch();
         travelersQueries.forEach((q) => q.refetch());
     };
 

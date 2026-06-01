@@ -98,28 +98,29 @@
                 return null;
             }
 
-            function buildCallbackPayload(trxRef, status) {
+            function buildCallbackPayload(trxRef, status, bookingId) {
                 var apiStatus = mapStatus(status);
                 if (!apiStatus) {
+                    // Only assume SUCCESS when Chapa explicitly omits status but provides a ref.
+                    // If status is present but unrecognised, treat as FAILED to be safe.
                     apiStatus = status ? 'FAILED' : 'SUCCESS';
                 }
-                return {
+                // Backend requires bookingId to look up the payment record.
+                var payload = {
                     gatewayReference: trxRef,
                     status: apiStatus,
                     transactionCode: trxRef,
                     callbackReference: trxRef,
-                    method: 'CHAPA',
                 };
+                if (bookingId) payload.bookingId = bookingId;
+                return payload;
             }
 
             async function postPaymentCallback(payload) {
                 var apiBase = getApiBase();
                 var url = apiBase + '/v1/payments/callback';
+                // Spec: no auth required for the callback endpoint.
                 var headers = { 'Content-Type': 'application/json' };
-                try {
-                    var token = localStorage.getItem('accessToken');
-                    if (token) headers.Authorization = 'Bearer ' + token;
-                } catch (e) { /* ignore */ }
 
                 var res = await fetch(url, {
                     method: 'POST',
@@ -179,7 +180,7 @@
                     }
                 } catch (e) { /* continue */ }
 
-                var payload = buildCallbackPayload(trxRef, status);
+                var payload = buildCallbackPayload(trxRef, status, bookingId);
 
                 try {
                     setStatus('Confirming payment with server…');

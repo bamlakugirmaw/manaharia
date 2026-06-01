@@ -31,7 +31,7 @@ export function useBookings(params = {}) {
         queryKey: bookingKeys.list(queryParams),
         queryFn: async () => unwrapList(await bookingsApi.listBookings(queryParams)),
         enabled,
-        staleTime: 30 * 1000,
+        staleTime: 0,
     });
 }
 

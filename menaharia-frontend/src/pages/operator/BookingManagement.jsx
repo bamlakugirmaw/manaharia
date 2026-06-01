@@ -526,15 +526,27 @@ export default function BookingManagement() {
                                 </form>
 
                                 <div className="overflow-x-auto rounded-2xl border border-gray-100">
+                                    {/* Legend */}
+                                    <div className="flex items-center gap-4 px-5 py-3 bg-gray-50/60 border-b border-gray-100 text-[11px] font-bold text-gray-500">
+                                        <span className="uppercase tracking-wider">Booking Source:</span>
+                                        <span className="inline-flex items-center gap-1.5">
+                                            <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400" />
+                                            Platform Booking
+                                        </span>
+                                        <span className="inline-flex items-center gap-1.5">
+                                            <span className="inline-block w-2.5 h-2.5 rounded-full bg-blue-400" />
+                                            Office Booking
+                                        </span>
+                                    </div>
                                     <table className="w-full text-left text-sm">
                                         <thead className="bg-gray-50/80 border-b border-gray-100 text-gray-400 uppercase font-bold text-[10px] tracking-wider">
                                             <tr>
                                                 <th className="px-5 py-4">Ticket / Booking</th>
                                                 <th className="px-5 py-4">Passenger</th>
                                                 <th className="px-5 py-4">Seat</th>
+                                                <th className="px-5 py-4">Source</th>
                                                 <th className="px-5 py-4">Contact</th>
                                                 <th className="px-5 py-4">Payment</th>
-                                                <th className="px-5 py-4">Booked by</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-50 text-gray-700">
@@ -543,7 +555,12 @@ export default function BookingManagement() {
                                             ) : manifestRows.length === 0 ? (
                                                 <tr><td colSpan={6} className="text-center py-10 text-gray-400 font-medium">No passengers booked for this trip yet.</td></tr>
                                             ) : manifestRows.map((row) => (
-                                                <tr key={row.id} className="hover:bg-blue-50/30 transition-colors">
+                                                <tr key={row.id} className={cn(
+                                                    "transition-colors hover:bg-gray-50/60",
+                                                    row.bookingSource?.variant === 'platform' && "border-l-2 border-l-emerald-300",
+                                                    row.bookingSource?.variant === 'office' && "border-l-2 border-l-blue-300",
+                                                )}>
+                                                    {/* Ticket / Booking */}
                                                     <td className="px-5 py-4">
                                                         <div className="font-bold text-gray-900 font-mono text-xs">
                                                             {row.ticketId ? `${String(row.ticketId).slice(0, 8)}…` : `${row.bookingId?.slice(0, 8)}…`}
@@ -561,34 +578,56 @@ export default function BookingManagement() {
                                                             {row.bookingStatus}
                                                         </span>
                                                     </td>
+
+                                                    {/* Passenger */}
                                                     <td className="px-5 py-4">
                                                         <div className="font-bold text-gray-900">{row.passengerName}</div>
-                                                        {row.channel !== '—' && (
-                                                            <span className={cn(
-                                                                'inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full',
-                                                                row.channel === 'Manual'
-                                                                    ? 'bg-emerald-100 text-emerald-700'
-                                                                    : row.channel === 'Walk-in'
-                                                                        ? 'bg-violet-100 text-violet-700'
-                                                                        : 'bg-sky-100 text-sky-700',
-                                                            )}>
-                                                                {row.channel}
-                                                            </span>
+                                                        {row.bookedBy && row.bookedBy !== '—' && (
+                                                            <div className="text-[10px] text-gray-400 mt-0.5">Acct: {row.bookedBy}</div>
                                                         )}
                                                     </td>
+
+                                                    {/* Seat */}
                                                     <td className="px-5 py-4">
-                                                        <span className="inline-flex items-center justify-center min-w-8 h-8 px-1 rounded-lg bg-gray-100 font-bold text-gray-700 border border-gray-200 shadow-sm">
+                                                        <span className="inline-flex items-center justify-center min-w-8 h-8 px-2 rounded-lg bg-gray-100 font-bold text-gray-700 border border-gray-200 shadow-sm text-sm">
                                                             {row.seatLabel}
                                                         </span>
                                                     </td>
+
+                                                    {/* Booking Source */}
+                                                    <td className="px-5 py-4 min-w-[140px]">
+                                                        {row.bookingSource?.variant === 'platform' ? (
+                                                            <div>
+                                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-bold whitespace-nowrap">
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                                                                    Platform Booking
+                                                                </span>
+                                                                <div className="text-[10px] text-gray-400 mt-1">Booked via Menaharia</div>
+                                                            </div>
+                                                        ) : row.bookingSource?.variant === 'office' ? (
+                                                            <div>
+                                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[11px] font-bold whitespace-nowrap">
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                                                                    Office Booking
+                                                                </span>
+                                                                <div className="text-[10px] text-gray-400 mt-1">Booked at Office</div>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-xs text-gray-400">—</span>
+                                                        )}
+                                                    </td>
+
+                                                    {/* Contact */}
                                                     <td className="px-5 py-4">
                                                         <div className="font-mono text-xs text-gray-800">{row.passengerPhone}</div>
-                                                        {row.passengerEmail && row.passengerEmail !== '—' && (
+                                                        {row.passengerEmail && row.passengerEmail !== '—' && !row.passengerEmail.includes('@menaharia.local') && (
                                                             <div className="text-[10px] text-gray-500 truncate max-w-[140px]" title={row.passengerEmail}>
                                                                 {row.passengerEmail}
                                                             </div>
                                                         )}
                                                     </td>
+
+                                                    {/* Payment */}
                                                     <td className="px-5 py-4">
                                                         <span className={cn(
                                                             'text-xs font-bold',
@@ -598,10 +637,6 @@ export default function BookingManagement() {
                                                         </span>
                                                         <div className="text-[10px] text-gray-500 mt-0.5">{row.paymentMethod}</div>
                                                         <div className="text-xs font-bold text-gray-800 mt-0.5">{row.amount}</div>
-                                                    </td>
-                                                    <td className="px-5 py-4 text-xs text-gray-700">
-                                                        <div className="font-semibold text-gray-900">{row.bookedBy}</div>
-                                                        <div className="text-[10px] text-gray-400 mt-0.5">Account holder</div>
                                                     </td>
                                                 </tr>
                                             ))}

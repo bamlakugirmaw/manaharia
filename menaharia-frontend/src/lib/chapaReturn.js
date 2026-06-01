@@ -88,10 +88,9 @@ export function resolveChapaReturnParams(searchParams, bookingId = null) {
     if (!apiStatus && fromUrl.chapaStatus) {
         apiStatus = mapChapaStatusToApi(fromUrl.chapaStatus);
     }
+    // Only use the dedup key as a signal — never assume SUCCESS from stored ref alone.
+    // If Chapa didn't provide a status, we cannot safely assume the payment succeeded.
     if (!apiStatus && gatewayReference && wasCallbackSentForGateway(gatewayReference)) {
-        apiStatus = 'SUCCESS';
-    }
-    if (!apiStatus && gatewayReference && !fromUrl.chapaStatus && storedRef) {
         apiStatus = 'SUCCESS';
     }
 

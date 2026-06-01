@@ -16,11 +16,13 @@ import { buildPaymentReceipt, savePaymentReceipt } from '../lib/paymentReceipt';
 import { extractErrorMessage } from '../lib/api';
 
 /**
- * After Chapa redirect: optional POST /v1/payments/callback, then poll GET /v1/bookings/:id.
+ * After Chapa redirect: POST /v1/payments/callback (with retry), then poll GET /v1/bookings/:id.
  * On success, show confirmation and let user continue to My Bookings.
  */
 const MAX_POLL_ATTEMPTS = 40;
 const POLL_INTERVAL_MS = 2000;
+// After this many polls without confirmation, retry the callback once more.
+const CALLBACK_RETRY_AFTER_POLLS = 5;
 
 export default function PaymentReturn() {
     const navigate = useNavigate();
@@ -28,6 +30,7 @@ export default function PaymentReturn() {
     const [searchParams] = useSearchParams();
     const pending = loadPendingPayment();
     const callbackAttemptedRef = useRef(false);
+    const callbackRetryAttemptedRef = useRef(false);
 
     const bookingId =
         searchParams.get('bookingId')
@@ -35,12 +38,17 @@ export default function PaymentReturn() {
         ?? pending?.bookingId
         ?? null;
 
+    // payment_result=failed means payment-return.html callback POST failed
+    const paymentResultParam = searchParams.get('payment_result');
+    const callbackAlreadyFailed = paymentResultParam === 'failed';
+
     const { data: booking, isLoading, refetch, isFetching } = useBooking(bookingId);
     const { mutateAsync: initiatePayment, isPending: retrying } = useInitiatePayment();
 
     const [errorMsg, setErrorMsg] = useState('');
     const [pollCount, setPollCount] = useState(0);
     const [callbackDone, setCallbackDone] = useState(false);
+    const [callbackFailed, setCallbackFailed] = useState(callbackAlreadyFailed);
 
     const isPaid = isBookingPaid(booking);
     const isFailed = isBookingPaymentFailed(booking);
@@ -56,25 +64,38 @@ export default function PaymentReturn() {
         clearPaymentInitiationLock(bookingId);
     }, [bookingId, navigate, searchParams]);
 
+    // Primary callback attempt on mount — skip if payment-return.html already reported failure
+    // (it means the backend rejected the callback; we retry below after a few polls)
     useEffect(() => {
         if (!bookingId || callbackAttemptedRef.current) return undefined;
 
         callbackAttemptedRef.current = true;
+
+        // If payment-return.html already failed, don't immediately retry — wait for polls first
+        if (callbackAlreadyFailed) {
+            setCallbackDone(true);
+            refetch();
+            return undefined;
+        }
+
         confirmPaymentFromChapaReturn({ bookingId, searchParams }).then((result) => {
             setCallbackDone(true);
             if (result?.error) {
+                setCallbackFailed(true);
                 setErrorMsg(extractErrorMessage(result.error, 'Payment confirmation failed. Retrying…'));
+            } else {
+                setCallbackFailed(false);
+                setErrorMsg('');
             }
             refetch();
         });
 
         return undefined;
-    }, [bookingId, searchParams, refetch]);
+    }, [bookingId, searchParams, refetch, callbackAlreadyFailed]);
 
+    // Polling loop — runs independently, does not restart on pollCount change
     useEffect(() => {
         if (!bookingId || isPaid || isFailed || pollCount >= MAX_POLL_ATTEMPTS) return undefined;
-
-        refetch();
 
         const interval = setInterval(() => {
             setPollCount((c) => c + 1);
@@ -82,7 +103,31 @@ export default function PaymentReturn() {
         }, POLL_INTERVAL_MS);
 
         return () => clearInterval(interval);
-    }, [bookingId, isPaid, isFailed, refetch, pollCount]);
+    }, [bookingId, isPaid, isFailed, refetch]); // intentionally exclude pollCount
+
+    // Retry callback once after CALLBACK_RETRY_AFTER_POLLS polls if booking is still pending
+    useEffect(() => {
+        if (
+            !bookingId
+            || isPaid
+            || isFailed
+            || pollCount < CALLBACK_RETRY_AFTER_POLLS
+            || callbackRetryAttemptedRef.current
+        ) return;
+
+        callbackRetryAttemptedRef.current = true;
+        // Force retry — bypass the dedup key
+        confirmPaymentFromChapaReturn({ bookingId, searchParams, forceRetry: true }).then((result) => {
+            if (result?.error) {
+                setCallbackFailed(true);
+                setErrorMsg(extractErrorMessage(result.error, 'Payment confirmation still pending.'));
+            } else if (result?.attempted) {
+                setCallbackFailed(false);
+                setErrorMsg('');
+                refetch();
+            }
+        });
+    }, [bookingId, isPaid, isFailed, pollCount, searchParams, refetch]);
 
     useEffect(() => {
         if (!isPaid || !bookingId || !booking) return;
@@ -109,6 +154,7 @@ export default function PaymentReturn() {
             const result = await initiatePayment({
                 method: 'CHAPA',
                 bookingId,
+                force: true,
             });
             if (result?.paymentUrl) {
                 window.location.href = result.paymentUrl;
@@ -158,6 +204,17 @@ export default function PaymentReturn() {
         );
     }
 
+    // Determine the right message based on what we know
+    const pendingMessage = (() => {
+        if (callbackFailed) {
+            return 'The server could not confirm your payment automatically. If you completed payment on Chapa, click "Check status now" or wait a moment.';
+        }
+        if (callbackDone) {
+            return 'Payment reported to the server. Waiting for booking confirmation…';
+        }
+        return 'If you paid on Chapa, confirmation may take a few seconds.';
+    })();
+
     return (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
             <div className="bg-white rounded-3xl shadow-lg border border-gray-100 max-w-lg w-full p-10 text-center">
@@ -188,13 +245,14 @@ export default function PaymentReturn() {
                     </>
                 ) : (
                     <>
-                        <Loader2 className="w-14 h-14 text-amber-500 animate-spin mx-auto mb-6" />
-                        <h1 className="text-xl font-bold text-gray-900 mb-2">Payment pending</h1>
-                        <p className="text-sm text-gray-500 mb-2">
-                            {callbackDone
-                                ? 'Payment reported to the server. Waiting for booking confirmation…'
-                                : 'If you paid on Chapa, confirmation may take a few seconds.'}
-                        </p>
+                        {callbackFailed
+                            ? <AlertCircle className="w-14 h-14 text-amber-500 mx-auto mb-6" />
+                            : <Loader2 className="w-14 h-14 text-amber-500 animate-spin mx-auto mb-6" />
+                        }
+                        <h1 className="text-xl font-bold text-gray-900 mb-2">
+                            {callbackFailed ? 'Confirmation pending' : 'Payment pending'}
+                        </h1>
+                        <p className="text-sm text-gray-500 mb-2">{pendingMessage}</p>
                         <p className="text-xs text-gray-400 mb-6">
                             Ref: {booking?.bookingReference ?? bookingId}
                             {pollCount > 0 && ` · checked ${pollCount}×`}
