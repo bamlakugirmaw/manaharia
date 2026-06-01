@@ -87,15 +87,25 @@ api.interceptors.response.use(
     }
 );
 
+/** Dashboard routes that require a valid session. */
+function isProtectedPath(pathname) {
+    return (
+        pathname.startsWith('/traveller')
+        || pathname.startsWith('/operator')
+        || pathname.startsWith('/admin')
+    );
+}
+
 /**
- * Clear stored tokens and redirect to login.
- * Called when a refresh attempt fails or no refresh token is present.
+ * Clear stored tokens; redirect to login only on protected dashboard routes.
+ * Public pages (operators, search, booking) must not hard-navigate — that breaks
+ * client-side routing on static hosts (e.g. Vercel 404 on /login).
  */
 function handleAuthFailure() {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
-    // Avoid redirect loops if already on the login page.
-    if (window.location.pathname !== '/login') {
+    const path = window.location.pathname;
+    if (isProtectedPath(path) && path !== '/login') {
         window.location.href = '/login';
     }
     return Promise.reject(new Error('Session expired. Please log in again.'));

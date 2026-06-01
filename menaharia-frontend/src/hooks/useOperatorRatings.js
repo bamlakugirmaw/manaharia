@@ -30,12 +30,25 @@ function unwrapSingle(response) {
  * }} params
  */
 export function useOperatorRatings(params = {}) {
-    const { enabled = true, ...queryParams } = params;
+    const { enabled = true, publicBrowse = false, ...queryParams } = params;
     return useQuery({
-        queryKey: ratingKeys.list(queryParams),
-        queryFn: async () => unwrapList(await operatorRatingsApi.listOperatorRatings(queryParams)),
+        queryKey: ratingKeys.list({ ...queryParams, publicBrowse }),
+        queryFn: async () => {
+            const list = publicBrowse
+                ? operatorRatingsApi.listOperatorRatingsPublic
+                : operatorRatingsApi.listOperatorRatings;
+            try {
+                return unwrapList(await list(queryParams));
+            } catch (err) {
+                if (publicBrowse && err?.response?.status === 401) {
+                    return [];
+                }
+                throw err;
+            }
+        },
         enabled,
         staleTime: 60 * 1000,
+        retry: false,
     });
 }
 

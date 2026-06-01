@@ -21,11 +21,19 @@ import { api, unwrap } from '../lib/api';
 export const listOperators = (params = {}) =>
     api.get('/operators', { params }).then(unwrap);
 
+/** Public operator browse — no login redirect on 401/403. */
+export const listOperatorsPublic = (params = {}) =>
+    api.get('/operators', { params, skipAuthRedirect: true }).then(unwrap);
+
 /**
  * @param {string} id
  */
 export const getOperatorById = (id) =>
     api.get(`/operators/${id}`).then(unwrap);
+
+/** Public operator profile — no login redirect on 401/403. */
+export const getOperatorByIdPublic = (id) =>
+    api.get(`/operators/${id}`, { skipAuthRedirect: true }).then(unwrap);
 
 /**
  * @param {string} id
@@ -73,7 +81,9 @@ export const removeOperator = (id) =>
 
 export const operatorsApi = {
     listOperators,
+    listOperatorsPublic,
     getOperatorById,
+    getOperatorByIdPublic,
     getOperatorDashboard,
     createOperator,
     updateOperator,

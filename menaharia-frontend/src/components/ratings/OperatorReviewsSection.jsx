@@ -18,6 +18,7 @@ export default function OperatorReviewsSection({
         operatorId,
         limit,
         enabled: !!operatorId,
+        publicBrowse: true,
     });
 
     const computedAvg = averageFromRatings(reviews);

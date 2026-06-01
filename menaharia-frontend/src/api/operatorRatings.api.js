@@ -33,6 +33,13 @@ export const createOperatorRating = (data) =>
 export const listOperatorRatings = (params = {}) =>
     api.get('/operator-ratings', { params: sanitizeListParams(params) }).then(unwrapEnvelope);
 
+/** Public reviews on operator profile — no login redirect on 401. */
+export const listOperatorRatingsPublic = (params = {}) =>
+    api.get('/operator-ratings', {
+        params: sanitizeListParams(params),
+        skipAuthRedirect: true,
+    }).then(unwrapEnvelope);
+
 /** @param {string} id */
 export const getOperatorRatingById = (id) =>
     api.get(`/operator-ratings/${id}`).then(unwrapEnvelope);
@@ -56,6 +63,7 @@ export const deleteOperatorRating = (id) =>
 export const operatorRatingsApi = {
     createOperatorRating,
     listOperatorRatings,
+    listOperatorRatingsPublic,
     getOperatorRatingById,
     updateOperatorRating,
     deleteOperatorRating,

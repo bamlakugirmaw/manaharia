@@ -78,10 +78,23 @@ export function usePublicOperators(params = {}) {
         enabled,
     });
 
-    const { data: apiOperators = [], isLoading: apiLoading, isError: apiError } = useOperators({
-        limit: 100,
-        status,
+    const { data: apiOperators = [], isLoading: apiLoading, isError: apiError } = useQuery({
+        queryKey: operatorKeys.list({ status, public: true }),
+        queryFn: async () => {
+            try {
+                const response = await operatorsApi.listOperatorsPublic({ limit: 100, status });
+                const payload = response?.data ?? response;
+                if (Array.isArray(payload)) return payload;
+                if (Array.isArray(payload?.items)) return payload.items;
+                if (Array.isArray(payload?.data)) return payload.data;
+                return [];
+            } catch {
+                return [];
+            }
+        },
         enabled: enabled && isAuthenticated,
+        staleTime: 10 * 60 * 1000,
+        retry: false,
     });
 
     const operators = useMemo(() => {
@@ -111,8 +124,19 @@ export function usePublicOperator(operatorId) {
         enabled: !!operatorId,
     });
 
-    const { data: apiOperator, isLoading: apiLoading } = useOperator(operatorId, {
+    const { data: apiOperator, isLoading: apiLoading } = useQuery({
+        queryKey: operatorKeys.detail({ id: operatorId, public: true }),
+        queryFn: async () => {
+            try {
+                const res = await operatorsApi.getOperatorByIdPublic(operatorId);
+                return res?.data ?? res;
+            } catch {
+                return null;
+            }
+        },
         enabled: isAuthenticated && !!operatorId,
+        staleTime: 10 * 60 * 1000,
+        retry: false,
     });
 
     const operator = useMemo(() => {

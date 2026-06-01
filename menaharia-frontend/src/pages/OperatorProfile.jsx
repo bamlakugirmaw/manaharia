@@ -1,10 +1,11 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import OperatorHeader from '../components/operators/OperatorHeader';
+import OperatorStatCards from '../components/operators/OperatorStatCards';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import {
-    ArrowLeft, Clock, Bus, Users, MapPin, Info, Shield, Route, Star, TrendingUp, Calendar,
+    ArrowLeft, Clock, Bus, Users, MapPin, Info, Shield, Route,
 } from 'lucide-react';
 import { usePublicOperator } from '../hooks/useOperators';
 import OperatorReviewsSection from '../components/ratings/OperatorReviewsSection';
@@ -45,26 +46,14 @@ export default function OperatorProfile() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-            <div className="bg-white border-b border-gray-200">
-                <div className="max-w-7xl mx-auto px-4 py-4">
-                    <Button variant="ghost" onClick={() => navigate('/operators')} className="font-bold">
-                        <ArrowLeft className="w-4 h-4 mr-2" /> Back to All Operators
-                    </Button>
-                </div>
-            </div>
-
-            <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white pt-6 md:pt-8">
+            <div className="max-w-7xl mx-auto px-4 pb-8">
                 <div className="mb-8">
                     <OperatorHeader operator={operator} />
                 </div>
 
-                {/* Stats strip */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                    <StatCard icon={Star} label="Rating" value={operator.rating != null ? operator.rating.toFixed(1) : 'New'} />
-                    <StatCard icon={TrendingUp} label="Reliability" value={operator.reliabilityScore != null ? `${operator.reliabilityScore}%` : '—'} />
-                    <StatCard icon={Route} label="Routes" value={operator.routeDetails?.length ?? operator.routesServed?.length ?? 0} />
-                    <StatCard icon={Calendar} label="Scheduled Trips" value={operator.scheduledTripCount ?? operator.upcomingTrips?.length ?? 0} />
+                <div className="mb-8">
+                    <OperatorStatCards operator={operator} />
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -285,21 +274,5 @@ export default function OperatorProfile() {
                 </div>
             </div>
         </div>
-    );
-}
-
-function StatCard({ icon: Icon, label, value }) {
-    return (
-        <Card className="p-5 border border-gray-100 shadow-sm">
-            <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                    <Icon size={18} />
-                </div>
-                <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{label}</p>
-                    <p className="text-xl font-black text-gray-900">{value}</p>
-                </div>
-            </div>
-        </Card>
     );
 }
