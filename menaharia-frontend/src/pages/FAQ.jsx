@@ -76,7 +76,7 @@ export default function FAQ() {
             id: 11,
             category: 'account',
             question: 'I forgot my password, how do I reset it?',
-            answer: 'Click "Forgot Password" on the login page. Enter your email or phone number, and you will receive a password reset link via email or SMS. Follow the link to create a new password.'
+            answer: 'Click "Forgot Password" on the login page, enter your account email, and you will receive a one-time verification code by email. Enter that code on the reset password page along with your new password (at least 8 characters).'
         },
         {
             id: 12,

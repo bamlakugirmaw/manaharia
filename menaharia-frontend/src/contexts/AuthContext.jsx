@@ -1,7 +1,10 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authApi } from '../api/auth.api';
 import { operatorsApi } from '../api/operators.api';
-import { api } from '../lib/api';
+import {
+    attachOperatorIdToUser,
+    clearCachedOperatorId,
+} from '../lib/resolveOperatorForUser';
 
 const AuthContext = createContext();
 
@@ -62,7 +65,13 @@ const normaliseUser = (raw) => {
         email:      raw.email ?? '',
         phone:      raw.phone ?? '',
         role:       normaliseRole(raw.roles),
-        operatorId: raw.operatorId ?? raw.operator?.id ?? null,
+        operatorId:
+            raw.operatorId
+            ?? raw.operator?.id
+            ?? raw.busOperator?.operatorId
+            ?? raw.busOperatorId
+            ?? null,
+        operator: raw.operator ?? raw.busOperator ?? null,
         avatarUrl:  avatarFromProfile ?? raw.avatarUrl ?? raw.avatar ?? null,
         roles:      raw.roles ?? [],
     };
@@ -117,22 +126,8 @@ export function AuthProvider({ children }) {
                 const raw = response?.data ?? response;
                 let u = normaliseUser(raw);
 
-                // For BUS_OPERATOR users, operatorId is not on the user object.
-                // Fetch the operators list to resolve it.
-                if (u?.role === 'operator' && !u.operatorId) {
-                    try {
-                        const opRes = await api.get('/operators', { params: { limit: 1 } });
-                        const opPayload = opRes.data?.data ?? opRes.data;
-                        const items = Array.isArray(opPayload) ? opPayload
-                            : Array.isArray(opPayload?.items) ? opPayload.items
-                            : [];
-                        if (items.length > 0) {
-                            u = { ...u, operatorId: items[0].id };
-                        }
-                    } catch { /* non-fatal */ }
-                }
-
                 if (u?.role === 'operator') {
+                    u = await attachOperatorIdToUser(u);
                     u = await resolveOperatorAvatar(u);
                 }
 
@@ -175,24 +170,8 @@ export function AuthProvider({ children }) {
                 }
             }
 
-            // For BUS_OPERATOR users the backend doesn't return operatorId on the
-            // user object. Fetch the operators list and pick the first one.
-            if (resolvedUser?.role === 'operator' && !resolvedUser.operatorId) {
-                try {
-                    const opRes = await api.get('/operators', { params: { limit: 1 } });
-                    const opPayload = opRes.data?.data ?? opRes.data;
-                    const items = Array.isArray(opPayload) ? opPayload
-                        : Array.isArray(opPayload?.items) ? opPayload.items
-                        : [];
-                    if (items.length > 0) {
-                        resolvedUser = { ...resolvedUser, operatorId: items[0].id };
-                    }
-                } catch {
-                    // Non-fatal — operator dashboard will show empty state
-                }
-            }
-
             if (resolvedUser?.role === 'operator') {
+                resolvedUser = await attachOperatorIdToUser(resolvedUser);
                 resolvedUser = await resolveOperatorAvatar(resolvedUser);
             }
 
@@ -235,11 +214,14 @@ export function AuthProvider({ children }) {
     // ── logout ────────────────────────────────────────────────────────────────
     const logout = useCallback(async () => {
         const refreshToken = localStorage.getItem('refreshToken');
+        setUser((prev) => {
+            if (prev?.id) clearCachedOperatorId(prev.id);
+            return null;
+        });
         if (refreshToken) {
             authApi.logout({ refreshToken }).catch(() => {});
         }
         clearTokens();
-        setUser(null);
     }, []);
 
     // ── updateProfile ─────────────────────────────────────────────────────────
@@ -247,7 +229,11 @@ export function AuthProvider({ children }) {
         try {
             const response = await authApi.updateMe(data);
             const raw = response?.data ?? response;
-            setUser(normaliseUser(raw));
+            let u = normaliseUser(raw);
+            if (u?.role === 'operator') {
+                u = await attachOperatorIdToUser(u);
+            }
+            setUser(u);
             return { success: true };
         } catch (err) {
             const message = err?.response?.data?.message ?? 'Update failed.';

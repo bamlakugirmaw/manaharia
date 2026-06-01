@@ -117,7 +117,7 @@ export default function SeatSelection() {
                             <p>{unavailableMessage}</p>
                             {needsNewTrip && (
                                 <p className="mt-2 text-xs font-semibold">
-                                    Operator steps: Fleet → Generate seats on bus → Bookings → Add New Trip Schedule.
+                                    Operator steps: Fleet → Add bus (seats auto-created) → Bookings → Add New Trip Schedule.
                                 </p>
                             )}
                         </div>

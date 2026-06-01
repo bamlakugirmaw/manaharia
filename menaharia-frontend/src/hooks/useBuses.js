@@ -24,12 +24,18 @@ function unwrapList(response) {
  * }} params
  */
 export function useBuses(params = {}) {
+    const { enabled = true, operatorId, ...queryParams } = params;
     return useQuery({
-        queryKey: busKeys.list(params),
+        queryKey: busKeys.list({ operatorId, ...queryParams }),
         queryFn: async () => {
-            const res = await busesApi.listBuses(params);
-            return unwrapList(res);
+            const list = await busesApi.listBuses({ operatorId, ...queryParams });
+            const rows = Array.isArray(list) ? list : unwrapList(list);
+            if (!operatorId) return rows;
+            return rows.filter(
+                (b) => (b.operatorId ?? b.operator?.id) === operatorId,
+            );
         },
+        enabled,
         staleTime: 5 * 60 * 1000,
     });
 }

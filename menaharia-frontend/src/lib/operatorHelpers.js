@@ -1,4 +1,5 @@
 import { tripOrigin, tripDest, tripSeatsLeft } from './tripHelpers';
+import { formatTripDisplayTime, formatTripDisplayDate } from './normaliseTrip';
 
 const DEFAULT_LOGO = '/images/Enhanced_Bus_Images/Selam_Bus1.jpg';
 
@@ -39,20 +40,14 @@ export function filterBookingsForOperator(bookings, operatorId, operatorBusIds =
     });
 }
 
-/** Strip ISO datetime to HH:MM for display. */
+/** Strip ISO datetime to HH:MM for display (Ethiopia local). */
 export function formatTripTime(value) {
-    if (!value) return '—';
-    const part = String(value).includes('T') ? String(value).split('T')[1] : String(value);
-    const [h, m] = part.split(':');
-    return h && m ? `${h.padStart(2, '0')}:${m}` : '—';
+    return formatTripDisplayTime(value);
 }
 
 /** Format trip date for display. */
 export function formatTripDate(value) {
-    if (!value) return '—';
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return '—';
-    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    return formatTripDisplayDate(value);
 }
 
 function routeKey(origin, dest) {

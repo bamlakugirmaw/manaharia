@@ -5,6 +5,7 @@ import { Badge } from '../../components/ui/Badge';
 import { Plus, MapPin, Edit2, X, Trash2 } from 'lucide-react';
 import { Input } from '../../components/ui/Input';
 import { useRoutes, useCreateRoute, useUpdateRoute, useRemoveRoute } from '../../hooks/useRoutes';
+import OperatorScopeBanner from '../../components/operator/OperatorScopeBanner';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { extractErrorMessage } from '../../lib/api';
 
@@ -105,6 +106,7 @@ export default function OperatorRoutes() {
     return (
         <div className="space-y-6">
             <ConfirmDialogHost />
+            <OperatorScopeBanner />
             <div className="flex justify-between items-center">
                 <div>
                     <h1 className="text-xl font-bold tracking-tight">Route Management</h1>

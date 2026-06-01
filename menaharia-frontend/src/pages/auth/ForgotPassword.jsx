@@ -1,21 +1,18 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Mail, Phone, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Mail, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { authApi } from '../../api/auth.api';
 import { extractErrorMessage } from '../../lib/api';
 
 const GENERIC_SUCCESS =
-    'If an account exists for that email or phone, we sent password reset instructions. Check your inbox or messages.';
+    'If an account exists for that email, we sent a one-time verification code. Check your inbox (and spam folder).';
 
 export default function ForgotPassword() {
-    const [identifier, setIdentifier] = useState('');
+    const [email, setEmail] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [submitted, setSubmitted] = useState(false);
-
-    const isPhone = /^[+0-9]/.test(identifier.trim());
-    const InputIcon = isPhone ? Phone : Mail;
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -23,19 +20,16 @@ export default function ForgotPassword() {
         setIsSubmitting(true);
 
         try {
-            await authApi.forgotPassword({ identifier: identifier.trim() });
+            await authApi.forgotPassword({ email: email.trim() });
             setSubmitted(true);
         } catch (err) {
-            const status = err?.response?.status;
-            if (status === 404) {
-                setError('Password reset is not available yet. Please contact support or try again later.');
-            } else {
-                setError(extractErrorMessage(err, 'Could not send reset instructions. Try again.'));
-            }
+            setError(extractErrorMessage(err, 'Could not send verification code. Try again.'));
         } finally {
             setIsSubmitting(false);
         }
     };
+
+    const resetUrl = `/reset-password?email=${encodeURIComponent(email.trim())}`;
 
     return (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -43,7 +37,7 @@ export default function ForgotPassword() {
                 <div className="text-center mb-10">
                     <h1 className="text-3xl font-bold text-gray-900">Forgot password?</h1>
                     <p className="text-gray-500 mt-2">
-                        Enter the email or phone you use to sign in. We will send reset instructions.
+                        Enter your account email. We will send a one-time code to reset your password.
                     </p>
                 </div>
 
@@ -52,6 +46,11 @@ export default function ForgotPassword() {
                         <div className="text-center space-y-4">
                             <CheckCircle2 className="w-14 h-14 text-emerald-500 mx-auto" />
                             <p className="text-sm text-gray-600 leading-relaxed">{GENERIC_SUCCESS}</p>
+                            <Link to={resetUrl}>
+                                <Button fullWidth className="py-4 rounded-xl font-bold">
+                                    Enter verification code
+                                </Button>
+                            </Link>
                             <Link
                                 to="/login"
                                 className="inline-flex items-center gap-2 text-sm font-bold text-primary hover:underline"
@@ -71,21 +70,21 @@ export default function ForgotPassword() {
                             <form onSubmit={handleSubmit} className="space-y-6">
                                 <div className="space-y-2">
                                     <label className="text-sm font-semibold text-gray-700 ml-1">
-                                        Email or phone number
+                                        Email address
                                     </label>
                                     <div className="relative">
-                                        <InputIcon
+                                        <Mail
                                             className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
                                             size={18}
                                         />
                                         <input
-                                            type="text"
+                                            type="email"
                                             required
-                                            autoComplete="username"
+                                            autoComplete="email"
                                             className="w-full pl-12 pr-4 py-3.5 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none transition-all"
-                                            placeholder="Email or phone (e.g. 0912345678)"
-                                            value={identifier}
-                                            onChange={(e) => setIdentifier(e.target.value)}
+                                            placeholder="you@example.com"
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
                                         />
                                     </div>
                                 </div>
@@ -96,7 +95,7 @@ export default function ForgotPassword() {
                                     disabled={isSubmitting}
                                     className="py-6 rounded-xl font-bold text-lg"
                                 >
-                                    {isSubmitting ? 'Sending…' : 'Send reset instructions'}
+                                    {isSubmitting ? 'Sending…' : 'Send verification code'}
                                 </Button>
                             </form>
 

@@ -6,26 +6,17 @@ import StarRatingInput from '../../components/ratings/StarRatingInput';
 import { averageFromRatings } from '../../lib/ratingHelpers';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { cn } from '../../lib/utils';
-import { useAuth } from '../../contexts/AuthContext';
 import { useOperator, useOperatorDashboard } from '../../hooks/useOperators';
-import { useOperatorBookings } from '../../hooks/useBookings';
-import { useBuses } from '../../hooks/useBuses';
-import { useMemo } from 'react';
-
-// Fallback chart data shown while loading
-const FALLBACK_REVENUE = [
-    { name: 'Mon', revenue: 12500 },
-    { name: 'Tue', revenue: 15000 },
-    { name: 'Wed', revenue: 18000 },
-    { name: 'Thu', revenue: 14000 },
-    { name: 'Fri', revenue: 22000 },
-    { name: 'Sat', revenue: 28000 },
-    { name: 'Sun', revenue: 25000 },
-];
+import { useOperatorScope } from '../../hooks/useOperatorScope';
+import OperatorScopeBanner from '../../components/operator/OperatorScopeBanner';
 
 export default function OperatorOverview() {
-    const { user } = useAuth();
-    const operatorId = user?.operatorId ?? null;
+    const {
+        operatorId,
+        bookings: bookingsResponse,
+        bookingsQuery,
+    } = useOperatorScope({ limit: 50 });
+    const bookingsLoading = bookingsQuery.isLoading;
 
     // GET /v1/operators/:id/dashboard
     const { data: dashData, isLoading: dashLoading } = useOperatorDashboard(operatorId);
@@ -39,15 +30,6 @@ export default function OperatorOverview() {
     const reviewAverage = averageFromRatings(recentReviews);
     const displayOperatorRating = operatorProfile?.rating ?? reviewAverage;
 
-    const { data: buses = [] } = useBuses(operatorId ? { operatorId, limit: 100 } : {});
-    const operatorBusIds = useMemo(() => buses.map((b) => b.id).filter(Boolean), [buses]);
-
-    const { data: bookingsResponse = [], isLoading: bookingsLoading } = useOperatorBookings(
-        operatorId,
-        { limit: 50 },
-        operatorBusIds
-    );
-
     const recentBookings = (() => {
         const raw = Array.isArray(bookingsResponse) ? bookingsResponse : [];
         return raw.slice(0, 5).map(b => ({
@@ -60,8 +42,7 @@ export default function OperatorOverview() {
         }));
     })();
 
-    // Revenue chart data — backend may return dailyRevenue array
-    const revenueData = dashData?.dailyRevenue ?? dashData?.weeklyRevenue ?? FALLBACK_REVENUE;
+    const revenueData = dashData?.dailyRevenue ?? dashData?.weeklyRevenue ?? [];
 
     // KPI values — use API data when available, show '—' while loading
     const kpis = [
@@ -102,6 +83,7 @@ export default function OperatorOverview() {
 
     return (
         <div className="space-y-8">
+            <OperatorScopeBanner />
             {/* KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {kpis.map((kpi, idx) => (
@@ -140,6 +122,9 @@ export default function OperatorOverview() {
                         <Button variant="ghost" size="sm" className="text-primary hover:bg-primary/5">View Report</Button>
                     </div>
                     <div className="flex-1 w-full min-h-0">
+                        {revenueData.length === 0 && !dashLoading ? (
+                            <p className="text-sm text-gray-400 text-center py-16">No revenue trend data yet.</p>
+                        ) : (
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={revenueData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                                 <defs>
@@ -155,6 +140,7 @@ export default function OperatorOverview() {
                                 <Area type="monotone" dataKey="revenue" stroke="#0EA5E9" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
                             </AreaChart>
                         </ResponsiveContainer>
+                        )}
                     </div>
                 </Card>
 
@@ -163,11 +149,10 @@ export default function OperatorOverview() {
                     <h3 className="font-bold text-lg mb-1">Top Routes</h3>
                     <p className="text-gray-500 text-sm mb-6">Highest occupancy lines</p>
                     <div className="space-y-6 flex-1">
-                        {(dashData?.topRoutes ?? [
-                            { name: 'Addis Ababa → Bahir Dar', occupancy: 92 },
-                            { name: 'Hawassa → Addis Ababa',   occupancy: 85 },
-                            { name: 'Addis Ababa → Dire Dawa', occupancy: 78 },
-                        ]).map((route, i) => {
+                        {(dashData?.topRoutes ?? []).length === 0 && !dashLoading && (
+                            <p className="text-sm text-gray-400 text-center py-8">No route occupancy data yet.</p>
+                        )}
+                        {(dashData?.topRoutes ?? []).map((route, i) => {
                             const colors = ['bg-emerald-500', 'bg-blue-500', 'bg-orange-500'];
                             const textColors = ['text-emerald-400', 'text-blue-400', 'text-orange-400'];
                             return (

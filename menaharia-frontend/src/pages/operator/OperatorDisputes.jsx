@@ -7,7 +7,8 @@ import {
     User, XCircle,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { useAuth } from '../../contexts/AuthContext';
+import { useOperatorScope } from '../../hooks/useOperatorScope';
+import OperatorScopeBanner from '../../components/operator/OperatorScopeBanner';
 import { useDisputes, useUpdateDispute, DISPUTE_STATUS_LABEL } from '../../hooks/useDisputes';
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
@@ -131,16 +132,16 @@ function DisputeDetail({ dispute, onBack }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function OperatorDisputes() {
-    const { user } = useAuth();
+    const { operatorId, scopeReady } = useOperatorScope();
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [activeId, setActiveId] = useState(null);
 
-    const operatorId = user?.operatorId ?? null;
-
-    const { data: disputes = [], isLoading, isError } = useDisputes(
-        operatorId ? { operatorId, limit: 100 } : {}
-    );
+    const { data: disputes = [], isLoading, isError } = useDisputes({
+        operatorId: operatorId ?? undefined,
+        limit: 100,
+        enabled: scopeReady,
+    });
 
     const activeDispute = disputes.find(d => d.id === activeId);
 
@@ -166,6 +167,7 @@ export default function OperatorDisputes() {
 
     return (
         <div className="space-y-6">
+            <OperatorScopeBanner />
             {/* Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                 {[

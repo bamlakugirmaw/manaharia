@@ -57,7 +57,7 @@ export async function ensureBusSeatsReady(busId, totalSeats = 45) {
     if (count > 0) return count;
 
     const noSeats = new Error(
-        'Could not verify a seat layout for this bus. In Fleet Management, open this bus and click "Generate seats", then try again.'
+        'Could not verify a seat layout for this bus. Edit the bus in Fleet Management or add it again with a valid seat count.'
     );
     noSeats.code = 'NO_BUS_SEATS';
     throw noSeats;
@@ -133,7 +133,7 @@ export function seatsUnavailableMessage(tripSeats = [], busSeats = []) {
         return 'This trip has no seat inventory. In Fleet Management, seats exist on the bus, but this trip was created before seats were set up. Create a new trip schedule for this bus.';
     }
 
-    return 'This trip has no bookable seats yet. The operator must add seats in Fleet Management (Generate seats), then create a new trip schedule.';
+    return 'This trip has no bookable seats yet. Add the bus in Fleet Management (seats are created automatically), then create a new trip schedule.';
 }
 
 /** @param {Array<{ label: string, tripSeatId?: string | null, seatType?: string } | string>} selectedSeats */

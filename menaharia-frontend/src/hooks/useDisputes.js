@@ -31,12 +31,14 @@ function unwrapSingle(response) {
 }
 
 export function useDisputes(params = {}) {
+    const { enabled = true, ...queryParams } = params;
     return useQuery({
-        queryKey: disputeKeys.list(params),
+        queryKey: disputeKeys.list(queryParams),
         queryFn: async () => {
-            const res = await disputesApi.listDisputes(params);
+            const res = await disputesApi.listDisputes(queryParams);
             return unwrapList(res);
         },
+        enabled,
         staleTime: 0,
     });
 }

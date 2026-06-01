@@ -1,4 +1,5 @@
 import { api, unwrap, unwrapEnvelope, sanitizeListParams } from '../lib/api';
+import { unwrapTripsList } from '../lib/normaliseTrip';
 
 /**
  * Trips API  (GET endpoints are public — no auth required)
@@ -24,7 +25,7 @@ import { api, unwrap, unwrapEnvelope, sanitizeListParams } from '../lib/api';
  * }} params
  */
 export const listTrips = (params = {}) =>
-    api.get('/trips', { params: sanitizeListParams(params) }).then(unwrap);
+    api.get('/trips', { params: sanitizeListParams(params) }).then(unwrapTripsList);
 
 /**
  * @param {string} id

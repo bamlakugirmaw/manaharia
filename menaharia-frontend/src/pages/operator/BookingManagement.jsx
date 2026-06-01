@@ -6,15 +6,15 @@ import { Card } from '../../components/ui/Card';
 import { Modal } from '../../components/ui/Modal';
 import { Plus, Ticket, Trash2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { useAuth } from '../../contexts/AuthContext';
-import { useOperatorBookings, useCreateBookingForUser } from '../../hooks/useBookings';
+import { useCreateBookingForUser } from '../../hooks/useBookings';
 import { authApi } from '../../api/auth.api';
-import { useOperatorTrips, useRemoveTrip } from '../../hooks/useTrips';
+import { useRemoveTrip } from '../../hooks/useTrips';
+import { useOperatorScope } from '../../hooks/useOperatorScope';
+import OperatorScopeBanner from '../../components/operator/OperatorScopeBanner';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { tripOrigin, tripDest, tripCityLabel, parseTripDateTime, buildArrivalDateTime, parseAmenities, toTripDateISO } from '../../lib/tripHelpers';
 import { formatTripTime } from '../../lib/operatorHelpers';
 import { useTripManifest } from '../../hooks/useTripManifest';
-import { useBuses } from '../../hooks/useBuses';
 import { useRoutes } from '../../hooks/useRoutes';
 import { tripsApi } from '../../api/trips.api';
 import { routesApi } from '../../api/routes.api';
@@ -49,24 +49,19 @@ function useCreateRoute() {
 
 
 export default function BookingManagement() {
-    const { user } = useAuth();
-    const operatorId = user?.operatorId ?? null;
-
-    // ── Data ──────────────────────────────────────────────────────────────────
-    const { data: buses = [] } = useBuses(operatorId ? { operatorId, limit: 50 } : {});
-    const operatorBusIds = useMemo(() => buses.map((b) => b.id).filter(Boolean), [buses]);
-
-    const { data: tripList = [], isLoading: tripsLoading } = useOperatorTrips(
+    const {
         operatorId,
-        { limit: 100, status: 'SCHEDULED' },
-        operatorBusIds
-    );
+        scopeReady,
+        buses,
+        operatorBusIds,
+        trips: tripList,
+        tripsQuery,
+        bookings,
+        bookingsQuery,
+    } = useOperatorScope({ limit: 500 });
+    const tripsLoading = tripsQuery.isLoading;
+    const bookingsLoading = bookingsQuery.isLoading;
     const firstTripId = tripList?.[0]?.id ?? null;
-    const { data: bookings = [], isLoading: bookingsLoading } = useOperatorBookings(
-        operatorId,
-        { limit: 500 },
-        operatorBusIds
-    );
     const { data: routes = [] } = useRoutes({ limit: 100 });
     const [creatingTrip, setCreatingTrip] = useState(false);
     const { mutate: createRoute, isPending: creatingRoute } = useCreateRoute();
@@ -144,7 +139,7 @@ export default function BookingManagement() {
         operatorBusIds,
         bookings,
         tripSeats,
-        enabled: !!effectiveTripId && !!operatorId,
+        enabled: !!effectiveTripId && scopeReady,
     });
 
     const totalSeats = tripSeats.length > 0
@@ -319,6 +314,7 @@ export default function BookingManagement() {
     return (
         <div className="space-y-6">
             <ConfirmDialogHost />
+            <OperatorScopeBanner />
             {/* Header */}
             <div className="flex justify-between items-center flex-wrap gap-4 border-b border-gray-100 pb-5">
                 <div>
@@ -698,7 +694,7 @@ export default function BookingManagement() {
                         )}
                         {addBusId && !selectedBusSeatsLoading && selectedBusSeats.length === 0 && (
                             <p className="text-xs text-amber-600 mt-1">
-                                This bus has no seat layout yet. Saving will generate seats automatically, or use Fleet → Generate seats first.
+                                This bus has no seat layout yet. Add the bus in Fleet Management first (seats are created automatically).
                             </p>
                         )}
                     </div>

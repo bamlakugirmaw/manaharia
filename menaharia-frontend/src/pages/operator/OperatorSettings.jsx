@@ -6,6 +6,7 @@ import { useOperatorRatings } from '../../hooks/useOperatorRatings';
 import StarRatingInput from '../../components/ratings/StarRatingInput';
 import { averageFromRatings } from '../../lib/ratingHelpers';
 import { useAuth } from '../../contexts/AuthContext';
+import OperatorScopeBanner from '../../components/operator/OperatorScopeBanner';
 import { useOperator } from '../../hooks/useOperators';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { operatorsApi } from '../../api/operators.api';
@@ -169,6 +170,7 @@ export default function OperatorSettings() {
 
     return (
         <div className="space-y-8 max-w-4xl mx-auto">
+            <OperatorScopeBanner />
             {/* Profile Header */}
             <Card className="p-6 border-none shadow-sm flex flex-col md:flex-row items-center gap-6">
                 <ProfileAvatarUpload

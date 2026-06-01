@@ -5,6 +5,8 @@ import { Badge } from '../../components/ui/Badge';
 import { Download, Search, Calendar, CreditCard, ChevronDown, X, Receipt } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { usePayments } from '../../hooks/usePayments';
+import { useOperatorScope } from '../../hooks/useOperatorScope';
+import OperatorScopeBanner from '../../components/operator/OperatorScopeBanner';
 
 // ─── Map backend payment to display shape ─────────────────────────────────────
 function mapPayment(p) {
@@ -25,6 +27,12 @@ function mapPayment(p) {
 }
 
 export default function OperatorPayouts() {
+    const { bookings, scopeReady, bookingsQuery } = useOperatorScope({ limit: 500 });
+    const operatorBookingIds = useMemo(
+        () => new Set(bookings.map((b) => b.id).filter(Boolean)),
+        [bookings],
+    );
+
     const [searchTerm,      setSearchTerm]      = useState('');
     const [startDate,       setStartDate]       = useState('');
     const [endDate,         setEndDate]         = useState('');
@@ -33,9 +41,17 @@ export default function OperatorPayouts() {
     const [selectedEnd,     setSelectedEnd]     = useState({ month: 'june', day: 20 });
     const [selectedPayout,  setSelectedPayout]  = useState(null);
 
-    // GET /v1/payments
-    const { data: rawPayments = [], isLoading } = usePayments({ limit: 100 });
-    const payments = useMemo(() => rawPayments.map(mapPayment), [rawPayments]);
+    const { data: rawPayments = [], isLoading: paymentsLoading } = usePayments({
+        limit: 200,
+        enabled: scopeReady,
+    });
+    const isLoading = paymentsLoading || bookingsQuery.isLoading;
+    const payments = useMemo(
+        () => rawPayments
+            .filter((p) => p.bookingId && operatorBookingIds.has(p.bookingId))
+            .map(mapPayment),
+        [rawPayments, operatorBookingIds],
+    );
 
     // ── Filter logic ──────────────────────────────────────────────────────────
     const filteredPayouts = useMemo(() => {
@@ -98,6 +114,7 @@ export default function OperatorPayouts() {
 
     return (
         <div className="space-y-6">
+            <OperatorScopeBanner />
             <Card className="p-6 border-none shadow-sm space-y-6">
                 {/* Filters */}
                 <div className="flex flex-col space-y-4">

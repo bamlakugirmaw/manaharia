@@ -33,8 +33,6 @@ import UserComplaints from './pages/dashboard/UserComplaints';
 import UserBookings from './pages/dashboard/UserBookings';
 import UserProfile from './pages/dashboard/UserProfile';
 import UserPayments from './pages/dashboard/UserPayments';
-import UserUpcoming from './pages/dashboard/UserUpcoming';
-
 import OperatorRevenue from './pages/operator/OperatorRevenue';
 import OperatorPayouts from './pages/operator/OperatorPayouts';
 
@@ -96,7 +94,6 @@ function App() {
           {/* User Dashboard Routes */}
           <Route path="/traveller" element={<ProtectedRoute allowedRoles={['traveller']}><Navigate to="/traveller/bookings" replace /></ProtectedRoute>} />
           <Route path="/traveller/bookings" element={<ProtectedRoute allowedRoles={['traveller']}><DashboardLayout><UserBookings /></DashboardLayout></ProtectedRoute>} />
-          <Route path="/traveller/upcoming" element={<ProtectedRoute allowedRoles={['traveller']}><DashboardLayout><UserUpcoming /></DashboardLayout></ProtectedRoute>} />
           <Route path="/traveller/complaints" element={<ProtectedRoute allowedRoles={['traveller']}><DashboardLayout><UserComplaints /></DashboardLayout></ProtectedRoute>} />
           <Route path="/traveller/profile" element={<ProtectedRoute allowedRoles={['traveller']}><DashboardLayout><UserProfile /></DashboardLayout></ProtectedRoute>} />
           <Route path="/traveller/payments" element={<ProtectedRoute allowedRoles={['traveller']}><DashboardLayout><UserPayments /></DashboardLayout></ProtectedRoute>} />
