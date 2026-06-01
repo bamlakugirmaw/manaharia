@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
-import { Building, Phone, Mail, CreditCard, Lock, Check } from 'lucide-react';
+import { Building, Phone, Mail, CreditCard, Lock, Check, Star } from 'lucide-react';
+import { useOperatorRatings } from '../../hooks/useOperatorRatings';
+import StarRatingInput from '../../components/ratings/StarRatingInput';
+import { averageFromRatings } from '../../lib/ratingHelpers';
 import { useAuth } from '../../contexts/AuthContext';
 import { useOperator } from '../../hooks/useOperators';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -30,6 +33,12 @@ export default function OperatorSettings() {
     // ── Fetch operator data ───────────────────────────────────────────────────
     const { data: rawOperator, isLoading: opLoading } = useOperator(operatorId);
     const operator = rawOperator?.data ?? rawOperator;
+    const { data: reviews = [] } = useOperatorRatings({
+        operatorId,
+        limit: 8,
+        enabled: !!operatorId,
+    });
+    const reviewAvg = averageFromRatings(reviews);
 
     // ── Profile form state ────────────────────────────────────────────────────
     const [profileForm, setProfileForm] = useState({
@@ -270,6 +279,43 @@ export default function OperatorSettings() {
                         <input type="text" className="w-full px-4 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-400" value="Contact admin to update" disabled />
                     </div>
                 </div>
+            </Card>
+
+            {/* Customer ratings */}
+            <Card className="p-8 border-none shadow-sm space-y-6">
+                <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-gray-100">
+                    <div className="flex items-center gap-2">
+                        <Star className="text-amber-500 fill-amber-400" size={20} />
+                        <h3 className="font-bold text-lg">Customer ratings</h3>
+                    </div>
+                    <div className="flex items-center gap-2 bg-amber-50 px-4 py-2 rounded-xl border border-amber-100">
+                        <span className="text-2xl font-black text-gray-900">
+                            {(operator?.rating ?? reviewAvg) != null
+                                ? Number(operator?.rating ?? reviewAvg).toFixed(1)
+                                : '—'}
+                        </span>
+                        <StarRatingInput
+                            value={(operator?.rating ?? reviewAvg) != null ? Math.round(operator?.rating ?? reviewAvg) : 0}
+                            disabled
+                            size={14}
+                        />
+                    </div>
+                </div>
+                {reviews.length === 0 ? (
+                    <p className="text-sm text-gray-500">No traveller reviews yet. Ratings appear after completed bookings.</p>
+                ) : (
+                    <ul className="space-y-3">
+                        {reviews.map((r) => (
+                            <li key={r.id} className="p-4 rounded-xl bg-gray-50 border border-gray-100 flex justify-between gap-4">
+                                <div>
+                                    <p className="font-bold text-sm text-gray-900">{r.reviewerName}</p>
+                                    {r.comment && <p className="text-xs text-gray-600 mt-1">{r.comment}</p>}
+                                </div>
+                                <StarRatingInput value={r.rating} disabled size={14} />
+                            </li>
+                        ))}
+                    </ul>
+                )}
             </Card>
 
             {/* Security Settings */}

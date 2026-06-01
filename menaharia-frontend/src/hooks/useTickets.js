@@ -20,9 +20,11 @@ function unwrapSingle(res) {
 }
 
 export function useTickets(params = {}) {
+    const { enabled = true, ...queryParams } = params;
     return useQuery({
-        queryKey: ticketKeys.list(params),
-        queryFn: async () => unwrapList(await ticketsApi.listTickets(params)),
+        queryKey: ticketKeys.list(queryParams),
+        queryFn: async () => unwrapList(await ticketsApi.listTickets(queryParams)),
+        enabled,
         staleTime: 0,
     });
 }

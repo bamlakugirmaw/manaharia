@@ -11,10 +11,13 @@ import SeatSelection from './pages/SeatSelection';
 import PassengerDetails from './pages/PassengerDetails';
 import Payment from './pages/Payment';
 import PaymentReturn from './pages/PaymentReturn';
+import ChapaReturnBridge from './pages/ChapaReturnBridge';
 import Ticket from './pages/Ticket';
 
 import Login from './pages/auth/Login';
 import Signup from './pages/auth/Signup';
+import ForgotPassword from './pages/auth/ForgotPassword';
+import ResetPassword from './pages/auth/ResetPassword';
 
 import OperatorsListing from './pages/OperatorsListing';
 import OperatorProfile from './pages/OperatorProfile';
@@ -62,6 +65,8 @@ function App() {
           <Route path="/search" element={<MainLayout><SearchResults /></MainLayout>} />
           <Route path="/login" element={<MainLayout><Login /></MainLayout>} />
           <Route path="/signup" element={<MainLayout><Signup /></MainLayout>} />
+          <Route path="/forgot-password" element={<MainLayout><ForgotPassword /></MainLayout>} />
+          <Route path="/reset-password" element={<MainLayout><ResetPassword /></MainLayout>} />
 
           {/* Operators */}
           <Route path="/operators" element={<MainLayout><OperatorsListing /></MainLayout>} />
@@ -84,6 +89,7 @@ function App() {
           <Route path="/booking/seats/:tripId" element={<MainLayout><SeatSelection /></MainLayout>} />
           <Route path="/booking/passenger" element={<MainLayout><PassengerDetails /></MainLayout>} />
           <Route path="/booking/payment" element={<MainLayout><Payment /></MainLayout>} />
+          <Route path="/payment-return" element={<ChapaReturnBridge />} />
           <Route path="/booking/payment/return" element={<MainLayout><PaymentReturn /></MainLayout>} />
           <Route path="/booking/ticket/:bookingId" element={<MainLayout><Ticket /></MainLayout>} />
 

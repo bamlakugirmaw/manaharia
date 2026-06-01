@@ -14,6 +14,7 @@ import {
     loadBookingFlow,
     savePendingPayment,
 } from '../lib/bookingFlow';
+import { getChapaReturnPageUrl } from '../lib/appUrl';
 import { buildSeatTypeMap, totalPriceForSelectedSeats } from '../lib/seatPricing';
 
 /** Backend payment_method enum on CreateBookingDto / InitiatePaymentDto */
@@ -130,7 +131,15 @@ export default function Payment() {
                 selectedSeats: resolved,
                 passengerDetails,
                 totalPrice: result.totalAmount ?? amount,
+                returnPageUrl: getChapaReturnPageUrl(bookingId),
             });
+
+            if (import.meta.env.DEV) {
+                console.info(
+                    '[Chapa] Backend FRONTEND_URL should point to:',
+                    getChapaReturnPageUrl(bookingId),
+                );
+            }
 
             setStep('redirecting');
 

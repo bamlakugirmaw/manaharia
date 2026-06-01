@@ -1,4 +1,4 @@
-import { api, unwrap } from '../lib/api';
+import { api, unwrapEnvelope, sanitizeListParams } from '../lib/api';
 
 /**
  * Travelers API  (all endpoints require auth)
@@ -18,12 +18,12 @@ import { api, unwrap } from '../lib/api';
  * }} params
  */
 export const listTravelers = (params = {}) =>
-    api.get('/travelers', { params }).then(unwrap);
+    api.get('/travelers', { params: sanitizeListParams(params) }).then(unwrapEnvelope);
 
 /**
  * @param {string} id
  */
 export const getTravelerById = (id) =>
-    api.get(`/travelers/${id}`).then(unwrap);
+    api.get(`/travelers/${id}`).then(unwrapEnvelope);
 
 export const travelersApi = { listTravelers, getTravelerById };

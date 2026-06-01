@@ -1,5 +1,7 @@
 import { tripOperatorName, tripOrigin, tripDest } from './tripHelpers';
-import { bookingOperatorId } from './operatorHelpers';
+import { bookingOperatorId, formatTripTime } from './operatorHelpers';
+import { getPaymentReceipt } from './paymentReceipt';
+import { collectSeatLabels, buildTripSeatLabelMap } from './bookingEnrichment';
 
 const METHOD_LABEL = {
     TELEBIRR: 'Telebirr',
@@ -10,7 +12,17 @@ const METHOD_LABEL = {
 
 export function resolveBookingPayment(booking) {
     if (!booking) return {};
-    return booking.payment ?? (Array.isArray(booking.payments) ? booking.payments[0] : null) ?? {};
+    const receipt = getPaymentReceipt(booking.id);
+    let payment = booking.payment ?? (Array.isArray(booking.payments) ? booking.payments[0] : null) ?? {};
+    if (receipt?.status === 'SUCCESS') {
+        payment = {
+            ...payment,
+            status: 'SUCCESS',
+            amount: receipt.amount ?? payment.amount ?? booking.totalAmount,
+            method: receipt.method ?? payment.method ?? 'CHAPA',
+        };
+    }
+    return payment;
 }
 
 export function mapPaymentDisplay(paymentStatus, bookingStatus) {
@@ -43,7 +55,8 @@ export function isBookingPaid(booking) {
  */
 export function normaliseBookingForUI(b) {
     const trip = b.trip ?? {};
-    const traveler = b.travelers?.[0] ?? {};
+    const travelers = b.travelers ?? b.bookingTravelers ?? [];
+    const traveler = travelers[0] ?? {};
     const payment = resolveBookingPayment(b);
     const bus = trip.bus ?? {};
     const operator = trip.bus?.operator ?? trip.operator ?? b.operator ?? {};
@@ -57,22 +70,44 @@ export function normaliseBookingForUI(b) {
         || operator.name
         || '';
 
+    const seatMap = buildTripSeatLabelMap(trip);
+    const seatLabels = b._seatLabels ?? collectSeatLabels(travelers, seatMap);
+    const seatNumber = seatLabels.length > 0 ? seatLabels.join(', ') : '';
+
+    const departureRaw = trip.departureTime ?? '';
+    const arrivalRaw = trip.arrivalTime ?? '';
+    const departure = departureRaw.includes('T')
+        ? formatTripTime(departureRaw)
+        : departureRaw;
+    const arrival = arrivalRaw.includes('T')
+        ? formatTripTime(arrivalRaw)
+        : arrivalRaw;
+
+    const passengerNames = [
+        ...new Set(travelers.map((t) => t.fullName).filter(Boolean)),
+    ];
+    const passengerName = passengerNames.join(', ') || (traveler.fullName ?? '');
+    const passengerPhone = traveler.phone ?? travelers.find((t) => t.phone)?.phone ?? '';
+    const passengerEmail = traveler.email ?? travelers.find((t) => t.email)?.email ?? '';
+
     const rawPaymentStatus = (payment.status ?? '').toUpperCase();
     const rawBookingStatus = (b.status ?? '').toUpperCase();
 
     return {
         id: b.id,
         ticketId: b.tickets?.[0]?.id ?? b.ticketId ?? b.id,
+        bookingReference: b.bookingReference ?? null,
         operator: operatorName || 'Unknown',
         operatorId,
-        busName: bus.make ?? bus.model ?? `${operatorName || 'Bus'} Coach`,
+        busName: bus.make ?? bus.model ?? bus.name ?? `${operatorName || 'Bus'} Coach`,
         busPlate: bus.plateNumber ?? '—',
         route: from && to ? `${from} → ${to}` : '—',
         from,
         to,
-        departure: trip.departureTime ?? '',
-        arrival: trip.arrivalTime ?? '',
-        seatNumber: traveler.seat?.seatNumber ?? traveler.seatNumber ?? '—',
+        departure: departure && departure !== '—' ? departure : '—',
+        arrival: arrival && arrival !== '—' ? arrival : '—',
+        seatNumber: seatNumber || '—',
+        seatLabels,
         date: trip.date
             ? new Date(trip.date).toLocaleDateString('en-US', {
                 month: 'short', day: 'numeric', year: 'numeric',
@@ -83,8 +118,9 @@ export function normaliseBookingForUI(b) {
                 month: 'short', day: 'numeric', year: 'numeric',
             })
             : '—',
-        passengerName: traveler.fullName ?? '',
-        passengerPhone: traveler.phone ?? '',
+        passengerName,
+        passengerPhone,
+        passengerEmail,
         status: rawBookingStatus.toLowerCase(),
         paymentStatusRaw: rawPaymentStatus,
         bookingStatusRaw: rawBookingStatus,
@@ -94,6 +130,7 @@ export function normaliseBookingForUI(b) {
         paymentMethod: METHOD_LABEL[payment.method] ?? payment.method ?? '—',
         gatewayReference: payment.gatewayReference ?? payment.transactionCode ?? null,
         paymentId: payment.id ?? null,
+        isPaid: isBookingPaid({ ...b, payment, status: rawBookingStatus }),
         _raw: b,
     };
 }

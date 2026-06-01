@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Returning to Menaharia…</title>
+    <script>
+        (function () {
+            var params = new URLSearchParams(window.location.search);
+            var bookingId = params.get('bookingId') || params.get('booking_id') || '';
+
+            try {
+                var raw = sessionStorage.getItem('menaharia.booking.pendingPayment');
+                if (!bookingId && raw) {
+                    var pending = JSON.parse(raw);
+                    if (pending && pending.bookingId) {
+                        bookingId = pending.bookingId;
+                    }
+                }
+            } catch (e) { /* ignore */ }
+
+            if (bookingId && !params.has('bookingId')) {
+                params.set('bookingId', bookingId);
+            }
+
+            var qs = params.toString();
+            var target = '/booking/payment/return' + (qs ? '?' + qs : '');
+            window.location.replace(target);
+        })();
+    </script>
+</head>
+<body>
+    <p style="font-family: system-ui, sans-serif; text-align: center; padding: 3rem; color: #334155;">
+        Payment complete — returning to Menaharia…
+    </p>
+</body>
+</html>

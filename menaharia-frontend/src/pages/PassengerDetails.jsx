@@ -1,14 +1,40 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { loadBookingFlow, saveBookingFlow } from '../lib/bookingFlow';
+import { useAuth } from '../contexts/AuthContext';
+import { authApi } from '../api/auth.api';
 import { Button } from '../components/ui/Button';
 import { ArrowRight, User, Mail, Phone, Info } from 'lucide-react';
 import ProgressStepper from '../components/booking/ProgressStepper';
 import BookingSummary from '../components/booking/BookingSummary';
 
+const EMPTY_FORM = {
+    fullName: '',
+    email: '',
+    phone: '',
+    emergencyContact: '',
+};
+
+/** Map AuthContext / GET /auth/me profile to passenger form fields. */
+function profileToPassengerForm(profile) {
+    if (!profile) return null;
+    const fullName = profile.fullName ?? profile.name ?? '';
+    const phone = profile.phone ?? '';
+    const email = profile.email ?? '';
+    if (!fullName && !phone && !email) return null;
+    return {
+        fullName,
+        email,
+        phone,
+        emergencyContact: profile.emergencyContact ?? phone,
+    };
+}
+
 export default function PassengerDetails() {
     const location = useLocation();
     const navigate = useNavigate();
+    const { user, isAuthenticated } = useAuth();
+    const prefilledRef = useRef(false);
     // selectedSeats is now an array of { label, tripSeatId } objects (from SeatSelection).
     // We keep backward compatibility: if it's still a plain string array (mock flow),
     // we wrap each entry so the rest of the page works uniformly.
@@ -27,12 +53,57 @@ export default function PassengerDetails() {
         }
     }, [tripId, trip, saved, navigate]);
 
-    const [formData, setFormData] = useState({
-        fullName: '',
-        email: '',
-        phone: '',
-        emergencyContact: ''
-    });
+    const [formData, setFormData] = useState(EMPTY_FORM);
+    const [profilePrefilled, setProfilePrefilled] = useState(false);
+
+    // Pre-fill: saved step (back from payment) → else GET /auth/me for logged-in users.
+    useEffect(() => {
+        const fromFlow = flow.passengerDetails ?? saved?.passengerDetails;
+        if (fromFlow && (fromFlow.fullName || fromFlow.email || fromFlow.phone)) {
+            if (!prefilledRef.current) {
+                setFormData({
+                    fullName: fromFlow.fullName ?? '',
+                    email: fromFlow.email ?? '',
+                    phone: fromFlow.phone ?? '',
+                    emergencyContact: fromFlow.emergencyContact ?? '',
+                });
+                prefilledRef.current = true;
+            }
+            return undefined;
+        }
+
+        if (prefilledRef.current) return undefined;
+
+        const applyProfile = (profile) => {
+            const mapped = profileToPassengerForm(profile);
+            if (!mapped) return;
+            setFormData(mapped);
+            setProfilePrefilled(true);
+            prefilledRef.current = true;
+        };
+
+        if (!isAuthenticated) {
+            applyProfile(user);
+            return undefined;
+        }
+
+        let cancelled = false;
+        authApi.me()
+            .then((response) => {
+                if (cancelled) return;
+                const raw = response?.data ?? response;
+                applyProfile({
+                    fullName: raw.fullName ?? raw.name,
+                    email: raw.email,
+                    phone: raw.phone,
+                });
+            })
+            .catch(() => {
+                if (!cancelled) applyProfile(user);
+            });
+
+        return () => { cancelled = true; };
+    }, [user, isAuthenticated, flow.passengerDetails, saved?.passengerDetails]);
 
     if (!tripId && !trip) {
         return null;
@@ -62,7 +133,12 @@ export default function PassengerDetails() {
                     <div className="lg:col-span-3">
                         <div className="bg-white rounded-[2rem] border border-slate-100 shadow-[0_8px_30px_rgba(0,0,0,0.02)] p-10">
                             <h2 className="text-3xl font-black text-indigo-950 mb-1 tracking-tight">Passenger Information</h2>
-                            <p className="text-sm font-medium text-slate-400 mb-8">Please enter accurate details for a smooth journey.</p>
+                            <p className="text-sm font-medium text-slate-400 mb-4">Please enter accurate details for a smooth journey.</p>
+                            {profilePrefilled && (
+                                <p className="text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5 mb-6">
+                                    Pre-filled from your account. You can edit any field before continuing to payment.
+                                </p>
+                            )}
 
                             <form onSubmit={handleSubmit} className="space-y-6">
                                 {/* Full Name */}

@@ -1,10 +1,13 @@
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
-import { Bus, TrendingUp, Calendar, CreditCard, Ticket, ArrowRight, Users } from 'lucide-react';
+import { Bus, TrendingUp, Calendar, CreditCard, Ticket, ArrowRight, Users, Star } from 'lucide-react';
+import { useOperatorRatings } from '../../hooks/useOperatorRatings';
+import StarRatingInput from '../../components/ratings/StarRatingInput';
+import { averageFromRatings } from '../../lib/ratingHelpers';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
-import { useOperatorDashboard } from '../../hooks/useOperators';
+import { useOperator, useOperatorDashboard } from '../../hooks/useOperators';
 import { useOperatorBookings } from '../../hooks/useBookings';
 import { useBuses } from '../../hooks/useBuses';
 import { useMemo } from 'react';
@@ -26,6 +29,15 @@ export default function OperatorOverview() {
 
     // GET /v1/operators/:id/dashboard
     const { data: dashData, isLoading: dashLoading } = useOperatorDashboard(operatorId);
+    const { data: operatorRecord } = useOperator(operatorId);
+    const operatorProfile = operatorRecord?.data ?? operatorRecord;
+    const { data: recentReviews = [], isLoading: reviewsLoading } = useOperatorRatings({
+        operatorId,
+        limit: 5,
+        enabled: !!operatorId,
+    });
+    const reviewAverage = averageFromRatings(recentReviews);
+    const displayOperatorRating = operatorProfile?.rating ?? reviewAverage;
 
     const { data: buses = [] } = useBuses(operatorId ? { operatorId, limit: 100 } : {});
     const operatorBusIds = useMemo(() => buses.map((b) => b.id).filter(Boolean), [buses]);
@@ -176,6 +188,53 @@ export default function OperatorOverview() {
                     </Button>
                 </Card>
             </div>
+
+            {/* Customer ratings */}
+            <Card className="p-6 border-none shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+                    <div>
+                        <h3 className="font-bold text-lg flex items-center gap-2">
+                            <Star className="w-5 h-5 text-amber-500 fill-amber-400" />
+                            Customer ratings
+                        </h3>
+                        <p className="text-sm text-gray-500 mt-1">Feedback from travellers on your service</p>
+                    </div>
+                    <div className="flex items-center gap-3 bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3">
+                        <span className="text-3xl font-black text-gray-900 tabular-nums">
+                            {displayOperatorRating != null ? Number(displayOperatorRating).toFixed(1) : '—'}
+                        </span>
+                        <div>
+                            <StarRatingInput
+                                value={displayOperatorRating != null ? Math.round(displayOperatorRating) : 0}
+                                disabled
+                                size={16}
+                            />
+                            <p className="text-[10px] font-bold text-gray-500 mt-1 uppercase tracking-wide">
+                                Platform average
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                {reviewsLoading ? (
+                    <p className="text-sm text-gray-400 text-center py-6">Loading reviews…</p>
+                ) : recentReviews.length === 0 ? (
+                    <p className="text-sm text-gray-400 text-center py-6">No reviews yet. Ratings appear after travellers complete paid trips.</p>
+                ) : (
+                    <ul className="divide-y divide-gray-100 border border-gray-100 rounded-2xl overflow-hidden">
+                        {recentReviews.map((r) => (
+                            <li key={r.id} className="px-5 py-4 flex items-start justify-between gap-4 bg-white">
+                                <div className="min-w-0">
+                                    <p className="font-bold text-sm text-gray-900">{r.reviewerName}</p>
+                                    {r.comment && (
+                                        <p className="text-xs text-gray-600 mt-1 line-clamp-2">{r.comment}</p>
+                                    )}
+                                </div>
+                                <StarRatingInput value={r.rating} disabled size={14} />
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </Card>
 
             {/* Recent Bookings */}
             <Card className="p-6 border-none shadow-sm overflow-hidden">

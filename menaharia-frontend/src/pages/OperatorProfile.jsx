@@ -7,6 +7,7 @@ import {
     ArrowLeft, Clock, Bus, Users, MapPin, Info, Shield, Route, Star, TrendingUp, Calendar,
 } from 'lucide-react';
 import { usePublicOperator } from '../hooks/useOperators';
+import OperatorReviewsSection from '../components/ratings/OperatorReviewsSection';
 
 export default function OperatorProfile() {
     const { operatorId } = useParams();
@@ -201,6 +202,11 @@ export default function OperatorProfile() {
                                 )}
                             </CardContent>
                         </Card>
+
+                        <OperatorReviewsSection
+                            operatorId={operator.id}
+                            operatorRating={operator.rating}
+                        />
                     </div>
 
                     {/* Sidebar */}

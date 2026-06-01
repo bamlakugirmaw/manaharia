@@ -1,17 +1,21 @@
-import { api, unwrap } from '../lib/api';
+import { api, unwrap, unwrapEnvelope } from '../lib/api';
 
 /**
  * Auth API
  *
- * register   — POST /v1/auth/register
- * login      — POST /v1/auth/login
- * refresh    — POST /v1/auth/refresh
- * logout     — POST /v1/auth/logout
- * me         — GET  /v1/auth/me
- * updateMe   — PATCH /v1/auth/me
- * changePassword — POST /v1/auth/change-password
- * deleteMe     — DELETE /v1/auth/me
+ * register            — POST /v1/auth/register
+ * login               — POST /v1/auth/login
+ * refresh             — POST /v1/auth/refresh
+ * logout              — POST /v1/auth/logout
+ * me                  — GET  /v1/auth/me
+ * updateMe            — PATCH /v1/auth/me
+ * changePassword      — POST /v1/auth/change-password
+ * forgotPassword      — POST /v1/auth/forgot-password
+ * resetPassword       — POST /v1/auth/reset-password
+ * deleteMe            — DELETE /v1/auth/me
  */
+
+const publicAuthConfig = { skipAuthRedirect: true };
 
 /**
  * @param {{ fullName: string, phone: string, email?: string, password: string }} data
@@ -69,8 +73,40 @@ export const updateMe = (data) =>
 export const changePassword = (data) =>
     api.post('/auth/change-password', data).then(unwrap);
 
+/**
+ * Request a password reset link (email or SMS).
+ * @param {{ identifier: string }} data — email or phone (same as login)
+ */
+export const forgotPassword = (data) =>
+    api
+        .post('/auth/forgot-password', { identifier: data.identifier?.trim() }, publicAuthConfig)
+        .then(unwrapEnvelope);
+
+/**
+ * Set a new password using the token from the reset email/link.
+ * @param {{ token: string, newPassword: string }} data
+ */
+export const resetPassword = (data) =>
+    api
+        .post('/auth/reset-password', {
+            token: data.token,
+            newPassword: data.newPassword,
+        }, publicAuthConfig)
+        .then(unwrapEnvelope);
+
 /** Soft-delete the authenticated user's account. */
 export const deleteMe = () =>
     api.delete('/auth/me').then(unwrap);
 
-export const authApi = { register, login, refresh, logout, me, updateMe, changePassword, deleteMe };
+export const authApi = {
+    register,
+    login,
+    refresh,
+    logout,
+    me,
+    updateMe,
+    changePassword,
+    forgotPassword,
+    resetPassword,
+    deleteMe,
+};
