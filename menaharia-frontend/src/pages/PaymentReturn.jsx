@@ -1,22 +1,33 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import { Button } from '../components/ui/Button';
-import { useBooking } from '../hooks/useBookings';
+import { useQueryClient } from '@tanstack/react-query';
+import { useBooking, bookingKeys } from '../hooks/useBookings';
 import { useInitiatePayment } from '../hooks/usePayments';
+import { tripKeys } from '../hooks/useTrips';
+import { ticketKeys } from '../hooks/useTickets';
 import { clearBookingFlow, clearPendingPayment, loadPendingPayment } from '../lib/bookingFlow';
-import { isBookingPaid } from '../lib/bookingUi';
+import { appendPaymentCallbackAudit, buildCallbackPayloadFromReturn } from '../lib/paymentCallbackAudit';
+import { clearPaymentInitiationLock } from '../lib/paymentInitiation';
+import { confirmPaymentFromChapaReturn } from '../lib/paymentReturnConfirm';
+import { isBookingPaid, isBookingPaymentFailed } from '../lib/bookingUi';
 import { buildPaymentReceipt, savePaymentReceipt } from '../lib/paymentReceipt';
 import { extractErrorMessage } from '../lib/api';
 
 /**
- * Return URL after Chapa checkout — confirms payment then sends user to My Bookings.
+ * After Chapa redirect: optional POST /v1/payments/callback, then poll GET /v1/bookings/:id.
+ * On success, show confirmation and let user continue to My Bookings.
  */
+const MAX_POLL_ATTEMPTS = 40;
+const POLL_INTERVAL_MS = 2000;
+
 export default function PaymentReturn() {
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
     const [searchParams] = useSearchParams();
     const pending = loadPendingPayment();
-    const redirectedRef = useRef(false);
+    const callbackAttemptedRef = useRef(false);
 
     const bookingId =
         searchParams.get('bookingId')
@@ -29,32 +40,56 @@ export default function PaymentReturn() {
 
     const [errorMsg, setErrorMsg] = useState('');
     const [pollCount, setPollCount] = useState(0);
+    const [callbackDone, setCallbackDone] = useState(false);
 
-    const paymentStatus = (booking?.payment?.status ?? '').toUpperCase();
     const isPaid = isBookingPaid(booking);
-    const isFailed = paymentStatus === 'FAILED';
+    const isFailed = isBookingPaymentFailed(booking);
 
     useEffect(() => {
         if (!bookingId) {
             navigate('/search', { replace: true });
+            return;
         }
-    }, [bookingId, navigate]);
+        appendPaymentCallbackAudit(
+            buildCallbackPayloadFromReturn({ bookingId, searchParams }),
+        );
+        clearPaymentInitiationLock(bookingId);
+    }, [bookingId, navigate, searchParams]);
 
     useEffect(() => {
-        if (!bookingId || isPaid) return undefined;
+        if (!bookingId || callbackAttemptedRef.current) return undefined;
+
+        callbackAttemptedRef.current = true;
+        confirmPaymentFromChapaReturn({ bookingId, searchParams }).then((result) => {
+            setCallbackDone(true);
+            if (result?.error) {
+                setErrorMsg(extractErrorMessage(result.error, 'Payment confirmation failed. Retrying…'));
+            }
+            refetch();
+        });
+
+        return undefined;
+    }, [bookingId, searchParams, refetch]);
+
+    useEffect(() => {
+        if (!bookingId || isPaid || isFailed || pollCount >= MAX_POLL_ATTEMPTS) return undefined;
+
+        refetch();
 
         const interval = setInterval(() => {
             setPollCount((c) => c + 1);
             refetch();
-        }, 3000);
+        }, POLL_INTERVAL_MS);
 
         return () => clearInterval(interval);
-    }, [bookingId, isPaid, refetch]);
+    }, [bookingId, isPaid, isFailed, refetch, pollCount]);
 
     useEffect(() => {
-        if (!isPaid || !bookingId || !booking || redirectedRef.current) return;
-
-        redirectedRef.current = true;
+        if (!isPaid || !bookingId || !booking) return;
+        queryClient.invalidateQueries({ queryKey: bookingKeys.detail(bookingId) });
+        queryClient.invalidateQueries({ queryKey: bookingKeys.all });
+        queryClient.invalidateQueries({ queryKey: tripKeys.all });
+        queryClient.invalidateQueries({ queryKey: ticketKeys.byBooking(bookingId) });
 
         const receipt = buildPaymentReceipt({
             booking,
@@ -65,16 +100,7 @@ export default function PaymentReturn() {
         savePaymentReceipt(receipt);
         clearBookingFlow();
         clearPendingPayment();
-
-        navigate('/traveller/bookings', {
-            replace: true,
-            state: {
-                paymentSuccess: true,
-                bookingId,
-                receipt,
-            },
-        });
-    }, [isPaid, bookingId, booking, searchParams, pending, navigate]);
+    }, [isPaid, bookingId, booking, searchParams, pending, queryClient]);
 
     const handleRetryPayment = async () => {
         if (!bookingId) return;
@@ -83,7 +109,6 @@ export default function PaymentReturn() {
             const result = await initiatePayment({
                 method: 'CHAPA',
                 bookingId,
-                customerReference: pending?.passengerDetails?.email ?? undefined,
             });
             if (result?.paymentUrl) {
                 window.location.href = result.paymentUrl;
@@ -102,9 +127,32 @@ export default function PaymentReturn() {
     if (isPaid) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
-                <div className="text-center">
-                    <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto mb-4" />
-                    <p className="text-sm text-gray-600 font-medium">Payment confirmed — opening your bookings…</p>
+                <div className="bg-white rounded-3xl shadow-lg border border-gray-100 max-w-lg w-full p-10 text-center">
+                    <CheckCircle className="w-14 h-14 text-emerald-500 mx-auto mb-6" />
+                    <h1 className="text-xl font-bold text-gray-900 mb-2">Payment successful</h1>
+                    <p className="text-sm text-gray-500 mb-6">
+                        Your payment has been confirmed. You can now continue to My Bookings.
+                    </p>
+                    <div className="flex flex-col gap-3">
+                        <Button
+                            onClick={() =>
+                                navigate('/traveller/bookings', {
+                                    replace: true,
+                                    state: { paymentSuccess: true, bookingId },
+                                })
+                            }
+                            className="w-full"
+                        >
+                            Go to My Bookings
+                        </Button>
+                        <Button
+                            variant="outline"
+                            onClick={() => navigate(`/booking/ticket/${bookingId}`)}
+                            className="w-full"
+                        >
+                            View Ticket
+                        </Button>
+                    </div>
                 </div>
             </div>
         );
@@ -126,7 +174,7 @@ export default function PaymentReturn() {
                         <AlertCircle className="w-14 h-14 text-red-500 mx-auto mb-6" />
                         <h1 className="text-xl font-bold text-gray-900 mb-2">Payment failed</h1>
                         <p className="text-sm text-gray-500 mb-6">
-                            Your booking may still be reserved. You can try Chapa again or view bookings.
+                            This booking was not confirmed. You can try Chapa again or view your bookings.
                         </p>
                         {errorMsg && <p className="text-sm text-red-600 mb-4">{errorMsg}</p>}
                         <div className="flex flex-col gap-3">
@@ -143,7 +191,9 @@ export default function PaymentReturn() {
                         <Loader2 className="w-14 h-14 text-amber-500 animate-spin mx-auto mb-6" />
                         <h1 className="text-xl font-bold text-gray-900 mb-2">Payment pending</h1>
                         <p className="text-sm text-gray-500 mb-2">
-                            If you paid on Chapa, confirmation may take a few seconds.
+                            {callbackDone
+                                ? 'Payment reported to the server. Waiting for booking confirmation…'
+                                : 'If you paid on Chapa, confirmation may take a few seconds.'}
                         </p>
                         <p className="text-xs text-gray-400 mb-6">
                             Ref: {booking?.bookingReference ?? bookingId}

@@ -1,10 +1,12 @@
 import { mapPaymentDisplay, resolveBookingPayment } from './bookingUi';
+import { isBookingVisibleOnOperatorManifest } from './paymentSync';
 
 const METHOD_LABEL = {
     TELEBIRR: 'Telebirr',
     SANTIM: 'Santim',
     CHAPA: 'Chapa',
     CBE: 'CBE Birr',
+    MANUAL: 'Manual / Cash',
 };
 
 export function isWalkInTraveler(traveler) {
@@ -59,6 +61,9 @@ export function buildManifestRows(
             ...booking,
             payment: paymentsByBookingId[booking.id] ?? booking.payment,
         });
+
+        if (!isBookingVisibleOnOperatorManifest(booking, payment)) continue;
+
         const paymentStatus = mapPaymentDisplay(payment.status, booking.status);
         const paymentMethod = METHOD_LABEL[payment.method] ?? payment.method ?? '—';
         const amount = payment.amount ?? booking.totalAmount;
@@ -92,7 +97,7 @@ export function buildManifestRows(
                 amount: formatAmount(amount),
                 channel,
                 bookedBy,
-                isPaid: paymentStatus === 'Paid',
+                isPaid: paymentStatus === 'Completed',
             });
         };
 
@@ -102,7 +107,12 @@ export function buildManifestRows(
         }
 
         for (const traveler of travelers) {
-            const channel = isWalkInTraveler(traveler) ? 'Walk-in' : 'Online';
+            const payMethod = (payment.method ?? '').toUpperCase();
+            const channel = payMethod === 'MANUAL'
+                ? 'Manual'
+                : isWalkInTraveler(traveler)
+                    ? 'Walk-in'
+                    : 'Online';
             const bookingSeats = traveler.bookingSeats ?? [];
 
             if (bookingSeats.length > 0) {

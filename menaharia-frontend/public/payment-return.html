@@ -3,35 +3,207 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Returning to Menaharia…</title>
-    <script>
-        (function () {
-            var params = new URLSearchParams(window.location.search);
-            var bookingId = params.get('bookingId') || params.get('booking_id') || '';
-
-            try {
-                var raw = sessionStorage.getItem('menaharia.booking.pendingPayment');
-                if (!bookingId && raw) {
-                    var pending = JSON.parse(raw);
-                    if (pending && pending.bookingId) {
-                        bookingId = pending.bookingId;
-                    }
-                }
-            } catch (e) { /* ignore */ }
-
-            if (bookingId && !params.has('bookingId')) {
-                params.set('bookingId', bookingId);
-            }
-
-            var qs = params.toString();
-            var target = '/booking/payment/return' + (qs ? '?' + qs : '');
-            window.location.replace(target);
-        })();
-    </script>
+    <title>Confirming payment…</title>
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            text-align: center;
+            padding: 3rem;
+            color: #334155;
+            margin: 0;
+            background: #f8fafc;
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #e2e8f0;
+            border-top-color: #0d9488;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #status { font-size: 0.875rem; color: #64748b; }
+        #error { font-size: 0.875rem; color: #dc2626; margin-top: 0.75rem; display: none; }
+    </style>
 </head>
 <body>
-    <p style="font-family: system-ui, sans-serif; text-align: center; padding: 3rem; color: #334155;">
-        Payment complete — returning to Menaharia…
-    </p>
+    <div class="spinner" aria-hidden="true"></div>
+    <p id="headline">Confirming your payment…</p>
+    <p id="status">Please wait.</p>
+    <p id="error"></p>
+    <script>
+        (function () {
+            var PENDING_KEY = 'menaharia.booking.pendingPayment';
+            var API_BASE_KEY = 'menaharia.api.baseUrl';
+            var CALLBACK_DONE_PREFIX = 'menaharia.payment.callbackSent.';
+
+            function getApiBase() {
+                try {
+                    var stored = localStorage.getItem(API_BASE_KEY);
+                    if (stored) return stored.replace(/\/$/, '');
+                } catch (e) { /* ignore */ }
+                return 'http://localhost:3002';
+            }
+
+            function setStatus(text) {
+                var el = document.getElementById('status');
+                if (el) el.textContent = text;
+            }
+
+            function showError(text) {
+                var el = document.getElementById('error');
+                if (el) {
+                    el.style.display = 'block';
+                    el.textContent = text;
+                }
+                console.error('Payment callback failed', text);
+            }
+
+            function mapStatus(status) {
+                var s = (status || '').toLowerCase().trim();
+                if (s === 'success' || s === 'successful' || s === 'completed') return 'SUCCESS';
+                if (s === 'failed' || s === 'failure' || s === 'cancelled' || s === 'canceled') {
+                    return 'FAILED';
+                }
+                return null;
+            }
+
+            function resolveBookingId(params) {
+                var bookingId = params.get('bookingId') || params.get('booking_id') || '';
+                if (bookingId) return bookingId;
+                try {
+                    var raw = sessionStorage.getItem(PENDING_KEY);
+                    if (raw) {
+                        var pending = JSON.parse(raw);
+                        if (pending && pending.bookingId) return pending.bookingId;
+                    }
+                } catch (e) { /* ignore */ }
+                return '';
+            }
+
+            function resolveTrxRef(params) {
+                var trxRef =
+                    params.get('trx_ref')
+                    || params.get('reference')
+                    || params.get('tx_ref');
+                if (trxRef) return trxRef;
+                try {
+                    var raw = sessionStorage.getItem(PENDING_KEY);
+                    if (raw) {
+                        var pending = JSON.parse(raw);
+                        if (pending && pending.gatewayReference) return pending.gatewayReference;
+                    }
+                } catch (e) { /* ignore */ }
+                return null;
+            }
+
+            function buildCallbackPayload(trxRef, status) {
+                var apiStatus = mapStatus(status);
+                if (!apiStatus) {
+                    apiStatus = status ? 'FAILED' : 'SUCCESS';
+                }
+                return {
+                    gatewayReference: trxRef,
+                    status: apiStatus,
+                    transactionCode: trxRef,
+                    callbackReference: trxRef,
+                    method: 'CHAPA',
+                };
+            }
+
+            async function postPaymentCallback(payload) {
+                var apiBase = getApiBase();
+                var url = apiBase + '/v1/payments/callback';
+                var headers = { 'Content-Type': 'application/json' };
+                try {
+                    var token = localStorage.getItem('accessToken');
+                    if (token) headers.Authorization = 'Bearer ' + token;
+                } catch (e) { /* ignore */ }
+
+                var res = await fetch(url, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(payload),
+                });
+
+                var body = null;
+                try {
+                    body = await res.json();
+                } catch (e) {
+                    body = null;
+                }
+
+                if (!res.ok) {
+                    var msg =
+                        (body && (body.message || body.error))
+                        || ('Callback failed (' + res.status + ')');
+                    throw new Error(msg);
+                }
+
+                return body;
+            }
+
+            function redirectToApp(bookingId, trxRef, status, callbackStatus) {
+                var targetParams = new URLSearchParams();
+                if (bookingId) targetParams.set('bookingId', bookingId);
+                if (trxRef) targetParams.set('trx_ref', trxRef);
+                if (status) targetParams.set('status', status);
+                if (callbackStatus) targetParams.set('payment_result', callbackStatus);
+                var qs = targetParams.toString();
+                window.location.replace('/booking/payment/return' + (qs ? '?' + qs : ''));
+            }
+
+            async function run() {
+                var params = new URLSearchParams(window.location.search);
+                var bookingId = resolveBookingId(params);
+                var trxRef = resolveTrxRef(params);
+                var status = params.get('status') || '';
+
+                if (bookingId && !params.has('bookingId')) {
+                    params.set('bookingId', bookingId);
+                }
+
+                if (!trxRef) {
+                    setStatus('Returning to Menaharia…');
+                    redirectToApp(bookingId, null, status, null);
+                    return;
+                }
+
+                var dedupeKey = CALLBACK_DONE_PREFIX + trxRef;
+                try {
+                    if (sessionStorage.getItem(dedupeKey)) {
+                        setStatus('Payment already confirmed. Opening app…');
+                        redirectToApp(bookingId, trxRef, status, 'success');
+                        return;
+                    }
+                } catch (e) { /* continue */ }
+
+                var payload = buildCallbackPayload(trxRef, status);
+
+                try {
+                    setStatus('Confirming payment with server…');
+                    await postPaymentCallback(payload);
+                    try {
+                        sessionStorage.setItem(dedupeKey, String(Date.now()));
+                    } catch (e) { /* ignore */ }
+                    setStatus('Payment confirmed. Opening your bookings…');
+                    redirectToApp(bookingId, trxRef, status, 'success');
+                    return;
+                } catch (err) {
+                    showError(
+                        err && err.message
+                            ? err.message
+                            : 'Could not confirm payment. Showing your bookings.',
+                    );
+                    setStatus('Could not confirm automatically. Opening your bookings…');
+                    redirectToApp(bookingId, trxRef, status, 'failed');
+                    return;
+                }
+            }
+
+            run();
+        })();
+    </script>
 </body>
 </html>

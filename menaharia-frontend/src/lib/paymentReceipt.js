@@ -22,7 +22,7 @@ export function buildPaymentReceipt({ booking, bookingId, searchParams, pending 
         paymentId: payment.id ?? null,
         amount: payment.amount ?? booking?.totalAmount ?? pending?.totalPrice ?? null,
         method: payment.method ?? 'CHAPA',
-        status: (payment.status ?? 'SUCCESS').toUpperCase(),
+        status: (payment.status ?? (booking?.status === 'CONFIRMED' ? 'SUCCESS' : 'PENDING')).toUpperCase(),
         gatewayReference:
             payment.gatewayReference
             ?? payment.reference

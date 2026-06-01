@@ -2,6 +2,15 @@ import axios from 'axios';
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? 'https://menaharia-backend.onrender.com';
 
+/** Used by public/payment-return.html before the SPA loads. */
+if (typeof window !== 'undefined') {
+    try {
+        localStorage.setItem('menaharia.api.baseUrl', BASE_URL.replace(/\/$/, ''));
+    } catch {
+        /* private mode */
+    }
+}
+
 /**
  * Central Axios instance.
  * All API modules import this — never create a second instance.

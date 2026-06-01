@@ -28,6 +28,15 @@ export function clearBookingFlow() {
     }
 }
 
+/** Clear wizard state only — keep pending payment context for Pay Later / resume. */
+export function clearBookingSession() {
+    try {
+        sessionStorage.removeItem(BOOKING_SESSION_KEY);
+    } catch {
+        /* ignore */
+    }
+}
+
 /** Persist context across Chapa redirect. */
 export function savePendingPayment(state) {
     try {
@@ -52,4 +61,12 @@ export function clearPendingPayment() {
     } catch {
         /* ignore */
     }
+}
+
+/** Pending checkout context for the same trip (resume payment without re-booking). */
+export function getPendingPaymentForTrip(tripId) {
+    const pending = loadPendingPayment();
+    if (!pending?.bookingId || !tripId) return null;
+    if (pending.tripId !== tripId) return null;
+    return pending;
 }

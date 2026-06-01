@@ -4,7 +4,7 @@ import { normaliseCreateBookingResponse, normaliseBookingDetail } from '../lib/b
 /**
  * Bookings API  (all endpoints require auth)
  *
- * create  — POST  /v1/bookings              Reserves seats + creates booking (+ payment record)
+ * create  — POST  /v1/bookings              Reserve seats + PENDING booking (pay via /payments/initiate)
  * list    — GET   /v1/bookings
  * getById — GET   /v1/bookings/:id
  * cancel  — PATCH /v1/bookings/:id/cancel
@@ -60,6 +60,14 @@ export const cancelBooking = (id) =>
 /**
  * Create a booking on behalf of another user (operator/admin).
  * POST /v1/bookings/for-user
+ *
+ * @param {{
+ *   tripId: string,
+ *   userId: string,
+ *   paymentMethod: 'CHAPA' | 'TELEBIRR' | 'SANTIM' | 'MANUAL',
+ *   paymentStatus?: 'PAID' | string,
+ *   travelers: Array<object>,
+ * }} data
  */
 export const createBookingForUser = (data) =>
     api.post('/bookings/for-user', data).then((res) =>

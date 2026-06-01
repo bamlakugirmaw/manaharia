@@ -75,7 +75,7 @@ export function normaliseBusSeats(list) {
         .filter((s) => s.id && s.seatNumber);
 }
 
-/** Trip seat is available for selection / POST /bookings. */
+/** Trip seat is available for selection / POST /bookings (RESERVED/BOOKED are blocked). */
 export function isTripSeatAvailable(seat) {
     const status = (seat?.status ?? 'AVAILABLE').toUpperCase();
     return status === 'AVAILABLE';

@@ -15,7 +15,7 @@ export { useEnrichedBooking } from './useEnrichedBooking';
 export { useTripManifest } from './useTripManifest';
 export { useTravelersByBooking, travelerKeys } from './useTravelers';
 export { usePayments, usePayment, useInitiatePayment, paymentKeys } from './usePayments';
-export { useTickets, useTicketsByBooking, useTicket, ticketKeys } from './useTickets';
+export { useTickets, useTicketsByBooking, useTicket, useValidateTicket, ticketKeys } from './useTickets';
 export { useUsers, useUser, useUpdateUserStatus, useRemoveUser, useHardRemoveUser, useRemoveUserRole, userKeys } from './useUsers';
 export { useAdminDashboard, adminKeys } from './useAdminDashboard';
 export { useRoles, useBusOperatorRoleId, useRevokeRole, roleKeys } from './useRoles';

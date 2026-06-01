@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { bookingsApi } from '../api';
 import { filterBookingsForOperator } from '../lib/operatorHelpers';
+import { tripKeys } from './useTrips';
 
 export const bookingKeys = {
     all:    ['bookings'],
@@ -61,11 +62,21 @@ export function useBooking(bookingId) {
     });
 }
 
+function invalidateBookingAndSeats(queryClient, bookingId) {
+    queryClient.invalidateQueries({ queryKey: bookingKeys.all });
+    if (bookingId) {
+        queryClient.invalidateQueries({ queryKey: bookingKeys.detail(bookingId) });
+    }
+    queryClient.invalidateQueries({ queryKey: tripKeys.all });
+}
+
 export function useCreateBooking() {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (data) => bookingsApi.createBooking(data),
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: bookingKeys.all }),
+        onSuccess: (result) => {
+            invalidateBookingAndSeats(queryClient, result?.bookingId);
+        },
     });
 }
 
@@ -73,7 +84,9 @@ export function useCreateBookingForUser() {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (data) => bookingsApi.createBookingForUser(data),
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: bookingKeys.all }),
+        onSuccess: (result) => {
+            invalidateBookingAndSeats(queryClient, result?.bookingId);
+        },
     });
 }
 
@@ -82,8 +95,7 @@ export function useCancelBooking() {
     return useMutation({
         mutationFn: (bookingId) => bookingsApi.cancelBooking(bookingId),
         onSuccess: (_data, bookingId) => {
-            queryClient.invalidateQueries({ queryKey: bookingKeys.all });
-            queryClient.invalidateQueries({ queryKey: bookingKeys.detail(bookingId) });
+            invalidateBookingAndSeats(queryClient, bookingId);
         },
     });
 }

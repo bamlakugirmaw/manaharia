@@ -2,7 +2,8 @@ import { useMemo } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import { travelersApi } from '../api/travelers.api';
 import { usePayments } from './usePayments';
-import { useTickets } from './useTickets';
+import { ticketsApi } from '../api/tickets.api';
+import { ticketKeys } from './useTickets';
 import { travelerKeys } from './useTravelers';
 import { unwrapTravelersList, buildTripSeatLabelMap } from '../lib/bookingEnrichment';
 import { buildManifestRows, countBookedSeatsFromRows } from '../lib/manifestRows';
@@ -65,9 +66,20 @@ export function useTripManifest({
         enabled: active && bookingIds.length > 0,
     });
 
-    const { data: allTickets = [], isLoading: ticketsLoading } = useTickets({
-        limit: 300,
-        enabled: active && bookingIds.length > 0,
+    const ticketsQueries = useQueries({
+        queries: bookingIds.map((bookingId) => ({
+            queryKey: ticketKeys.byBooking(bookingId),
+            queryFn: async () => {
+                const res = await ticketsApi.getTicketsByBooking(bookingId);
+                const p = res?.data ?? res;
+                if (Array.isArray(p)) return p;
+                if (Array.isArray(p?.items)) return p.items;
+                if (Array.isArray(p?.data)) return p.data;
+                return [];
+            },
+            enabled: active,
+            staleTime: 30 * 1000,
+        })),
     });
 
     const travelersByBookingId = useMemo(() => {
@@ -90,15 +102,11 @@ export function useTripManifest({
 
     const ticketsByBookingId = useMemo(() => {
         const map = {};
-        const idSet = new Set(bookingIds);
-        for (const t of allTickets) {
-            const bid = t.bookingId ?? t.booking?.id;
-            if (!bid || !idSet.has(bid)) continue;
-            if (!map[bid]) map[bid] = [];
-            map[bid].push(t);
-        }
+        bookingIds.forEach((id, index) => {
+            map[id] = ticketsQueries[index]?.data ?? [];
+        });
         return map;
-    }, [allTickets, bookingIds]);
+    }, [bookingIds, ticketsQueries]);
 
     const rows = useMemo(
         () => buildManifestRows(
@@ -114,6 +122,7 @@ export function useTripManifest({
     const bookedSeatCount = useMemo(() => countBookedSeatsFromRows(rows), [rows]);
 
     const travelersLoading = travelersQueries.some((q) => q.isLoading || q.isFetching);
+    const ticketsLoading = ticketsQueries.some((q) => q.isLoading || q.isFetching);
     const isLoading = travelersLoading || paymentsLoading || ticketsLoading;
 
     const refetch = () => {

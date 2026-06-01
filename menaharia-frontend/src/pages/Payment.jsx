@@ -1,24 +1,24 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import chapaLogo from '../assets/chapa-logo.jpg';
 import { Button } from '../components/ui/Button';
-import { ArrowRight, ShieldCheck, Clock, ExternalLink } from 'lucide-react';
+import { ShieldCheck, Clock, ExternalLink } from 'lucide-react';
 import ProgressStepper from '../components/booking/ProgressStepper';
 import BookingSummary from '../components/booking/BookingSummary';
-import { useCreateBooking } from '../hooks/useBookings';
 import { useInitiatePayment } from '../hooks/usePayments';
 import { useAuth } from '../contexts/AuthContext';
+import { bookingsApi } from '../api/bookings.api';
 import { extractErrorMessage } from '../lib/api';
-import { fetchTripSeatContext, resolveSelectedSeats } from '../lib/tripSeats';
+import { isBookingPaid } from '../lib/bookingUi';
+import { reserveBooking, DEFAULT_PAYMENT_METHOD } from '../lib/bookingCheckout';
 import {
     loadBookingFlow,
     savePendingPayment,
+    saveBookingFlow,
 } from '../lib/bookingFlow';
 import { getChapaReturnPageUrl } from '../lib/appUrl';
 import { buildSeatTypeMap, totalPriceForSelectedSeats } from '../lib/seatPricing';
-
-/** Backend payment_method enum on CreateBookingDto / InitiatePaymentDto */
-const PAYMENT_METHOD = 'CHAPA';
+import { clearPaymentInitiationLock } from '../lib/paymentInitiation';
 
 export default function Payment() {
     const loc = useLocation();
@@ -33,16 +33,30 @@ export default function Payment() {
         selectedSeats = [],
         totalPrice,
         passengerDetails,
+        bookingId: stateBookingId,
+        bookingReference: stateBookingRef,
+        reservedUntil: stateReservedUntil,
     } = state;
 
     const tripId = stateTripId ?? trip?.id;
+    const preCreatedBookingId = stateBookingId ?? saved?.bookingId ?? null;
 
-    const { mutateAsync: createBooking, isPending: creating } = useCreateBooking();
     const { mutateAsync: initiatePayment, isPending: initiating } = useInitiatePayment();
 
     const [errorMsg, setErrorMsg] = useState('');
-    const [step, setStep] = useState('idle'); // idle | reserving | redirecting
-    const [reservation, setReservation] = useState(null);
+    const [step, setStep] = useState('idle'); // idle | redirecting
+    const [reservation, setReservation] = useState(
+        preCreatedBookingId
+            ? {
+                bookingId: preCreatedBookingId,
+                bookingReference: stateBookingRef,
+                reservedUntil: stateReservedUntil,
+                totalAmount: totalPrice,
+            }
+            : null,
+    );
+    const checkoutLock = useRef(false);
+    const autoStarted = useRef(false);
 
     useEffect(() => {
         if (!tripId) {
@@ -56,9 +70,133 @@ export default function Payment() {
             return;
         }
         if (!selectedSeats?.length || !passengerDetails) {
-            navigate(`/booking/seats/${tripId}`);
+            navigate(`/booking/passenger`, {
+                state: { trip, tripId, selectedSeats, totalPrice, passengerDetails },
+            });
         }
-    }, [tripId, isAuthenticated, navigate, state, selectedSeats, passengerDetails]);
+    }, [tripId, isAuthenticated, navigate, state, selectedSeats, passengerDetails, trip, totalPrice]);
+
+    useEffect(() => {
+        if (!preCreatedBookingId || reservation?.booking) return;
+        bookingsApi.getBookingById(preCreatedBookingId)
+            .then((booking) => {
+                if (isBookingPaid(booking)) {
+                    navigate(`/booking/payment/return?bookingId=${preCreatedBookingId}`, { replace: true });
+                    return;
+                }
+                setReservation({
+                    bookingId: preCreatedBookingId,
+                    booking,
+                    bookingReference: booking?.bookingReference ?? stateBookingRef,
+                    reservedUntil: booking?.reservedUntil ?? stateReservedUntil,
+                    totalAmount: booking?.totalAmount ?? totalPrice,
+                });
+            })
+            .catch(() => {});
+    }, [preCreatedBookingId, reservation?.booking, navigate, stateBookingRef, stateReservedUntil, totalPrice]);
+
+    const startChapaCheckout = async () => {
+        if (checkoutLock.current) return;
+        checkoutLock.current = true;
+        setErrorMsg('');
+        setStep('redirecting');
+
+        try {
+            let bookingId = preCreatedBookingId ?? reservation?.bookingId;
+            let bookingRecord = reservation?.booking;
+            let reservedUntil = reservation?.reservedUntil;
+            let amount = reservation?.totalAmount ?? totalPrice;
+
+            if (!bookingId) {
+                setStep('idle');
+                const result = await reserveBooking({
+                    tripId,
+                    trip,
+                    selectedSeats,
+                    passengerDetails,
+                });
+                bookingId = result.bookingId;
+                bookingRecord = result.booking;
+                reservedUntil = result.reservedUntil;
+                amount = result.totalAmount;
+            }
+
+            if (!bookingId) {
+                throw new Error('Booking ID is missing. Go back and try again.');
+            }
+
+            setReservation({
+                bookingId,
+                booking: bookingRecord,
+                bookingReference: bookingRecord?.bookingReference ?? stateBookingRef,
+                reservedUntil,
+                totalAmount: amount,
+            });
+
+            savePendingPayment({
+                bookingId,
+                tripId,
+                trip,
+                selectedSeats,
+                passengerDetails,
+                totalPrice: amount,
+                returnPageUrl: getChapaReturnPageUrl(bookingId),
+            });
+
+            saveBookingFlow({
+                trip,
+                tripId,
+                selectedSeats,
+                totalPrice: amount,
+                passengerDetails,
+                bookingId,
+                step: 'payment',
+            });
+
+            const checkout = await initiatePayment({
+                method: DEFAULT_PAYMENT_METHOD,
+                bookingId,
+            });
+
+            if (checkout?.gatewayReference) {
+                savePendingPayment({
+                    bookingId,
+                    tripId,
+                    trip,
+                    selectedSeats,
+                    passengerDetails,
+                    totalPrice: amount,
+                    gatewayReference: checkout.gatewayReference,
+                    returnPageUrl: getChapaReturnPageUrl(bookingId),
+                });
+            }
+
+            if (!checkout?.paymentUrl) {
+                clearPaymentInitiationLock(bookingId);
+                setStep('idle');
+                setErrorMsg(
+                    checkout?.message ??
+                        'Booking reserved, but Chapa checkout URL was not returned. Retry from My Bookings.',
+                );
+                navigate(`/booking/payment/return?bookingId=${bookingId}`, { replace: false });
+                return;
+            }
+
+            window.location.href = checkout.paymentUrl;
+        } catch (err) {
+            setStep('idle');
+            setErrorMsg(extractErrorMessage(err, 'Could not start payment. Please try again.'));
+        } finally {
+            checkoutLock.current = false;
+        }
+    };
+
+    useEffect(() => {
+        if (!preCreatedBookingId || autoStarted.current) return;
+        autoStarted.current = true;
+        startChapaCheckout();
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- run once when arriving with bookingId
+    }, [preCreatedBookingId]);
 
     if (!tripId) {
         return null;
@@ -69,102 +207,8 @@ export default function Payment() {
         selectedSeats,
         buildSeatTypeMap(trip?.tripSeats ?? [])
     );
-    const displayTotal = computedTotal || totalPrice || 0;
-
-    const loading = creating || initiating || step !== 'idle';
-
-    const handlePayWithChapa = async () => {
-        setErrorMsg('');
-        setStep('reserving');
-
-        try {
-            const ctx = await fetchTripSeatContext(tripId);
-            const resolved = resolveSelectedSeats(selectedSeats, ctx.seatIdMap);
-            const seatTypeMap = buildSeatTypeMap(ctx.tripSeats);
-            const amount = totalPriceForSelectedSeats(
-                ctx.trip?.price ?? trip?.price ?? 0,
-                resolved,
-                seatTypeMap
-            );
-
-            const missing = resolved.filter((s) => !s.tripSeatId);
-            if (missing.length > 0) {
-                setStep('idle');
-                setErrorMsg(
-                    ctx.unavailableMessage ??
-                        'Selected seats are no longer available. Go back and choose different seats.'
-                );
-                return;
-            }
-
-            const travelers = resolved.map((seat) => ({
-                tripSeatId: seat.tripSeatId,
-                fullName: passengerDetails?.fullName ?? '',
-                email: passengerDetails?.email ?? '',
-                phone: passengerDetails?.phone ?? '',
-                emergencyContact: passengerDetails?.emergencyContact ?? '',
-            }));
-
-            const result = await createBooking({
-                tripId,
-                paymentMethod: PAYMENT_METHOD,
-                travelers,
-            });
-
-            const bookingId = result?.bookingId;
-            if (!bookingId) {
-                throw new Error('Booking was created but no booking ID was returned.');
-            }
-
-            setReservation({
-                bookingId,
-                booking: result.booking,
-                payment: result.payment,
-                reservedUntil: result.reservedUntil,
-                totalAmount: result.totalAmount ?? amount,
-            });
-
-            savePendingPayment({
-                bookingId,
-                tripId,
-                trip: ctx.trip ?? trip,
-                selectedSeats: resolved,
-                passengerDetails,
-                totalPrice: result.totalAmount ?? amount,
-                returnPageUrl: getChapaReturnPageUrl(bookingId),
-            });
-
-            if (import.meta.env.DEV) {
-                console.info(
-                    '[Chapa] Backend FRONTEND_URL should point to:',
-                    getChapaReturnPageUrl(bookingId),
-                );
-            }
-
-            setStep('redirecting');
-
-            const checkout = await initiatePayment({
-                method: PAYMENT_METHOD,
-                bookingId,
-                customerReference: passengerDetails?.email ?? undefined,
-            });
-
-            if (!checkout?.paymentUrl) {
-                setStep('idle');
-                setErrorMsg(
-                    checkout?.message ??
-                        'Booking reserved, but Chapa checkout URL was not returned. Try again from My Bookings.'
-                );
-                navigate(`/booking/payment/return?bookingId=${bookingId}`, { replace: false });
-                return;
-            }
-
-            window.location.href = checkout.paymentUrl;
-        } catch (err) {
-            setStep('idle');
-            setErrorMsg(extractErrorMessage(err, 'Could not complete booking. Please try again.'));
-        }
-    };
+    const displayTotal = reservation?.totalAmount ?? computedTotal ?? totalPrice ?? 0;
+    const loading = initiating || step === 'redirecting';
 
     const reservedUntilLabel = reservation?.reservedUntil
         ? new Date(reservation.reservedUntil).toLocaleTimeString('en-US', {
@@ -183,8 +227,7 @@ export default function Payment() {
                         <div className="bg-white rounded-2xl shadow-sm p-8">
                             <h1 className="text-2xl font-bold text-gray-900 mb-2">Pay with Chapa</h1>
                             <p className="text-sm text-gray-500 mb-6">
-                                We reserve your seats first, then redirect you to Chapa&apos;s secure checkout to
-                                complete payment in ETB.
+                                Your seats are reserved. Complete payment on Chapa&apos;s secure checkout in ETB.
                             </p>
 
                             {errorMsg && (
@@ -214,7 +257,7 @@ export default function Payment() {
                                             </li>
                                             <li className="flex items-center gap-2">
                                                 <Clock size={14} className="text-amber-600 shrink-0" />
-                                                Seats held briefly while you pay
+                                                Seats held while payment is pending
                                             </li>
                                         </ul>
                                     </div>
@@ -223,9 +266,9 @@ export default function Payment() {
 
                             {reservation && (
                                 <div className="mb-6 p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-sm text-emerald-800">
-                                    <p className="font-semibold">Booking reserved</p>
+                                    <p className="font-semibold">Booking reserved — payment pending</p>
                                     <p className="mt-1 font-mono text-xs">
-                                        {reservation.booking?.bookingReference ?? reservation.bookingId}
+                                        {reservation.bookingReference ?? reservation.bookingId}
                                     </p>
                                     {reservedUntilLabel && (
                                         <p className="mt-1 text-xs">
@@ -238,15 +281,13 @@ export default function Payment() {
                             <Button
                                 fullWidth
                                 className="h-12 bg-[#0EA5E9] hover:bg-[#0284C7] text-white font-semibold text-sm rounded-lg"
-                                onClick={handlePayWithChapa}
+                                onClick={startChapaCheckout}
                                 disabled={loading || !isAuthenticated}
                                 isLoading={loading}
                             >
-                                {step === 'reserving'
-                                    ? 'Reserving seats…'
-                                    : step === 'redirecting'
-                                      ? 'Opening Chapa checkout…'
-                                      : (
+                                {step === 'redirecting'
+                                    ? 'Opening Chapa checkout…'
+                                    : (
                                         <>
                                             Pay ETB {displayTotal.toLocaleString()} with Chapa
                                             <ExternalLink className="w-4 h-4 ml-2" />
@@ -255,8 +296,7 @@ export default function Payment() {
                             </Button>
 
                             <p className="text-xs text-gray-400 text-center mt-4">
-                                By continuing you agree to complete payment on Chapa. Unpaid reservations may be
-                                released automatically.
+                                Payment is confirmed only after Chapa notifies our server. Your booking stays pending until then.
                             </p>
                         </div>
                     </div>

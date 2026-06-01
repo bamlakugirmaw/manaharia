@@ -1,6 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { paymentsApi } from '../api';
+import { initiatePaymentForBooking } from '../lib/paymentInitiation';
 import { bookingKeys } from './useBookings';
+import { tripKeys } from './useTrips';
+import { ticketKeys } from './useTickets';
 
 export const paymentKeys = {
     all: ['payments'],
@@ -53,13 +56,16 @@ export function usePayment(paymentId) {
 export function useInitiatePayment() {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: (data) => paymentsApi.initiatePayment(data),
+        mutationFn: (data) => initiatePaymentForBooking(data),
         onSuccess: (_data, variables) => {
-            // Refresh the booking that was just paid for
             queryClient.invalidateQueries({
                 queryKey: bookingKeys.detail(variables.bookingId),
             });
             queryClient.invalidateQueries({ queryKey: bookingKeys.all });
+            queryClient.invalidateQueries({ queryKey: tripKeys.all });
+            queryClient.invalidateQueries({
+                queryKey: ticketKeys.byBooking(variables.bookingId),
+            });
         },
     });
 }

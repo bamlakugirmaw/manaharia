@@ -4,7 +4,7 @@ import { Badge } from '../../components/ui/Badge';
 import { Input } from '../../components/ui/Input';
 import { Card } from '../../components/ui/Card';
 import { Modal } from '../../components/ui/Modal';
-import { Plus, Ticket, Trash2 } from 'lucide-react';
+import { Plus, Ticket, Trash2, QrCode, Search, CheckCircle } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useCreateBookingForUser } from '../../hooks/useBookings';
 import { authApi } from '../../api/auth.api';
@@ -20,11 +20,14 @@ import { tripsApi } from '../../api/trips.api';
 import { routesApi } from '../../api/routes.api';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { extractErrorMessage } from '../../lib/api';
+import { useValidateTicket } from '../../hooks/useTickets';
 import BusLayout from '../../components/seat-map/BusLayout';
 import { useTripSeatContext } from '../../hooks/useTripSeatContext';
 import { useSeats } from '../../hooks/useSeats';
 import { ensureBusSeatsReady } from '../../lib/tripSeats';
 import { buildSeatTypeMap, resolveSeatType, seatPriceForLabel } from '../../lib/seatPricing';
+import { searchUserByContact, isEmailLike } from '../../lib/operatorUserLookup';
+import { buildManualBookingForUserPayload } from '../../lib/manualBooking';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 const tripFrom = (t) => tripOrigin(t);
@@ -69,6 +72,10 @@ export default function BookingManagement() {
     const queryClient = useQueryClient();
     const { mutate: removeTrip, isPending: removingTrip } = useRemoveTrip();
     const { confirm, ConfirmDialogHost } = useConfirmDialog();
+    const { mutateAsync: validateTicket, isPending: validatingTicket } = useValidateTicket();
+    const [validateInput, setValidateInput] = useState('');
+    const [validateResult, setValidateResult] = useState(null);
+    const [validateError, setValidateError] = useState('');
 
     // ── UI state ──────────────────────────────────────────────────────────────
     const [selectedTrip, setSelectedTrip] = useState(null);
@@ -107,10 +114,11 @@ export default function BookingManagement() {
     const [passengerName, setPassengerName] = useState('');
     const [passengerPhone, setPassengerPhone] = useState('');
     const [passengerEmail, setPassengerEmail] = useState('');
-    const [emergencyContact, setEmergencyContact] = useState('');
     const [passengerUserId, setPassengerUserId] = useState('');
-    const [walkInPayment, setWalkInPayment] = useState('chapa');
+    const [userSearchInput, setUserSearchInput] = useState('');
+    const [userSearchStatus, setUserSearchStatus] = useState('idle'); // idle | searching | found | not_found
     const [walkInError, setWalkInError] = useState('');
+    const [walkInSuccess, setWalkInSuccess] = useState('');
     const [walkInSaving, setWalkInSaving] = useState(false);
 
     // ── Derived ───────────────────────────────────────────────────────────────
@@ -161,79 +169,125 @@ export default function BookingManagement() {
         ? resolveSeatType(selectedSeat, walkInSeatTypeMap[selectedSeat])
         : null;
 
-    const PAYMENT_MAP = { chapa: 'CHAPA', telebirr: 'TELEBIRR', santim: 'SANTIM', cash: 'CHAPA' };
+    const resetPassengerForm = () => {
+        setPassengerName('');
+        setPassengerPhone('');
+        setPassengerEmail('');
+        setPassengerUserId('');
+        setUserSearchInput('');
+        setUserSearchStatus('idle');
+    };
 
-    const resolveWalkInUserId = async () => {
+    const handleSearchUser = async () => {
+        const value = userSearchInput.trim();
+        setWalkInError('');
+        setWalkInSuccess('');
+        if (!value) {
+            setWalkInError('Enter a phone number or email to search.');
+            return;
+        }
+
+        setUserSearchStatus('searching');
+        try {
+            const params = isEmailLike(value)
+                ? { email: value }
+                : { phone: value };
+            const user = await searchUserByContact(params);
+            if (user) {
+                setPassengerUserId(user.id);
+                setPassengerName(user.fullName);
+                setPassengerPhone(user.phone);
+                setPassengerEmail(user.email);
+                setUserSearchStatus('found');
+                return;
+            }
+            setPassengerUserId('');
+            setPassengerName('');
+            setPassengerPhone(isEmailLike(value) ? '' : value);
+            setPassengerEmail(isEmailLike(value) ? value : '');
+            setUserSearchStatus('not_found');
+        } catch (err) {
+            setUserSearchStatus('idle');
+            setWalkInError(
+                extractErrorMessage(err, 'Could not search for user. Enter customer details and book to create an account.'),
+            );
+        }
+    };
+
+    const handleClearUserSearch = () => {
+        resetPassengerForm();
+        setWalkInError('');
+    };
+
+    const resolveManualBookingUserId = async () => {
         if (passengerUserId.trim()) return passengerUserId.trim();
+
         const tempPassword = `Walk@${Date.now().toString(36).slice(-8)}1!`;
         const email =
-            passengerEmail.trim() ||
-            `walkin.${passengerPhone.replace(/\D/g, '') || Date.now()}@menaharia.local`;
+            passengerEmail.trim()
+            || `walkin.${passengerPhone.replace(/\D/g, '') || Date.now()}@menaharia.local`;
         const regResponse = await authApi.register({
-            fullName: passengerName,
-            phone: passengerPhone,
+            fullName: passengerName.trim(),
+            phone: passengerPhone.trim(),
             email,
             password: tempPassword,
         });
         const payload = regResponse?.data ?? regResponse;
         const uid = payload?.user?.id ?? payload?.id;
         if (!uid) throw new Error('Could not create passenger account.');
+        setPassengerUserId(uid);
         return uid;
     };
 
-    const handleWalkInBooking = async () => {
+    const handleManualBooking = async () => {
         setWalkInError('');
+        setWalkInSuccess('');
         if (!effectiveTripId || !selectedSeat) {
             setWalkInError('Select a trip and an available seat.');
             return;
         }
         if (!passengerName.trim() || !passengerPhone.trim()) {
-            setWalkInError('Passenger name and phone are required.');
-            return;
-        }
-        if (!emergencyContact.trim()) {
-            setWalkInError('Emergency contact is required.');
+            setWalkInError('Full name and phone number are required.');
             return;
         }
         const tripSeatId = seatIdMap[selectedSeat];
         if (!tripSeatId) {
             setWalkInError(
-                'No trip seat ID for this label. Add bus seats (Fleet) and create a new trip so trip seats are materialized.'
+                'No trip seat ID for this label. Add bus seats (Fleet) and create a new trip so trip seats are materialized.',
             );
             return;
         }
 
         setWalkInSaving(true);
         try {
-            const userId = await resolveWalkInUserId();
-            const method = PAYMENT_MAP[walkInPayment.toLowerCase()] ?? 'CHAPA';
-            await createBookingForUser({
-                tripId: effectiveTripId,
-                userId,
-                paymentMethod: method,
-                travelers: [{
+            const userId = await resolveManualBookingUserId();
+            await createBookingForUser(
+                buildManualBookingForUserPayload({
+                    tripId: effectiveTripId,
+                    userId,
                     tripSeatId,
-                    fullName: passengerName.trim(),
-                    email: passengerEmail.trim() || `walkin.${passengerPhone.replace(/\D/g, '')}@menaharia.local`,
-                    phone: passengerPhone.trim(),
-                    emergencyContact: emergencyContact.trim(),
-                }],
-            });
+                    fullName: passengerName,
+                    phone: passengerPhone,
+                    email: passengerEmail,
+                }),
+            );
             await queryClient.invalidateQueries({ queryKey: ['bookings'] });
             await queryClient.invalidateQueries({ queryKey: ['travelers'] });
             await queryClient.invalidateQueries({ queryKey: ['trips'] });
             refetchManifest();
+            refetchTripSeats();
+
+            const seatLabel = selectedSeat;
+            setWalkInSuccess(
+                `Seat ${seatLabel} booked and marked as paid for ${passengerName.trim()}.`,
+            );
             setSelectedSeat('');
-            setPassengerName('');
-            setPassengerPhone('');
-            setPassengerEmail('');
-            setEmergencyContact('');
-            setPassengerUserId('');
+            resetPassengerForm();
             setActiveSection('manifest');
         } catch (err) {
-            const msg = extractErrorMessage(err, 'Walk-in booking failed.');
+            const msg = extractErrorMessage(err, 'Manual booking failed.');
             if (msg.toLowerCase().includes('phone') || msg.toLowerCase().includes('email')) {
-                setWalkInError(`${msg} Enter the passenger's User ID if they already have an account.`);
+                setWalkInError(`${msg} Search for the customer first if they already have an account.`);
             } else {
                 setWalkInError(msg);
             }
@@ -292,6 +346,26 @@ export default function BookingManagement() {
             }
         } finally {
             setCreatingTrip(false);
+        }
+    };
+
+    const handleValidateTicket = async (e) => {
+        e.preventDefault();
+        setValidateError('');
+        setValidateResult(null);
+        const value = validateInput.trim();
+        if (!value) {
+            setValidateError('Enter a ticket number or scan QR code value.');
+            return;
+        }
+        try {
+            const payload = value.includes(':') || value.length > 24
+                ? { qrCode: value }
+                : { ticketNumber: value };
+            const res = await validateTicket(payload);
+            setValidateResult(res?.data ?? res);
+        } catch (err) {
+            setValidateError(extractErrorMessage(err, 'Ticket validation failed.'));
         }
     };
 
@@ -421,6 +495,36 @@ export default function BookingManagement() {
                                         <span className="text-3xl font-black">{manifestLoading ? '—' : emptySeatsCount}</span>
                                     </div>
                                 </div>
+
+                                <form
+                                    onSubmit={handleValidateTicket}
+                                    className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3"
+                                >
+                                    <div className="flex items-center gap-2 text-sm font-bold text-gray-800">
+                                        <QrCode size={16} className="text-primary" />
+                                        Validate ticket (QR or ticket number)
+                                    </div>
+                                    <div className="flex flex-wrap gap-3">
+                                        <Input
+                                            value={validateInput}
+                                            onChange={(e) => setValidateInput(e.target.value)}
+                                            placeholder="Ticket number or QR payload"
+                                            className="flex-1 min-w-[200px]"
+                                        />
+                                        <Button type="submit" disabled={validatingTicket} className="h-11 px-6">
+                                            {validatingTicket ? 'Validating…' : 'Validate'}
+                                        </Button>
+                                    </div>
+                                    {validateError && (
+                                        <p className="text-sm text-red-600 font-medium">{validateError}</p>
+                                    )}
+                                    {validateResult && (
+                                        <pre className="text-xs bg-white border border-emerald-100 rounded-xl p-3 overflow-x-auto text-emerald-900">
+                                            {JSON.stringify(validateResult, null, 2)}
+                                        </pre>
+                                    )}
+                                </form>
+
                                 <div className="overflow-x-auto rounded-2xl border border-gray-100">
                                     <table className="w-full text-left text-sm">
                                         <thead className="bg-gray-50/80 border-b border-gray-100 text-gray-400 uppercase font-bold text-[10px] tracking-wider">
@@ -462,7 +566,11 @@ export default function BookingManagement() {
                                                         {row.channel !== '—' && (
                                                             <span className={cn(
                                                                 'inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full',
-                                                                row.channel === 'Walk-in' ? 'bg-violet-100 text-violet-700' : 'bg-sky-100 text-sky-700',
+                                                                row.channel === 'Manual'
+                                                                    ? 'bg-emerald-100 text-emerald-700'
+                                                                    : row.channel === 'Walk-in'
+                                                                        ? 'bg-violet-100 text-violet-700'
+                                                                        : 'bg-sky-100 text-sky-700',
                                                             )}>
                                                                 {row.channel}
                                                             </span>
@@ -529,13 +637,68 @@ export default function BookingManagement() {
                                 </div>
                                 {/* Passenger Form */}
                                 <div className="space-y-4">
-                                    <h3 className="text-lg font-bold text-gray-900">Passenger Details</h3>
+                                    <h3 className="text-lg font-bold text-gray-900">Customer Details</h3>
                                     <p className="text-xs text-gray-500">
-                                        Walk-in booking uses POST /v1/bookings/for-user. A guest account is created automatically unless you provide an existing User ID.
+                                        Search by phone or email. Paid in cash or at the office — no online payment is started.
                                     </p>
+                                    {walkInSuccess && (
+                                        <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-800 text-sm flex items-start gap-2">
+                                            <CheckCircle size={16} className="shrink-0 mt-0.5" />
+                                            <span>{walkInSuccess}</span>
+                                        </div>
+                                    )}
                                     {walkInError && (
                                         <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">{walkInError}</div>
                                     )}
+
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
+                                            Search user (phone or email)
+                                        </label>
+                                        <div className="flex gap-2">
+                                            <Input
+                                                placeholder="0911223344 or name@email.com"
+                                                value={userSearchInput}
+                                                onChange={(e) => {
+                                                    setUserSearchInput(e.target.value);
+                                                    if (userSearchStatus !== 'idle') setUserSearchStatus('idle');
+                                                }}
+                                                onKeyDown={(e) => e.key === 'Enter' && handleSearchUser()}
+                                                className="rounded-xl h-11 flex-1"
+                                                disabled={userSearchStatus === 'found'}
+                                            />
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={handleSearchUser}
+                                                disabled={userSearchStatus === 'searching' || userSearchStatus === 'found'}
+                                                className="h-11 px-4 rounded-xl shrink-0"
+                                            >
+                                                <Search size={16} className="mr-1.5" />
+                                                {userSearchStatus === 'searching' ? 'Searching…' : 'Search'}
+                                            </Button>
+                                        </div>
+                                        {userSearchStatus === 'found' && (
+                                            <p className="text-xs font-semibold text-emerald-700 mt-2">
+                                                User found — details filled in below.
+                                            </p>
+                                        )}
+                                        {userSearchStatus === 'not_found' && (
+                                            <p className="text-xs font-semibold text-amber-700 mt-2">
+                                                User not found. Please enter customer details.
+                                            </p>
+                                        )}
+                                        {userSearchStatus === 'found' && (
+                                            <button
+                                                type="button"
+                                                onClick={handleClearUserSearch}
+                                                className="text-xs font-bold text-primary mt-2 hover:underline"
+                                            >
+                                                Clear search
+                                            </button>
+                                        )}
+                                    </div>
+
                                     <div>
                                         <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Selected Seat</label>
                                         <div className="h-11 px-4 bg-gray-50 border border-gray-200 rounded-xl flex items-center font-bold text-gray-800">
@@ -544,27 +707,37 @@ export default function BookingManagement() {
                                                 : 'None selected'}
                                         </div>
                                     </div>
-                                    <Input label="Passenger Name *" placeholder="e.g. Abebe Kebede" value={passengerName} onChange={e => setPassengerName(e.target.value)} className="rounded-xl h-11" />
-                                    <Input label="Phone Number *" placeholder="e.g. 0911223344" value={passengerPhone} onChange={e => setPassengerPhone(e.target.value)} className="rounded-xl h-11" />
-                                    <Input label="Email" placeholder="optional" value={passengerEmail} onChange={e => setPassengerEmail(e.target.value)} className="rounded-xl h-11" />
-                                    <Input label="Emergency Contact *" placeholder="e.g. 0911000000" value={emergencyContact} onChange={e => setEmergencyContact(e.target.value)} className="rounded-xl h-11" />
-                                    <Input label="Existing User ID (optional)" placeholder="UUID if passenger already registered" value={passengerUserId} onChange={e => setPassengerUserId(e.target.value)} className="rounded-xl h-11 font-mono text-xs" />
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
-                                        <select value={walkInPayment} onChange={e => setWalkInPayment(e.target.value)}
-                                            className="w-full h-11 rounded-xl border border-gray-300 px-3 text-sm focus:ring-primary focus:border-primary outline-none">
-                                            <option value="chapa">Chapa</option>
-                                            <option value="telebirr">Telebirr</option>
-                                            <option value="santim">Santim</option>
-                                        </select>
-                                    </div>
+                                    <Input
+                                        label="Full Name *"
+                                        placeholder="e.g. Abebe Kebede"
+                                        value={passengerName}
+                                        onChange={(e) => setPassengerName(e.target.value)}
+                                        className="rounded-xl h-11"
+                                        disabled={userSearchStatus === 'found'}
+                                    />
+                                    <Input
+                                        label="Phone Number *"
+                                        placeholder="e.g. 0911223344"
+                                        value={passengerPhone}
+                                        onChange={(e) => setPassengerPhone(e.target.value)}
+                                        className="rounded-xl h-11"
+                                        disabled={userSearchStatus === 'found'}
+                                    />
+                                    <Input
+                                        label="Email Address"
+                                        placeholder="optional"
+                                        value={passengerEmail}
+                                        onChange={(e) => setPassengerEmail(e.target.value)}
+                                        className="rounded-xl h-11"
+                                        disabled={userSearchStatus === 'found'}
+                                    />
                                     <Button
                                         type="button"
                                         disabled={walkInSaving || !selectedSeat || !seatIdMap[selectedSeat]}
-                                        onClick={handleWalkInBooking}
+                                        onClick={handleManualBooking}
                                         className="w-full bg-primary hover:bg-primary/90 text-white font-bold h-11 rounded-xl mt-4"
                                     >
-                                        {walkInSaving ? 'Booking…' : 'Confirm Walk-in Booking'}
+                                        {walkInSaving ? 'Booking…' : 'Book Seat'}
                                     </Button>
                                 </div>
                             </div>

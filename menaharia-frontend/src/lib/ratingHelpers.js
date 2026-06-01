@@ -54,10 +54,13 @@ export function averageFromRatings(ratings) {
     return Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10;
 }
 
+import { isPaidPaymentStatus } from './paymentSync';
+
+/** Travellers may rate only after payment is SUCCESS / COMPLETED. */
 export function canRateBooking(booking) {
     if (!booking?.operatorId) return false;
     if (booking.rowStatus?.key === 'cancelled' || booking.bookingStatusRaw === 'CANCELLED') {
         return false;
     }
-    return Boolean(booking.isPaid || booking.paymentStatusRaw === 'SUCCESS' || booking.rowStatus?.key === 'confirmed');
+    return isPaidPaymentStatus(booking.paymentStatusRaw);
 }

@@ -1,5 +1,6 @@
 import { getPaymentReceipt } from './paymentReceipt';
 import { formatTripTime } from './operatorHelpers';
+import { isBackendBookingPaid } from './bookingUi';
 
 export function unwrapTravelersList(res) {
     const p = res?.data ?? res;
@@ -49,13 +50,11 @@ export function resolvePaymentForBooking(booking, paymentFromList, receipt) {
         ?? paymentFromList
         ?? null;
 
-    if (receipt?.status === 'SUCCESS') {
+    if (receipt && isBackendBookingPaid(booking, payment)) {
         payment = {
             ...(payment ?? {}),
-            status: 'SUCCESS',
-            amount: receipt.amount ?? payment?.amount ?? booking?.totalAmount,
-            method: receipt.method ?? payment?.method ?? 'CHAPA',
             gatewayReference: receipt.gatewayReference ?? payment?.gatewayReference,
+            transactionCode: receipt.transactionId ?? payment?.transactionCode,
         };
     }
 

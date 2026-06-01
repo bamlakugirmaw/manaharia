@@ -8,46 +8,96 @@ const METHOD_LABEL = {
     SANTIM: 'Santim',
     CHAPA: 'Chapa',
     CBE: 'CBE Birr',
+    MANUAL: 'Manual / Cash',
 };
+
+/** Normalise API payment status (SUCCESS | COMPLETED → paid). */
+export function normalizePaymentStatus(status) {
+    const s = (status ?? '').toUpperCase();
+    if (s === 'SUCCESS' || s === 'COMPLETED' || s === 'PAID') return 'COMPLETED';
+    if (s === 'FAILED') return 'FAILED';
+    return 'PENDING';
+}
+
+/** True only when the API reports a completed payment or confirmed booking. */
+export function isBackendBookingPaid(booking, payment = null) {
+    const p = payment ?? booking?.payment ?? (Array.isArray(booking?.payments) ? booking.payments[0] : null);
+    const ps = normalizePaymentStatus(p?.status);
+    const bs = (booking?.status ?? '').toUpperCase();
+    return ps === 'COMPLETED' || bs === 'CONFIRMED';
+}
+
+/** User can open Chapa checkout for this booking. */
+export function canPayBooking(booking) {
+    if (!booking) return false;
+    if (isBookingPaid(booking)) return false;
+    const bs = (booking.status ?? booking.bookingStatusRaw ?? '').toUpperCase();
+    if (bs === 'CANCELLED') return false;
+    const ps = normalizePaymentStatus(
+        booking.payment?.status ?? booking.paymentStatusRaw,
+    );
+    return ps === 'PENDING' || ps === 'FAILED';
+}
 
 export function resolveBookingPayment(booking) {
     if (!booking) return {};
-    const receipt = getPaymentReceipt(booking.id);
     let payment = booking.payment ?? (Array.isArray(booking.payments) ? booking.payments[0] : null) ?? {};
-    if (receipt?.status === 'SUCCESS') {
-        payment = {
-            ...payment,
-            status: 'SUCCESS',
-            amount: receipt.amount ?? payment.amount ?? booking.totalAmount,
-            method: receipt.method ?? payment.method ?? 'CHAPA',
-        };
+
+    // Local Chapa receipt is display-only — never override pending/failed API state.
+    if (isBackendBookingPaid(booking, payment)) {
+        const receipt = getPaymentReceipt(booking.id);
+        if (receipt) {
+            payment = {
+                ...payment,
+                gatewayReference: receipt.gatewayReference ?? payment.gatewayReference,
+                transactionId: receipt.transactionId ?? payment.transactionCode,
+            };
+        }
     }
+
     return payment;
 }
 
 export function mapPaymentDisplay(paymentStatus, bookingStatus) {
-    const ps = (paymentStatus ?? '').toUpperCase();
+    const ps = normalizePaymentStatus(paymentStatus);
     const bs = (bookingStatus ?? '').toUpperCase();
-    if (ps === 'SUCCESS' || bs === 'CONFIRMED') return 'Paid';
+    if (ps === 'COMPLETED' || bs === 'CONFIRMED') return 'Completed';
     if (ps === 'FAILED') return 'Failed';
     if (bs === 'CANCELLED') return 'Cancelled';
     return 'Pending';
 }
 
+export function mapBookingStatusDisplay(bookingStatus) {
+    const bs = (bookingStatus ?? '').toUpperCase();
+    if (bs === 'CONFIRMED') return 'Confirmed';
+    if (bs === 'CANCELLED') return 'Cancelled';
+    if (bs === 'PENDING_PAYMENT') return 'Pending Payment';
+    if (bs === 'PENDING') return 'Pending';
+    return bs ? bs.replace(/_/g, ' ') : '—';
+}
+
 export function mapBookingRowStatus(paymentStatus, bookingStatus) {
-    const ps = (paymentStatus ?? '').toUpperCase();
+    const ps = normalizePaymentStatus(paymentStatus);
     const bs = (bookingStatus ?? '').toUpperCase();
     if (bs === 'CANCELLED') return { key: 'cancelled', label: 'Cancelled' };
-    if (ps === 'SUCCESS' || bs === 'CONFIRMED') return { key: 'confirmed', label: 'Confirmed' };
+    if (ps === 'COMPLETED' || bs === 'CONFIRMED') return { key: 'confirmed', label: 'Confirmed' };
     if (ps === 'FAILED') return { key: 'failed', label: 'Payment Failed' };
     return { key: 'pending', label: 'Pending Payment' };
 }
 
 export function isBookingPaid(booking) {
-    const payment = resolveBookingPayment(booking);
-    const ps = (payment.status ?? '').toUpperCase();
-    const bs = (booking?.status ?? '').toUpperCase();
-    return ps === 'SUCCESS' || bs === 'CONFIRMED';
+    const payment = booking?.payment ?? (Array.isArray(booking?.payments) ? booking.payments[0] : null);
+    return isBackendBookingPaid(booking, payment);
+}
+
+/** Payment failed or booking cancelled after checkout. */
+export function isBookingPaymentFailed(booking) {
+    if (!booking) return false;
+    const bs = (booking.status ?? '').toUpperCase();
+    if (bs === 'CANCELLED') return true;
+    const payment = booking.payment ?? (Array.isArray(booking.payments) ? booking.payments[0] : null);
+    const ps = (payment?.status ?? '').toUpperCase();
+    return ps === 'FAILED';
 }
 
 /**
@@ -90,7 +140,7 @@ export function normaliseBookingForUI(b) {
     const passengerPhone = traveler.phone ?? travelers.find((t) => t.phone)?.phone ?? '';
     const passengerEmail = traveler.email ?? travelers.find((t) => t.email)?.email ?? '';
 
-    const rawPaymentStatus = (payment.status ?? '').toUpperCase();
+    const rawPaymentStatus = normalizePaymentStatus(payment.status);
     const rawBookingStatus = (b.status ?? '').toUpperCase();
 
     return {
@@ -125,7 +175,10 @@ export function normaliseBookingForUI(b) {
         paymentStatusRaw: rawPaymentStatus,
         bookingStatusRaw: rawBookingStatus,
         paymentStatus: mapPaymentDisplay(rawPaymentStatus, rawBookingStatus),
+        paymentStatusLabel: mapPaymentDisplay(rawPaymentStatus, rawBookingStatus),
+        bookingStatusLabel: mapBookingStatusDisplay(rawBookingStatus),
         rowStatus: mapBookingRowStatus(rawPaymentStatus, rawBookingStatus),
+        canPayNow: canPayBooking({ ...b, payment, status: rawBookingStatus, paymentStatusRaw: rawPaymentStatus }),
         amount: payment.amount ?? b.totalAmount ?? trip.price ?? 0,
         paymentMethod: METHOD_LABEL[payment.method] ?? payment.method ?? '—',
         gatewayReference: payment.gatewayReference ?? payment.transactionCode ?? null,

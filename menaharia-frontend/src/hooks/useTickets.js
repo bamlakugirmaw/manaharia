@@ -1,10 +1,12 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { ticketsApi } from '../api';
 
 export const ticketKeys = {
     all:    ['tickets'],
     list:   (params) => ['tickets', 'list', params],
+    byBooking: (bookingId) => ['tickets', 'booking', bookingId],
     detail: (id)     => ['tickets', 'detail', id],
+    validate: (key) => ['tickets', 'validate', key],
 };
 
 function unwrapList(res) {
@@ -29,12 +31,22 @@ export function useTickets(params = {}) {
     });
 }
 
-export function useTicketsByBooking(bookingId) {
+export function useTicketsByBooking(bookingId, options = {}) {
+    const { enabled = true } = options;
     return useQuery({
-        queryKey: ticketKeys.list({ bookingId }),
-        queryFn: async () => unwrapList(await ticketsApi.listTickets({ bookingId })),
-        enabled: !!bookingId,
+        queryKey: ticketKeys.byBooking(bookingId),
+        queryFn: async () => unwrapList(await ticketsApi.getTicketsByBooking(bookingId)),
+        enabled: enabled && !!bookingId,
         staleTime: 0,
+    });
+}
+
+/**
+ * POST /v1/tickets/validate — operator QR / ticket number check-in.
+ */
+export function useValidateTicket() {
+    return useMutation({
+        mutationFn: (params) => ticketsApi.validateTicket(params),
     });
 }
 

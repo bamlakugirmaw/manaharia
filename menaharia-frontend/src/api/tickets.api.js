@@ -1,14 +1,32 @@
 import { api, unwrapEnvelope, sanitizeListParams } from '../lib/api';
 
 /**
- * Tickets API  (all endpoints require auth)
+ * Tickets API
  *
- * Tickets are generated server-side automatically after a payment is confirmed.
- * There is no create endpoint — they are a result of a successful booking payment.
+ * getByBooking — GET  /v1/tickets/booking/:bookingId  (after payment confirms)
+ * validate     — POST /v1/tickets/validate             (QR / ticket number check-in)
+ * getById      — GET  /v1/tickets/:id
+ * pdf          — GET  /v1/tickets/:ticketId/pdf
  *
- * list    — GET /v1/tickets
- * getById — GET /v1/tickets/:id
+ * Tickets are issued by the backend after payment callback — no create endpoint.
  */
+
+/**
+ * @param {string} bookingId
+ */
+export const getTicketsByBooking = (bookingId) =>
+    api.get(`/tickets/booking/${bookingId}`).then(unwrapEnvelope);
+
+/**
+ * Validate an issued ticket (operator check-in).
+ * @param {{ ticketNumber?: string, qrCode?: string }} params
+ */
+export const validateTicket = ({ ticketNumber, qrCode } = {}) => {
+    const params = {};
+    if (ticketNumber) params.ticketNumber = ticketNumber;
+    if (qrCode) params.qrCode = qrCode;
+    return api.post('/tickets/validate', null, { params }).then(unwrapEnvelope);
+};
 
 /**
  * @param {{
@@ -16,16 +34,25 @@ import { api, unwrapEnvelope, sanitizeListParams } from '../lib/api';
  *   limit?: number,
  *   bookingId?: string
  * }} params
- * @returns {{ data: Array<Ticket>, total: number, ... }}
+ * @deprecated Prefer getTicketsByBooking — list route is not in OpenAPI.
  */
-export const listTickets = (params = {}) =>
-    api.get('/tickets', { params: sanitizeListParams(params) }).then(unwrapEnvelope);
+export const listTickets = (params = {}) => {
+    const { bookingId, ...rest } = params;
+    if (bookingId) {
+        return getTicketsByBooking(bookingId);
+    }
+    return api.get('/tickets', { params: sanitizeListParams(rest) }).then(unwrapEnvelope);
+};
 
 /**
  * @param {string} id
- * @returns {Ticket}
  */
 export const getTicketById = (id) =>
     api.get(`/tickets/${id}`).then(unwrapEnvelope);
 
-export const ticketsApi = { listTickets, getTicketById };
+export const ticketsApi = {
+    getTicketsByBooking,
+    validateTicket,
+    listTickets,
+    getTicketById,
+};

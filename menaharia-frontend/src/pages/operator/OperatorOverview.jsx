@@ -4,6 +4,7 @@ import { Bus, TrendingUp, Calendar, CreditCard, Ticket, ArrowRight, Users, Star 
 import { useOperatorRatings } from '../../hooks/useOperatorRatings';
 import StarRatingInput from '../../components/ratings/StarRatingInput';
 import { averageFromRatings } from '../../lib/ratingHelpers';
+import { isBookingVisibleOnOperatorManifest } from '../../lib/paymentSync';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { cn } from '../../lib/utils';
 import { useOperator, useOperatorDashboard } from '../../hooks/useOperators';
@@ -32,14 +33,20 @@ export default function OperatorOverview() {
 
     const recentBookings = (() => {
         const raw = Array.isArray(bookingsResponse) ? bookingsResponse : [];
-        return raw.slice(0, 5).map(b => ({
-            id:        b.id,
-            passenger: b.travelers?.[0]?.fullName ?? '—',
-            route:     `${b.trip?.from ?? b.trip?.route?.origin ?? ''} → ${b.trip?.to ?? b.trip?.route?.destination ?? ''}`,
-            date:      b.trip?.departureTime ?? '—',
-            amount:    `${(b.payment?.amount ?? b.trip?.price ?? 0).toLocaleString()} ETB`,
-            status:    (b.status ?? 'pending').toLowerCase(),
-        }));
+        return raw
+            .filter((b) => {
+                const payment = b.payment ?? (Array.isArray(b.payments) ? b.payments[0] : null);
+                return isBookingVisibleOnOperatorManifest(b, payment);
+            })
+            .slice(0, 5)
+            .map(b => ({
+                id:        b.id,
+                passenger: b.travelers?.[0]?.fullName ?? '—',
+                route:     `${b.trip?.from ?? b.trip?.route?.origin ?? ''} → ${b.trip?.to ?? b.trip?.route?.destination ?? ''}`,
+                date:      b.trip?.departureTime ?? '—',
+                amount:    `${(b.payment?.amount ?? b.trip?.price ?? 0).toLocaleString()} ETB`,
+                status:    (b.status ?? 'pending').toLowerCase(),
+            }));
     })();
 
     const revenueData = dashData?.dailyRevenue ?? dashData?.weeklyRevenue ?? [];

@@ -4,12 +4,15 @@ import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import PaymentReceiptCard from '../../components/PaymentReceiptCard';
 import {
-    Eye, X, MessageSquare, Send, Bus, Calendar, Ticket,
+    X, MessageSquare, Send, Bus, Calendar, Ticket,
     User, CreditCard, Phone, Hash, ArrowRight, AlertCircle,
     CheckCircle, Clock, ChevronLeft, MapPin, PlusCircle, Star,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBookings, useCancelBooking } from '../../hooks/useBookings';
+import { useInitiatePayment } from '../../hooks/usePayments';
+import { savePendingPayment } from '../../lib/bookingFlow';
+import { getChapaReturnPageUrl } from '../../lib/appUrl';
 import { useEnrichedBooking } from '../../hooks/useEnrichedBooking';
 import { useCreateDispute, useDisputes, DISPUTE_STATUS_LABEL } from '../../hooks/useDisputes';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
@@ -44,22 +47,6 @@ function ComplaintStatusBadge({ status }) {
     );
 }
 
-function BookingStatusBadge({ rowStatus, paymentStatus }) {
-    const key = rowStatus?.key ?? 'pending';
-    const label = rowStatus?.label ?? paymentStatus ?? 'Pending';
-    const styles = {
-        confirmed: 'bg-emerald-100 text-emerald-700',
-        cancelled: 'bg-gray-100 text-gray-500',
-        failed: 'bg-red-100 text-red-700',
-        pending: 'bg-amber-100 text-amber-700',
-    };
-    return (
-        <span className={cn('text-[10px] font-bold uppercase px-2.5 py-1 rounded-full', styles[key] || styles.pending)}>
-            {label}
-        </span>
-    );
-}
-
 function InfoTile({ icon: Icon, label, value, accent, hideIfEmpty }) {
     if (hideIfEmpty && (!value || value === '—')) return null;
     return (
@@ -82,19 +69,50 @@ export default function UserBookings() {
     const navigate = useNavigate();
     const location = useLocation();
     const { user } = useAuth();
+    const query = useMemo(() => new URLSearchParams(location.search), [location.search]);
 
     const [paymentSuccess, setPaymentSuccess] = useState(() => location.state?.paymentSuccess ?? false);
     const [successReceipt, setSuccessReceipt] = useState(() => location.state?.receipt ?? null);
     const [successBookingId, setSuccessBookingId] = useState(() => location.state?.bookingId ?? null);
+    const [payLaterNotice, setPayLaterNotice] = useState(
+        () => (location.state?.payLater ? location.state : null),
+    );
+    const [payError, setPayError] = useState('');
+    const [payingBookingId, setPayingBookingId] = useState(null);
+
+    const { mutateAsync: initiatePayment } = useInitiatePayment();
 
     useEffect(() => {
+        const returnResult = (query.get('payment_result') ?? '').toLowerCase();
+        const returnBookingId = query.get('bookingId') ?? query.get('booking_id');
+        const returnStatus = (query.get('status') ?? '').toLowerCase();
+
+        if (returnResult === 'success' || returnStatus === 'success') {
+            setSuccessBookingId(returnBookingId ?? null);
+            setPaymentSuccess(true);
+            setPayError('');
+            navigate(location.pathname, { replace: true, state: {} });
+            return;
+        }
+
+        if (returnResult === 'failed' || returnStatus === 'failed') {
+            setPayError('Payment was not completed. Please try again from your bookings.');
+            navigate(location.pathname, { replace: true, state: {} });
+            return;
+        }
+
         if (location.state?.paymentSuccess) {
             setSuccessBookingId(location.state.bookingId ?? null);
             setSuccessReceipt(location.state.receipt ?? null);
             setPaymentSuccess(true);
             navigate(location.pathname, { replace: true, state: {} });
         }
-    }, [location.state, location.pathname, navigate]);
+        if (location.state?.payLater && location.state?.bookingReserved) {
+            setPayLaterNotice(location.state);
+            navigate(location.pathname, { replace: true, state: {} });
+        }
+    }, [location.state, location.pathname, navigate, query]);
+
     const { mutate: createDispute, isPending: filingDispute } = useCreateDispute();
     const { mutate: cancelBooking, isPending: cancelling } = useCancelBooking();
     const { confirm, ConfirmDialogHost } = useConfirmDialog();
@@ -102,6 +120,12 @@ export default function UserBookings() {
     const { data: rawBookings = [], isLoading, isError, refetch } = useBookings(
         user?.id ? { userId: user.id, limit: 50, enabled: true } : { enabled: false }
     );
+
+    useEffect(() => {
+        if (paymentSuccess || payLaterNotice) {
+            refetch();
+        }
+    }, [paymentSuccess, payLaterNotice, refetch]);
 
     const { data: disputes = [] } = useDisputes({ limit: 100 });
 
@@ -119,9 +143,9 @@ export default function UserBookings() {
         return map;
     }, [disputes]);
 
-    const pendingCount = bookings.filter((b) => b.rowStatus?.key === 'pending').length;
+    const pendingCount = bookings.filter((b) => b.canPayNow).length;
     const totalSpent = bookings
-        .filter((b) => b.paymentStatusRaw === 'SUCCESS')
+        .filter((b) => b.isPaid)
         .reduce((sum, b) => sum + (b.amount ?? 0), 0);
 
     const [selectedBooking, setSelectedBooking] = useState(null);
@@ -188,8 +212,43 @@ export default function UserBookings() {
     };
     const openBookingDetail = (b) => { setSelectedBooking(b); setShowChat(false); setChatMsg(''); };
 
-    const canCancelBooking = (b) =>
-        ['pending', 'confirmed', 'paid'].includes((b.status ?? '').toLowerCase());
+    const canCancelBooking = (b) => b.canPayNow || b.rowStatus?.key === 'pending';
+
+    const handlePayNow = async (booking) => {
+        if (!booking?.id || !booking.canPayNow) return;
+        setPayError('');
+        setPayingBookingId(booking.id);
+        try {
+            savePendingPayment({
+                bookingId: booking.id,
+                tripId: booking._raw?.tripId ?? booking._raw?.trip?.id,
+                passengerDetails: { email: booking.passengerEmail },
+                returnPageUrl: getChapaReturnPageUrl(booking.id),
+            });
+            const checkout = await initiatePayment({
+                method: 'CHAPA',
+                bookingId: booking.id,
+            });
+            if (checkout?.gatewayReference) {
+                savePendingPayment({
+                    bookingId: booking.id,
+                    tripId: booking._raw?.tripId ?? booking._raw?.trip?.id,
+                    passengerDetails: { email: booking.passengerEmail },
+                    gatewayReference: checkout.gatewayReference,
+                    returnPageUrl: getChapaReturnPageUrl(booking.id),
+                });
+            }
+            if (checkout?.paymentUrl) {
+                window.location.href = checkout.paymentUrl;
+                return;
+            }
+            navigate(`/booking/payment/return?bookingId=${booking.id}`);
+        } catch (err) {
+            setPayError(extractErrorMessage(err, 'Could not start payment.'));
+        } finally {
+            setPayingBookingId(null);
+        }
+    };
 
     const handleCancelBooking = async () => {
         if (!displayBooking || !canCancelBooking(displayBooking)) return;
@@ -207,6 +266,38 @@ export default function UserBookings() {
     return (
         <div className="space-y-6">
             <ConfirmDialogHost />
+
+            {payLaterNotice && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 relative">
+                    <button
+                        type="button"
+                        onClick={() => setPayLaterNotice(null)}
+                        className="absolute right-3 top-3 text-amber-600 hover:text-amber-800"
+                        aria-label="Dismiss"
+                    >
+                        <X size={18} />
+                    </button>
+                    <div className="flex items-start gap-3 pr-8">
+                        <Clock className="text-amber-600 shrink-0 mt-0.5" size={22} />
+                        <div>
+                            <p className="font-bold text-amber-900">Booking saved — payment pending</p>
+                            <p className="text-sm text-amber-800 mt-1">
+                                Your seats are reserved. Reference:{' '}
+                                <span className="font-mono font-semibold">
+                                    {payLaterNotice.bookingReference ?? payLaterNotice.bookingId?.slice(0, 8)}
+                                </span>
+                                . Open a booking with View, then use Pay Now when you are ready.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {payError && (
+                <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700 font-medium">
+                    {payError}
+                </div>
+            )}
 
             {paymentSuccess && (
                 <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 relative">
@@ -322,28 +413,34 @@ export default function UserBookings() {
                     <table className="w-full text-left text-sm">
                         <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase font-medium text-xs">
                             <tr>
-                                <th className="px-6 py-4">Booking ID</th>
                                 <th className="px-6 py-4">Operator</th>
                                 <th className="px-6 py-4">Route</th>
-                                <th className="px-6 py-4">Date</th>
-                                <th className="px-6 py-4">Status</th>
+                                <th className="px-6 py-4">Travel</th>
+                                <th className="px-6 py-4">Seats</th>
+                                <th className="px-6 py-4">Payment</th>
                                 <th className="px-6 py-4">Rating</th>
                                 <th className="px-6 py-4 text-right">Amount</th>
-                                <th className="px-6 py-4 text-center">Actions</th>
+                                <th className="px-6 py-4 text-center">View</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {bookings.map(booking => (
                                 <tr key={booking.id} className="hover:bg-gray-50 transition-colors">
-                                    <td className="px-6 py-4 font-mono text-gray-500 text-xs">{booking.id}</td>
                                     <td className="px-6 py-4 font-medium">{booking.operator}</td>
                                     <td className="px-6 py-4 text-gray-600">{booking.route}</td>
                                     <td className="px-6 py-4 text-gray-600">{booking.date}</td>
+                                    <td className="px-6 py-4 text-gray-700 text-xs font-semibold">
+                                        {booking.seatNumber !== '—' ? booking.seatNumber : '—'}
+                                    </td>
                                     <td className="px-6 py-4">
-                                        <BookingStatusBadge
-                                            rowStatus={booking.rowStatus}
-                                            paymentStatus={booking.paymentStatus}
-                                        />
+                                        <span className={cn(
+                                            'text-[10px] font-bold uppercase px-2.5 py-1 rounded-full',
+                                            booking.isPaid ? 'bg-emerald-100 text-emerald-700'
+                                                : booking.paymentStatusRaw === 'FAILED' ? 'bg-red-100 text-red-700'
+                                                    : 'bg-amber-100 text-amber-700',
+                                        )}>
+                                            {booking.isPaid ? 'Completed' : booking.paymentStatusLabel}
+                                        </span>
                                     </td>
                                     <td className="px-6 py-4">
                                         {ratingsLoading ? (
@@ -363,9 +460,12 @@ export default function UserBookings() {
                                         ETB {(booking.amount ?? 0).toLocaleString()}
                                     </td>
                                     <td className="px-6 py-4 text-center">
-                                        <button onClick={() => openBookingDetail(booking)}
-                                            className="inline-flex items-center gap-1.5 text-primary text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors">
-                                            <Eye size={14} /> View
+                                        <button
+                                            type="button"
+                                            onClick={() => openBookingDetail(booking)}
+                                            className="text-primary text-xs font-bold hover:underline underline-offset-2"
+                                        >
+                                            View
                                         </button>
                                     </td>
                                 </tr>
@@ -452,9 +552,19 @@ export default function UserBookings() {
                                         <InfoTile icon={Phone}      label="Phone"        value={displayBooking.passengerPhone} hideIfEmpty />
                                         <InfoTile
                                             icon={CreditCard}
-                                            label="Payment"
-                                            value={displayBooking.paymentStatus}
+                                            label="Payment Status"
+                                            value={displayBooking.isPaid ? 'Completed' : displayBooking.paymentStatusLabel}
                                             accent={displayBooking.isPaid ? 'green' : undefined}
+                                        />
+                                        <InfoTile
+                                            icon={Hash}
+                                            label="Booking Status"
+                                            value={displayBooking.bookingStatusLabel}
+                                        />
+                                        <InfoTile
+                                            icon={Hash}
+                                            label="Reference"
+                                            value={displayBooking.bookingReference ?? displayBooking.id}
                                         />
                                         <InfoTile icon={CreditCard} label="Amount Paid"  value={`ETB ${(displayBooking.amount ?? 0).toLocaleString()}`} />
                                         {displayBooking.driverContact && (
@@ -463,7 +573,7 @@ export default function UserBookings() {
                                         <InfoTile icon={Hash} label="Bus Plate" value={displayBooking.busPlate} />
                                     </div>
 
-                                    {selectedReceipt && (
+                                    {selectedReceipt && displayBooking.isPaid && (
                                         <PaymentReceiptCard receipt={selectedReceipt} compact />
                                     )}
 
@@ -547,7 +657,7 @@ export default function UserBookings() {
                                 <Button variant="outline" onClick={closeModal} className="h-10 px-5 rounded-xl text-sm font-semibold border-gray-200">
                                     Close
                                 </Button>
-                                {(displayBooking.rowStatus?.key === 'confirmed' || displayBooking.paymentStatusRaw === 'SUCCESS') && (
+                                {displayBooking.isPaid && (
                                     <Button
                                         variant="outline"
                                         onClick={() => navigate(`/booking/ticket/${displayBooking.id}`, {
@@ -557,6 +667,15 @@ export default function UserBookings() {
                                     >
                                         <Ticket size={14} className="mr-1.5" />
                                         View ticket
+                                    </Button>
+                                )}
+                                {displayBooking.canPayNow && (
+                                    <Button
+                                        onClick={() => handlePayNow(displayBooking)}
+                                        disabled={payingBookingId === displayBooking.id}
+                                        className="h-10 px-5 rounded-xl text-sm font-semibold"
+                                    >
+                                        {payingBookingId === displayBooking.id ? 'Opening Chapa…' : 'Pay Now'}
                                     </Button>
                                 )}
                                 {canCancelBooking(displayBooking) && (
