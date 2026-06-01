@@ -1,5 +1,7 @@
+import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { tripsApi } from '../api';
+import { filterTripsForOperator } from '../lib/operatorHelpers';
 
 export const tripKeys = {
     all:    ['trips'],
@@ -53,6 +55,27 @@ export function useAllTrips(params = {}) {
         placeholderData: (prev) => (Array.isArray(prev) ? prev : []),
         staleTime: 30 * 1000, // 30s — operator needs fresh data after creating a trip
     });
+}
+
+/**
+ * Scheduled/all trips scoped to one operator (client filter on GET /v1/trips).
+ * @param {string | null} operatorId
+ * @param {object} params — passed to listTrips (limit, status, …)
+ * @param {string[]} operatorBusIds — fleet bus ids from GET /v1/buses?operatorId=
+ */
+export function useOperatorTrips(operatorId, params = {}, operatorBusIds = []) {
+    const busKey = operatorBusIds.join(',');
+    const query = useAllTrips({
+        ...params,
+        enabled: params.enabled !== false && !!operatorId,
+    });
+
+    const data = useMemo(
+        () => filterTripsForOperator(query.data ?? [], operatorId, operatorBusIds),
+        [query.data, operatorId, busKey]
+    );
+
+    return { ...query, data };
 }
 
 export function useTrip(tripId, options = {}) {

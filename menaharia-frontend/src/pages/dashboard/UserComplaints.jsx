@@ -140,9 +140,13 @@ export default function UserComplaints() {
     const { user } = useAuth();
     const [activeId, setActiveId] = useState(null);
 
-    const { data: disputes = [], isLoading, isError } = useDisputes(
-        user?.id ? { userId: user.id, limit: 50 } : {}
-    );
+    const { data: rawDisputes = [], isLoading, isError } = useDisputes({ limit: 100 });
+
+    const disputes = rawDisputes.filter((d) => {
+        if (!user?.id) return true;
+        const uid = d.userId ?? d.user?.id;
+        return !uid || uid === user.id;
+    });
 
     const activeDispute = disputes.find(d => d.id === activeId);
 

@@ -1,4 +1,5 @@
 import { api, unwrapEnvelope, sanitizeListParams } from '../lib/api';
+import { normaliseCreateBookingResponse, normaliseBookingDetail } from '../lib/bookingResponse';
 
 /**
  * Bookings API  (all endpoints require auth)
@@ -16,7 +17,7 @@ import { api, unwrapEnvelope, sanitizeListParams } from '../lib/api';
  *
  * @param {{
  *   tripId: string,
- *   paymentMethod: 'TELEBIRR' | 'CBE' | 'CHAPA',
+ *   paymentMethod: 'TELEBIRR' | 'SANTIM' | 'CHAPA',
  *   travelers: Array<{
  *     tripSeatId: string,
  *     fullName: string,
@@ -27,7 +28,9 @@ import { api, unwrapEnvelope, sanitizeListParams } from '../lib/api';
  * }} data
  */
 export const createBooking = (data) =>
-    api.post('/bookings', data).then(unwrapEnvelope);
+    api.post('/bookings', data).then((res) =>
+        normaliseCreateBookingResponse(unwrapEnvelope(res))
+    );
 
 /**
  * @param {{
@@ -44,7 +47,9 @@ export const listBookings = (params = {}) =>
  * @param {string} id
  */
 export const getBookingById = (id) =>
-    api.get(`/bookings/${id}`).then(unwrapEnvelope);
+    api.get(`/bookings/${id}`).then((res) =>
+        normaliseBookingDetail(unwrapEnvelope(res))
+    );
 
 /**
  * @param {string} id
@@ -57,7 +62,9 @@ export const cancelBooking = (id) =>
  * POST /v1/bookings/for-user
  */
 export const createBookingForUser = (data) =>
-    api.post('/bookings/for-user', data).then(unwrapEnvelope);
+    api.post('/bookings/for-user', data).then((res) =>
+        normaliseCreateBookingResponse(unwrapEnvelope(res))
+    );
 
 export const bookingsApi = {
     createBooking,

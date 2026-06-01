@@ -12,6 +12,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { busesApi } from '../../api/buses.api';
 import { seatsApi } from '../../api/seats.api';
 import { buildSeatDefinitionsForBus } from '../../lib/seatLayout';
+import { VIP_SEAT_LABELS } from '../../lib/seatPricing';
 import { extractErrorMessage } from '../../lib/api';
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
@@ -54,6 +55,7 @@ function BusFleetCard({ bus, onEdit, onDelete, deleting }) {
 
     const totalSeats = parseInt(bus.totalSeats, 10) || 0;
     const needsSeats = !seatsLoading && seats.length === 0 && totalSeats > 0;
+    const vipCount = seats.filter((s) => s.seatType === 'VIP' || VIP_SEAT_LABELS.has(s.seatNumber)).length;
 
     const handleGenerateSeats = async () => {
         setSeeding(true);
@@ -97,8 +99,18 @@ function BusFleetCard({ bus, onEdit, onDelete, deleting }) {
                     <span className="text-gray-400">Layout seats</span>
                     <span className="text-gray-900 font-bold">
                         {seatsLoading ? '…' : seats.length}
+                        {!seatsLoading && seats.length > 0 && (
+                            <span className="text-[10px] font-semibold text-amber-600 ml-1">
+                                ({vipCount} VIP)
+                            </span>
+                        )}
                     </span>
                 </div>
+                {!needsSeats && seats.length > 0 && vipCount === 0 && (
+                    <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5">
+                        Front seats A1–A4 should be VIP. Regenerate seats, then create a new trip schedule.
+                    </p>
+                )}
                 <div className="flex justify-between items-center">
                     <span className="text-gray-400">Bus ID</span>
                     <span className="text-gray-400 font-mono text-[10px]">{bus.id}</span>

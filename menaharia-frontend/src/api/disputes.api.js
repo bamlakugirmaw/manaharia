@@ -1,4 +1,4 @@
-import { api, unwrap } from '../lib/api';
+import { api, unwrapEnvelope, sanitizeListParams } from '../lib/api';
 
 /**
  * Disputes API  (all endpoints require auth)
@@ -21,7 +21,7 @@ import { api, unwrap } from '../lib/api';
  * }} data
  */
 export const createDispute = (data) =>
-    api.post('/disputes', data).then(unwrap);
+    api.post('/disputes', data).then(unwrapEnvelope);
 
 /**
  * @param {{
@@ -34,11 +34,11 @@ export const createDispute = (data) =>
  * }} params
  */
 export const listDisputes = (params = {}) =>
-    api.get('/disputes', { params }).then(unwrap);
+    api.get('/disputes', { params: sanitizeListParams(params) }).then(unwrapEnvelope);
 
 /** @param {string} id */
 export const getDisputeById = (id) =>
-    api.get(`/disputes/${id}`).then(unwrap);
+    api.get(`/disputes/${id}`).then(unwrapEnvelope);
 
 /**
  * @param {string} id
@@ -48,11 +48,11 @@ export const getDisputeById = (id) =>
  * }} data
  */
 export const updateDispute = (id, data) =>
-    api.patch(`/disputes/${id}`, data).then(unwrap);
+    api.patch(`/disputes/${id}`, data).then(unwrapEnvelope);
 
 /** @param {string} id */
 export const removeDispute = (id) =>
-    api.delete(`/disputes/${id}`).then(unwrap);
+    api.delete(`/disputes/${id}`).then(unwrapEnvelope);
 
 export const disputesApi = {
     createDispute,

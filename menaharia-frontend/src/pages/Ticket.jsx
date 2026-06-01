@@ -1,333 +1,500 @@
 import { useLocation, useParams, useNavigate } from 'react-router-dom';
+
 import { Button } from '../components/ui/Button';
+
 import { Card } from '../components/ui/Card';
+
+import PaymentReceiptCard from '../components/PaymentReceiptCard';
+
 import {
+
     CheckCircle2, Download, Home, Calendar, MapPin,
-    User, QrCode, Mail, MessageSquare, Bus, Clock,
+
+    User, QrCode, Mail, MessageSquare, Bus, Clock, Ticket as TicketIcon,
+
 } from 'lucide-react';
+
 import { useTicketsByBooking } from '../hooks/useTickets';
+
 import { useBooking } from '../hooks/useBookings';
 
+import { tripOperatorName } from '../lib/tripHelpers';
+
+import { isBookingPaid } from '../lib/bookingUi';
+
+import { getPaymentReceipt } from '../lib/paymentReceipt';
+
+
+
 const fmtTime = (s) => {
+
     if (!s) return '—';
+
     const part = s.includes('T') ? s.split('T')[1] : s;
+
     const [h, m] = part.split(':');
+
     return `${h}:${m}`;
+
 };
 
-export default function Ticket() {
-    const { bookingId } = useParams();
-    const location      = useLocation();
-    const navigate      = useNavigate();
 
-    // State passed from Payment page
+
+export default function Ticket() {
+
+    const { bookingId } = useParams();
+    const navigate = useNavigate();
+    const loc = useLocation();
+
+
+
     const {
+
         booking,
+
         trip: stateTripObj,
-        tripId,
+
         selectedSeats = [],
+
         passengerDetails,
+
         totalPrice,
-    } = location.state || {};
+
+        receipt: stateReceipt,
+
+    } = loc.state || {};
+
+
 
     const { data: bookingFromApi, isLoading: bookingLoading } = useBooking(bookingId);
+
     const resolvedBooking = bookingFromApi ?? booking ?? null;
 
-    const { data: ticketsResponse, isLoading: ticketLoading } = useTicketsByBooking(bookingId);
 
-    const tickets = Array.isArray(ticketsResponse)
-        ? ticketsResponse
-        : (ticketsResponse?.data ?? []);
-    const ticket = tickets[0] ?? null;
+
+    const { data: tickets = [], isLoading: ticketLoading } = useTicketsByBooking(bookingId);
+
+
+
+    const ticket = Array.isArray(tickets) ? tickets[0] : null;
+
+    const receipt = stateReceipt ?? getPaymentReceipt(bookingId);
+
+
 
     const tripData =
-        ticket?.booking?.trip ??
-        resolvedBooking?.trip ??
-        stateTripObj ??
-        null;
 
-    // Normalise field names (backend vs mock)
-    const from          = tripData?.from ?? tripData?.route?.origin ?? '';
-    const to            = tripData?.to   ?? tripData?.route?.destination ?? '';
+        ticket?.booking?.trip
+
+        ?? ticket?.trip
+
+        ?? resolvedBooking?.trip
+
+        ?? stateTripObj
+
+        ?? null;
+
+
+
+    const from = tripData?.from ?? tripData?.route?.origin ?? '';
+
+    const to = tripData?.to ?? tripData?.route?.destination ?? '';
+
     const departureTime = fmtTime(tripData?.departureTime ?? '');
-    const tripDate      = tripData?.date ?? '';
-    const operatorName  =
-        tripData?.operator?.name ??
-        tripData?.operator?.companyName ??
-        resolvedBooking?.operator?.name ??
-        '';
 
-    const bookingStatus = (resolvedBooking?.status ?? 'PENDING').toUpperCase();
-    const paymentStatus = resolvedBooking?.payment?.status ?? 'PENDING';
-    const isPaymentComplete = paymentStatus === 'SUCCESS' || bookingStatus === 'CONFIRMED';
+    const tripDate = tripData?.date ?? '';
 
-    // Seat labels — from ticket travelers or from state
-    const seatLabels = ticket?.travelers?.map(t => t.seatNumber ?? t.seat?.seatNumber).filter(Boolean)
-        ?? selectedSeats.map(s => (typeof s === 'object' ? s.label : s));
+    const operatorName = tripOperatorName(tripData);
 
-    const passengerName  = passengerDetails?.fullName  ?? ticket?.travelers?.[0]?.fullName  ?? '';
-    const passengerPhone = passengerDetails?.phone      ?? ticket?.travelers?.[0]?.phone      ?? '';
-    const passengerEmail = passengerDetails?.email      ?? ticket?.travelers?.[0]?.email      ?? '';
+
+
+    const isPaymentComplete = isBookingPaid(resolvedBooking);
+
+
+
+    const seatLabels = ticket?.travelers?.map((t) => t.seatNumber ?? t.seat?.seatNumber).filter(Boolean)
+
+        ?? resolvedBooking?.travelers?.map((t) => t.seat?.seatNumber ?? t.seatNumber).filter(Boolean)
+
+        ?? selectedSeats.map((s) => (typeof s === 'object' ? s.label : s));
+
+
+
+    const passengerName = passengerDetails?.fullName
+
+        ?? ticket?.travelers?.[0]?.fullName
+
+        ?? resolvedBooking?.travelers?.[0]?.fullName
+
+        ?? '';
+
+    const passengerPhone = passengerDetails?.phone
+
+        ?? ticket?.travelers?.[0]?.phone
+
+        ?? resolvedBooking?.travelers?.[0]?.phone
+
+        ?? '';
+
+    const passengerEmail = passengerDetails?.email
+
+        ?? ticket?.travelers?.[0]?.email
+
+        ?? resolvedBooking?.travelers?.[0]?.email
+
+        ?? '';
+
+
+
     const paidAmount =
-        totalPrice ??
-        resolvedBooking?.payment?.amount ??
-        resolvedBooking?.totalAmount ??
-        tripData?.price ??
-        0;
+
+        totalPrice
+
+        ?? receipt?.amount
+
+        ?? resolvedBooking?.payment?.amount
+
+        ?? resolvedBooking?.totalAmount
+
+        ?? tripData?.price
+
+        ?? 0;
+
+
+
+    const ticketCode = ticket?.ticketCode ?? ticket?.code ?? ticket?.id ?? bookingId;
+
+    const qrPayload = ticket?.qrCode ?? ticket?.qrData ?? ticketCode;
+
+
 
     if (bookingLoading && !tripData && !resolvedBooking) {
+
         return (
+
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
+
             </div>
+
         );
+
     }
+
+
 
     if (!tripData && !ticketLoading && !resolvedBooking) {
+
         return (
+
             <div className="container mx-auto px-4 py-20 text-center">
+
                 <h1 className="text-2xl font-bold mb-4">Booking Not Found</h1>
+
                 <Button onClick={() => navigate('/')}>Return Home</Button>
+
             </div>
+
         );
+
     }
 
+
+
     return (
+
         <div className="min-h-screen bg-gray-50 py-12">
+
             <div className="container mx-auto px-4 max-w-5xl">
-                {/* Success Header */}
+
                 <div className="text-center mb-10">
+
                     <div className="flex justify-center mb-6">
-                        <div className="h-24 w-24 bg-green-100 rounded-full flex items-center justify-center text-green-600 animate-in zoom-in duration-300">
+
+                        <div className="h-24 w-24 bg-green-100 rounded-full flex items-center justify-center text-green-600">
+
                             <CheckCircle2 size={56} strokeWidth={2.5} />
+
                         </div>
+
                     </div>
+
                     <h1 className="text-4xl font-black text-gray-900 mb-3 tracking-tight">
+
                         {isPaymentComplete ? 'Booking Confirmed!' : 'Booking Reserved'}
+
                     </h1>
+
                     <p className="text-lg text-gray-500 font-medium mb-4">
+
                         {isPaymentComplete
-                            ? 'Your ticket has been booked successfully'
-                            : 'Your seats are reserved. Complete payment when the gateway is available.'}
+
+                            ? 'Your ticket is ready. Show the QR code when boarding.'
+
+                            : 'Complete payment to receive your e-ticket.'}
+
                     </p>
+
                     <div className="inline-block px-5 py-2 bg-white border border-gray-200 rounded-xl font-mono text-sm text-gray-600 font-bold shadow-sm">
+
                         Booking ID: <span className="text-gray-900">{bookingId}</span>
+
                     </div>
+
+
 
                     <div className="flex flex-wrap gap-4 justify-center mt-8">
+
                         <Button
-                            className="h-12 px-8 font-bold bg-[#0EA5E9] hover:bg-[#0284C7] text-white shadow-lg shadow-sky-100 rounded-xl"
+
+                            className="h-12 px-8 font-bold bg-[#0EA5E9] hover:bg-[#0284C7] text-white rounded-xl"
+
                             onClick={() => navigate('/traveller/bookings')}
+
                         >
+
                             View My Bookings
+
                         </Button>
-                        {isPaymentComplete && (
-                            <>
-                                <Button className="h-12 px-8 font-bold bg-[#0EA5E9] hover:bg-[#0284C7] text-white shadow-lg shadow-sky-100 rounded-xl">
-                                    <Download className="mr-2 h-5 w-5" /> Download Ticket (PDF)
-                                </Button>
-                                <Button variant="outline" className="h-12 px-8 font-bold border-gray-200 hover:bg-gray-50 text-gray-700 bg-white shadow-sm rounded-xl">
-                                    <Calendar className="mr-2 h-5 w-5" /> Add to Calendar
-                                </Button>
-                            </>
+
+                        {ticket?.id && (
+
+                            <Button
+
+                                variant="outline"
+
+                                className="h-12 px-8 font-bold rounded-xl"
+
+                                onClick={() => navigate(`/booking/ticket/${bookingId}`)}
+
+                            >
+
+                                <TicketIcon className="mr-2 h-5 w-5" />
+
+                                Refresh ticket
+
+                            </Button>
+
                         )}
+
                     </div>
+
                 </div>
+
+
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-                    {/* Booking Summary */}
-                    <Card className="bg-white border-none shadow-[0_2px_20px_rgba(0,0,0,0.04)] rounded-3xl p-8">
-                        <h2 className="text-xl font-extrabold text-gray-900 mb-6">Booking Summary</h2>
-                        <div className="space-y-8">
-                            {/* Trip Details */}
-                            <div>
-                                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-4 border-b border-gray-100 pb-2">Trip Details</h3>
-                                <div className="space-y-4 text-sm">
-                                    <div className="flex items-start gap-4">
-                                        <MapPin className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" />
-                                        <div>
-                                            <p className="text-xs text-gray-400 font-bold uppercase mb-0.5">Route</p>
-                                            <p className="font-bold text-gray-900 text-base">{from} <span className="text-gray-400 mx-1">→</span> {to}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-start gap-4">
-                                        <Calendar className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" />
-                                        <div>
-                                            <p className="text-xs text-gray-400 font-bold uppercase mb-0.5">Date</p>
-                                            <p className="font-bold text-gray-900 text-base">
-                                                {tripDate ? new Date(tripDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-start gap-4">
-                                        <Clock className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" />
-                                        <div>
-                                            <p className="text-xs text-gray-400 font-bold uppercase mb-0.5">Time</p>
-                                            <p className="font-bold text-gray-900 text-base">{departureTime || '—'}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-start gap-4">
-                                        <Bus className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" />
-                                        <div>
-                                            <p className="text-xs text-gray-400 font-bold uppercase mb-0.5">Seat(s)</p>
-                                            <p className="font-bold text-gray-900 text-base">
-                                                {seatLabels.join(', ') || '—'}
-                                                {operatorName && <span className="text-xs text-gray-400 font-normal ml-1">({operatorName})</span>}
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
+
+                    <div className="space-y-6">
+
+                        <Card className="bg-white border-none shadow-sm rounded-3xl p-8">
+
+                            <h2 className="text-xl font-extrabold text-gray-900 mb-6">Booking Summary</h2>
+
+                            <div className="space-y-4 text-sm">
+
+                                <p className="font-bold text-gray-900">{from} → {to}</p>
+
+                                <p className="text-gray-600">
+
+                                    {tripDate
+
+                                        ? new Date(tripDate).toLocaleDateString('en-US', {
+
+                                            month: 'short', day: 'numeric', year: 'numeric',
+
+                                        })
+
+                                        : '—'}{' '}
+
+                                    · {departureTime}
+
+                                </p>
+
+                                <p className="text-gray-600">
+
+                                    Seats: {seatLabels.join(', ') || '—'}
+
+                                    {operatorName && ` · ${operatorName}`}
+
+                                </p>
+
+                                <p className="text-gray-600">{passengerName}</p>
+
+                                <p className="font-bold text-gray-900">
+
+                                    ETB {Number(paidAmount).toLocaleString()}
+
+                                    {' · '}
+
+                                    {isPaymentComplete ? 'Paid' : 'Pending'}
+
+                                </p>
+
                             </div>
 
-                            {/* Passenger Details */}
-                            <div>
-                                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-4 border-b border-gray-100 pb-2">Passenger Details</h3>
-                                <div className="space-y-3">
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-500 text-sm font-medium">Name</span>
-                                        <span className="text-gray-900 font-bold text-sm">{passengerName || '—'}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-500 text-sm font-medium">Phone</span>
-                                        <span className="text-gray-900 font-bold text-sm">{passengerPhone || '—'}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-500 text-sm font-medium">Email</span>
-                                        <span className="text-gray-900 font-bold text-sm">{passengerEmail || '—'}</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Payment Details */}
-                            <div>
-                                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-4 border-b border-gray-100 pb-2">Payment Details</h3>
-                                <div className="space-y-3">
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-500 text-sm font-medium">Total Amount Paid</span>
-                                        <span className="text-gray-900 font-bold text-sm">ETB {paidAmount.toLocaleString()}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-500 text-sm font-medium">Payment Method</span>
-                                        <span className="text-gray-900 font-bold text-sm">
-                                            {resolvedBooking?.payment?.method ?? 'Chapa'}
-                                        </span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-gray-500 text-sm font-medium">Payment Status</span>
-                                        <span
-                                            className={`px-2.5 py-1 text-xs font-bold rounded-full flex items-center gap-1 ${
-                                                isPaymentComplete
-                                                    ? 'bg-green-100 text-green-700'
-                                                    : 'bg-amber-100 text-amber-700'
-                                            }`}
-                                        >
-                                            <CheckCircle2 size={12} />
-                                            {isPaymentComplete ? 'Confirmed' : 'Pending'}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </Card>
-
-                    {/* E-Ticket */}
-                    <div className="flex flex-col gap-6">
-                        <Card className="bg-white border-none shadow-[0_8px_30px_rgba(0,0,0,0.08)] rounded-3xl overflow-hidden">
-                            <div className="p-8 pb-4">
-                                <h3 className="text-lg font-bold text-gray-900 mb-6">Your E-Ticket</h3>
-                                <div className="rounded-3xl overflow-hidden shadow-lg transform transition-transform hover:scale-[1.01] duration-300">
-                                    {/* Ticket Header */}
-                                    <div className="bg-gradient-to-br from-[#0EA5E9] to-[#0284C7] p-8 text-white relative">
-                                        <div className="flex items-center justify-between mb-8">
-                                            <div className="font-black text-2xl tracking-tight">Menaharia</div>
-                                            <div className="text-xs font-bold bg-white/20 backdrop-blur-sm px-2 py-1 rounded">E-TICKET</div>
-                                        </div>
-                                        <div className="text-center mb-4">
-                                            <div className="text-2xl font-bold opacity-90">{from || '—'}</div>
-                                            <div className="my-1 opacity-60 text-xs uppercase tracking-widest font-bold">to</div>
-                                            <div className="text-3xl font-black">{to || '—'}</div>
-                                        </div>
-                                    </div>
-
-                                    {/* Ticket Body */}
-                                    <div className="bg-white p-8">
-                                        <div className="grid grid-cols-2 gap-y-6 gap-x-4 mb-8">
-                                            <div>
-                                                <div className="text-[10px] uppercase text-gray-400 font-bold mb-1">Passenger</div>
-                                                <div className="text-sm font-bold text-gray-900 truncate">{passengerName || '—'}</div>
-                                            </div>
-                                            <div className="text-right">
-                                                <div className="text-[10px] uppercase text-gray-400 font-bold mb-1">Booking ID</div>
-                                                <div className="text-sm font-bold text-gray-900 font-mono">{bookingId}</div>
-                                            </div>
-                                            <div>
-                                                <div className="text-[10px] uppercase text-gray-400 font-bold mb-1">Date</div>
-                                                <div className="text-sm font-bold text-gray-900">
-                                                    {tripDate ? new Date(tripDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
-                                                </div>
-                                            </div>
-                                            <div className="text-right">
-                                                <div className="text-[10px] uppercase text-gray-400 font-bold mb-1">Time</div>
-                                                <div className="text-sm font-bold text-gray-900">{departureTime || '—'}</div>
-                                            </div>
-                                            <div>
-                                                <div className="text-[10px] uppercase text-gray-400 font-bold mb-1">Seats</div>
-                                                <div className="text-sm font-bold text-gray-900">{seatLabels.join(', ') || '—'}</div>
-                                            </div>
-                                            <div className="text-right">
-                                                <div className="text-[10px] uppercase text-gray-400 font-bold mb-1">Operator</div>
-                                                <div className="text-sm font-bold text-gray-900">{operatorName || '—'}</div>
-                                            </div>
-                                        </div>
-                                        <div className="flex justify-center">
-                                            <div className="bg-gray-900 p-3 rounded-xl shadow-lg">
-                                                <QrCode size={100} className="text-white" />
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="bg-gray-50 border-t border-gray-100 p-4 text-center">
-                                        <p className="text-[10px] text-gray-400 font-medium">Please show this QR code at boarding</p>
-                                    </div>
-                                </div>
-                            </div>
                         </Card>
 
-                        {/* Notifications */}
-                        <div className="space-y-3">
-                            <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                                    <Mail className="w-4 h-4 text-blue-600" />
+
+
+                        {receipt && isPaymentComplete && (
+
+                            <PaymentReceiptCard receipt={receipt} />
+
+                        )}
+
+                    </div>
+
+
+
+                    <Card className="bg-white border-none shadow-lg rounded-3xl overflow-hidden">
+
+                        <div className="p-8 pb-4">
+
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">Your E-Ticket</h3>
+
+                            {ticketLoading && (
+
+                                <p className="text-sm text-gray-400 mb-4">Loading ticket from server…</p>
+
+                            )}
+
+                            {!ticketLoading && !ticket && isPaymentComplete && (
+
+                                <p className="text-sm text-amber-600 mb-4">
+
+                                    Ticket is being generated. Refresh in a moment if the QR does not appear.
+
+                                </p>
+
+                            )}
+
+                            <div className="rounded-3xl overflow-hidden shadow-lg">
+
+                                <div className="bg-gradient-to-br from-[#0EA5E9] to-[#0284C7] p-8 text-white">
+
+                                    <div className="flex items-center justify-between mb-6">
+
+                                        <div className="font-black text-2xl">Menaharia</div>
+
+                                        <div className="text-xs font-bold bg-white/20 px-2 py-1 rounded">E-TICKET</div>
+
+                                    </div>
+
+                                    <div className="text-center">
+
+                                        <div className="text-xl font-bold opacity-90">{from || '—'}</div>
+
+                                        <div className="my-1 opacity-60 text-xs uppercase tracking-widest">to</div>
+
+                                        <div className="text-3xl font-black">{to || '—'}</div>
+
+                                    </div>
+
                                 </div>
-                                <div className="text-xs text-gray-600">
-                                    Email sent to <span className="font-bold text-gray-900">{passengerEmail || 'your email'}</span>
+
+                                <div className="bg-white p-8">
+
+                                    <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
+
+                                        <div>
+
+                                            <div className="text-[10px] uppercase text-gray-400 font-bold">Passenger</div>
+
+                                            <div className="font-bold">{passengerName || '—'}</div>
+
+                                        </div>
+
+                                        <div className="text-right">
+
+                                            <div className="text-[10px] uppercase text-gray-400 font-bold">Ticket</div>
+
+                                            <div className="font-mono font-bold text-xs">{ticketCode}</div>
+
+                                        </div>
+
+                                        <div>
+
+                                            <div className="text-[10px] uppercase text-gray-400 font-bold">Operator</div>
+
+                                            <div className="font-bold">{operatorName || '—'}</div>
+
+                                        </div>
+
+                                        <div className="text-right">
+
+                                            <div className="text-[10px] uppercase text-gray-400 font-bold">Seats</div>
+
+                                            <div className="font-bold">{seatLabels.join(', ') || '—'}</div>
+
+                                        </div>
+
+                                    </div>
+
+                                    <div className="flex justify-center">
+
+                                        {ticket?.qrCodeUrl ? (
+
+                                            <img
+
+                                                src={ticket.qrCodeUrl}
+
+                                                alt="Boarding QR"
+
+                                                className="w-28 h-28 rounded-xl"
+
+                                            />
+
+                                        ) : (
+
+                                            <div className="bg-gray-900 p-3 rounded-xl" title={qrPayload}>
+
+                                                <QrCode size={100} className="text-white" />
+
+                                            </div>
+
+                                        )}
+
+                                    </div>
+
+                                    {!ticket?.qrCodeUrl && qrPayload && (
+
+                                        <p className="text-center text-[10px] text-gray-400 mt-2 font-mono truncate px-4">
+
+                                            {qrPayload}
+
+                                        </p>
+
+                                    )}
+
                                 </div>
+
                             </div>
-                            <div className="bg-green-50/50 border border-green-100 rounded-2xl p-4 flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-                                    <MessageSquare className="w-4 h-4 text-green-600" />
-                                </div>
-                                <div className="text-xs text-gray-600">
-                                    SMS sent to <span className="font-bold text-gray-900">{passengerPhone || 'your phone'}</span>
-                                </div>
-                            </div>
+
                         </div>
 
-                        <div className="flex flex-col gap-2">
-                            <Button
-                                variant="outline"
-                                className="w-full h-12 rounded-xl text-primary font-bold text-sm border-primary/30"
-                                onClick={() => navigate('/traveller/bookings')}
-                            >
-                                My Bookings
-                            </Button>
-                            <Button variant="ghost" className="w-full h-12 rounded-xl text-gray-500 font-bold text-sm hover:bg-gray-100" onClick={() => navigate('/')}>
-                                <Home className="mr-2 w-4 h-4" /> Return to Home
-                            </Button>
-                        </div>
-                    </div>
+                    </Card>
+
                 </div>
+
+
+
+                <div className="mt-8 flex justify-center">
+
+                    <Button variant="ghost" onClick={() => navigate('/')}>
+
+                        <Home className="mr-2 w-4 h-4" /> Return to Home
+
+                    </Button>
+
+                </div>
+
             </div>
+
         </div>
+
     );
+
 }
+

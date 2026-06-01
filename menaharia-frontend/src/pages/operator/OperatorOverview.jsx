@@ -5,7 +5,9 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
 import { useOperatorDashboard } from '../../hooks/useOperators';
-import { useBookings } from '../../hooks/useBookings';
+import { useOperatorBookings } from '../../hooks/useBookings';
+import { useBuses } from '../../hooks/useBuses';
+import { useMemo } from 'react';
 
 // Fallback chart data shown while loading
 const FALLBACK_REVENUE = [
@@ -25,15 +27,17 @@ export default function OperatorOverview() {
     // GET /v1/operators/:id/dashboard
     const { data: dashData, isLoading: dashLoading } = useOperatorDashboard(operatorId);
 
-    // GET /v1/bookings — recent bookings for this operator's trips
-    const { data: bookingsResponse, isLoading: bookingsLoading } = useBookings(
-        operatorId ? { limit: 5 } : {}
+    const { data: buses = [] } = useBuses(operatorId ? { operatorId, limit: 100 } : {});
+    const operatorBusIds = useMemo(() => buses.map((b) => b.id).filter(Boolean), [buses]);
+
+    const { data: bookingsResponse = [], isLoading: bookingsLoading } = useOperatorBookings(
+        operatorId,
+        { limit: 50 },
+        operatorBusIds
     );
 
     const recentBookings = (() => {
-        const raw = Array.isArray(bookingsResponse)
-            ? bookingsResponse
-            : (bookingsResponse?.data ?? []);
+        const raw = Array.isArray(bookingsResponse) ? bookingsResponse : [];
         return raw.slice(0, 5).map(b => ({
             id:        b.id,
             passenger: b.travelers?.[0]?.fullName ?? '—',

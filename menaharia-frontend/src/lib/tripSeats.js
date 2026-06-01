@@ -70,6 +70,7 @@ export function normaliseBusSeats(list) {
         .map((s) => ({
             id: s.id,
             seatNumber: s.seatNumber ?? s.seat?.seatNumber ?? '',
+            seatType: s.seatType ?? s.seat?.seatType ?? null,
         }))
         .filter((s) => s.id && s.seatNumber);
 }
@@ -135,14 +136,16 @@ export function seatsUnavailableMessage(tripSeats = [], busSeats = []) {
     return 'This trip has no bookable seats yet. The operator must add seats in Fleet Management (Generate seats), then create a new trip schedule.';
 }
 
-/** @param {Array<{ label: string, tripSeatId?: string | null } | string>} selectedSeats */
+/** @param {Array<{ label: string, tripSeatId?: string | null, seatType?: string } | string>} selectedSeats */
 export function resolveSelectedSeats(selectedSeats, seatIdMap) {
     return selectedSeats.map((seat) => {
         const label = typeof seat === 'object' ? seat.label : seat;
         const existing = typeof seat === 'object' ? seat.tripSeatId : null;
+        const seatType = typeof seat === 'object' ? seat.seatType : null;
         return {
             label,
             tripSeatId: seatIdMap[label] ?? existing ?? null,
+            ...(seatType ? { seatType } : {}),
         };
     });
 }

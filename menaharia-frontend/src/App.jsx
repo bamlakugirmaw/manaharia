@@ -10,6 +10,7 @@ import SearchResults from './pages/SearchResults';
 import SeatSelection from './pages/SeatSelection';
 import PassengerDetails from './pages/PassengerDetails';
 import Payment from './pages/Payment';
+import PaymentReturn from './pages/PaymentReturn';
 import Ticket from './pages/Ticket';
 
 import Login from './pages/auth/Login';
@@ -83,6 +84,7 @@ function App() {
           <Route path="/booking/seats/:tripId" element={<MainLayout><SeatSelection /></MainLayout>} />
           <Route path="/booking/passenger" element={<MainLayout><PassengerDetails /></MainLayout>} />
           <Route path="/booking/payment" element={<MainLayout><Payment /></MainLayout>} />
+          <Route path="/booking/payment/return" element={<MainLayout><PaymentReturn /></MainLayout>} />
           <Route path="/booking/ticket/:bookingId" element={<MainLayout><Ticket /></MainLayout>} />
 
           {/* User Dashboard Routes */}

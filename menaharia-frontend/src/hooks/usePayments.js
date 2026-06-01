@@ -13,7 +13,7 @@ export const paymentKeys = {
  *   page?: number,
  *   limit?: number,
  *   status?: 'PENDING' | 'SUCCESS' | 'FAILED',
- *   method?: 'TELEBIRR' | 'CBE' | 'CHAPA'
+ *   method?: 'TELEBIRR' | 'SANTIM' | 'CHAPA'
  * }} params
  */
 export function usePayments(params = {}) {

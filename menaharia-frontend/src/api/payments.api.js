@@ -1,4 +1,5 @@
-import { api, unwrap } from '../lib/api';
+import { api, unwrapEnvelope } from '../lib/api';
+import { normaliseInitiatePaymentResponse } from '../lib/bookingResponse';
 
 /**
  * Payments API  (all endpoints require auth except /callback)
@@ -8,7 +9,7 @@ import { api, unwrap } from '../lib/api';
  * list     — GET  /v1/payments
  * getById  — GET  /v1/payments/:id
  *
- * Payment methods: TELEBIRR | CBE | CHAPA
+ * Payment methods: TELEBIRR | SANTIM | CHAPA
  * Payment status:  PENDING  | SUCCESS | FAILED
  */
 
@@ -17,14 +18,16 @@ import { api, unwrap } from '../lib/api';
  * Returns a payment URL or reference to redirect the user to the gateway.
  *
  * @param {{
- *   method: 'TELEBIRR' | 'CBE' | 'CHAPA',
+ *   method: 'TELEBIRR' | 'SANTIM' | 'CHAPA',
  *   bookingId: string,
  *   customerReference?: string
  * }} data
  * @returns {{ paymentUrl?: string, reference?: string, ... }}
  */
 export const initiatePayment = (data) =>
-    api.post('/payments/initiate', data).then(unwrap);
+    api.post('/payments/initiate', data).then((res) =>
+        normaliseInitiatePaymentResponse(unwrapEnvelope(res))
+    );
 
 /**
  * Receive payment provider callback (webhook).
@@ -41,7 +44,7 @@ export const initiatePayment = (data) =>
  * }} data
  */
 export const paymentCallback = (data) =>
-    api.post('/payments/callback', data).then(unwrap);
+    api.post('/payments/callback', data).then(unwrapEnvelope);
 
 /**
  * @param {{
@@ -52,12 +55,12 @@ export const paymentCallback = (data) =>
  * }} params
  */
 export const listPayments = (params = {}) =>
-    api.get('/payments', { params }).then(unwrap);
+    api.get('/payments', { params }).then(unwrapEnvelope);
 
 /**
  * @param {string} id
  */
 export const getPaymentById = (id) =>
-    api.get(`/payments/${id}`).then(unwrap);
+    api.get(`/payments/${id}`).then(unwrapEnvelope);
 
 export const paymentsApi = { initiatePayment, paymentCallback, listPayments, getPaymentById };

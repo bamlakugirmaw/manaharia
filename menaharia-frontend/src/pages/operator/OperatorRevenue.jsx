@@ -5,7 +5,8 @@ import { TrendingUp, TrendingDown, DollarSign, Calendar, PieChart, BarChart as B
 import { ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../../contexts/AuthContext';
 import { useOperatorDashboard } from '../../hooks/useOperators';
-import { useBookings } from '../../hooks/useBookings';
+import { useOperatorBookings } from '../../hooks/useBookings';
+import { useBuses } from '../../hooks/useBuses';
 
 export default function OperatorRevenue() {
     const { user } = useAuth();
@@ -14,8 +15,14 @@ export default function OperatorRevenue() {
     // GET /v1/operators/:id/dashboard
     const { data: dash, isLoading: dashLoading } = useOperatorDashboard(operatorId);
 
-    // GET /v1/bookings — derive route analytics client-side
-    const { data: bookings = [] } = useBookings({ limit: 500 });
+    const { data: buses = [] } = useBuses(operatorId ? { operatorId, limit: 100 } : {});
+    const operatorBusIds = useMemo(() => buses.map((b) => b.id).filter(Boolean), [buses]);
+
+    const { data: bookings = [] } = useOperatorBookings(
+        operatorId,
+        { limit: 500 },
+        operatorBusIds
+    );
 
     // ── KPI values from dashboard ─────────────────────────────────────────────
     const totalRevenue   = dash?.totalRevenue   ?? dash?.payments?.revenue ?? 0;

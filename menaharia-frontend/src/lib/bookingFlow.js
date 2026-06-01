@@ -1,4 +1,5 @@
 const BOOKING_SESSION_KEY = 'menaharia.booking.flow';
+const PENDING_PAYMENT_KEY = 'menaharia.booking.pendingPayment';
 
 /** Persist booking wizard state across refresh (best-effort). */
 export function saveBookingFlow(state) {
@@ -21,6 +22,33 @@ export function loadBookingFlow() {
 export function clearBookingFlow() {
     try {
         sessionStorage.removeItem(BOOKING_SESSION_KEY);
+        sessionStorage.removeItem(PENDING_PAYMENT_KEY);
+    } catch {
+        /* ignore */
+    }
+}
+
+/** Persist context across Chapa redirect. */
+export function savePendingPayment(state) {
+    try {
+        sessionStorage.setItem(PENDING_PAYMENT_KEY, JSON.stringify(state));
+    } catch {
+        /* ignore */
+    }
+}
+
+export function loadPendingPayment() {
+    try {
+        const raw = sessionStorage.getItem(PENDING_PAYMENT_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch {
+        return null;
+    }
+}
+
+export function clearPendingPayment() {
+    try {
+        sessionStorage.removeItem(PENDING_PAYMENT_KEY);
     } catch {
         /* ignore */
     }
