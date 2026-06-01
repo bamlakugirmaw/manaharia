@@ -5,6 +5,7 @@ import {
     DEFAULT_GRID_LABELS,
     getSeatLabel,
 } from '../../lib/seatLayout';
+import { resolveSeatType, seatPriceForLabel } from '../../lib/seatPricing';
 import { isTripSeatAvailable, isTripSeatOccupied } from '../../lib/tripSeats';
 
 /**
@@ -19,6 +20,7 @@ export default function BusLayout({
     bookedSeats = [],
     tripSeats = null,
     disabled = false,
+    basePrice = null,
 }) {
     const seatByLabel = useMemo(() => {
         if (!tripSeats?.length) return null;
@@ -49,6 +51,9 @@ export default function BusLayout({
             : bookedSeats.includes(seatLabel);
         const isSelected = selectedSeats.includes(seatLabel);
         const canClick = !disabled && !isBooked && (!tripSeat || isTripSeatAvailable(tripSeat));
+        const seatType = resolveSeatType(seatLabel, tripSeat?.seatType);
+        const isVip = seatType === 'VIP';
+        const seatPrice = basePrice != null ? seatPriceForLabel(basePrice, seatLabel, seatType) : null;
 
         return (
             <button
@@ -61,9 +66,13 @@ export default function BusLayout({
                     isBooked
                         ? 'bg-gray-300 border-gray-400 text-gray-500 cursor-not-allowed'
                         : isSelected
-                          ? 'bg-secondary border-secondary text-white scale-105 shadow-md'
+                          ? isVip
+                              ? 'bg-amber-500 border-amber-600 text-white scale-105 shadow-md shadow-amber-200/60'
+                              : 'bg-secondary border-secondary text-white scale-105 shadow-md'
                           : canClick
-                            ? 'bg-white border-gray-300 text-gray-700 hover:border-secondary hover:text-secondary'
+                            ? isVip
+                                ? 'bg-amber-50 border-amber-300 text-amber-800 hover:border-amber-500 hover:bg-amber-100'
+                                : 'bg-white border-gray-300 text-gray-700 hover:border-secondary hover:text-secondary'
                             : 'bg-gray-100 border-gray-200 text-gray-300 cursor-not-allowed'
                 )}
                 title={
@@ -71,10 +80,15 @@ export default function BusLayout({
                         ? tripSeat?.status
                             ? `Unavailable (${tripSeat.status})`
                             : 'Unavailable'
-                        : `Seat ${seatLabel}`
+                        : seatPrice != null
+                          ? `Seat ${seatLabel} · ${isVip ? 'VIP' : 'Standard'} · ETB ${seatPrice.toLocaleString()}`
+                          : `Seat ${seatLabel} · ${isVip ? 'VIP' : 'Standard'}`
                 }
             >
                 {seatLabel}
+                {isVip && !isBooked && (
+                    <span className="absolute -top-1.5 -right-1.5 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white" />
+                )}
                 <div
                     className={cn(
                         'absolute -bottom-1 w-[80%] h-1 rounded-sm',
@@ -90,6 +104,8 @@ export default function BusLayout({
         const isBooked = isTripSeatOccupied(tripSeat);
         const isSelected = selectedSeats.includes(label);
         const canClick = !disabled && !isBooked && isTripSeatAvailable(tripSeat);
+        const seatType = resolveSeatType(label, tripSeat?.seatType);
+        const isVip = seatType === 'VIP';
 
         return (
             <button
@@ -102,8 +118,12 @@ export default function BusLayout({
                     isBooked
                         ? 'bg-gray-300 border-gray-400 text-gray-500'
                         : isSelected
-                          ? 'bg-secondary border-secondary text-white'
-                          : 'bg-white border-gray-300 hover:border-secondary'
+                          ? isVip
+                              ? 'bg-amber-500 border-amber-600 text-white'
+                              : 'bg-secondary border-secondary text-white'
+                          : isVip
+                            ? 'bg-amber-50 border-amber-300 text-amber-800 hover:border-amber-500'
+                            : 'bg-white border-gray-300 hover:border-secondary'
                 )}
             >
                 {label}
@@ -136,10 +156,16 @@ export default function BusLayout({
                 </div>
             )}
 
-            <div className="flex gap-8 mt-12 text-[10px] font-bold uppercase tracking-[0.1em] text-gray-400">
+            <div className="flex gap-8 mt-12 text-[10px] font-bold uppercase tracking-[0.1em] text-gray-400 flex-wrap justify-center">
                 <div className="flex items-center gap-2.5">
                     <div className="w-4 h-4 rounded-md border-2 border-gray-100 bg-white shadow-sm" />
-                    <span>Available</span>
+                    <span>Standard</span>
+                </div>
+                <div className="flex items-center gap-2.5">
+                    <div className="w-4 h-4 rounded-md border-2 border-amber-300 bg-amber-50 shadow-sm relative">
+                        <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500" />
+                    </div>
+                    <span>VIP (+5%)</span>
                 </div>
                 <div className="flex items-center gap-2.5">
                     <div className="w-4 h-4 rounded-md bg-secondary shadow-md shadow-secondary/20" />

@@ -1,4 +1,4 @@
-import { api, unwrap } from '../lib/api';
+import { api, unwrapEnvelope, sanitizeListParams } from '../lib/api';
 
 /**
  * Tickets API  (all endpoints require auth)
@@ -19,13 +19,13 @@ import { api, unwrap } from '../lib/api';
  * @returns {{ data: Array<Ticket>, total: number, ... }}
  */
 export const listTickets = (params = {}) =>
-    api.get('/tickets', { params }).then(unwrap);
+    api.get('/tickets', { params: sanitizeListParams(params) }).then(unwrapEnvelope);
 
 /**
  * @param {string} id
  * @returns {Ticket}
  */
 export const getTicketById = (id) =>
-    api.get(`/tickets/${id}`).then(unwrap);
+    api.get(`/tickets/${id}`).then(unwrapEnvelope);
 
 export const ticketsApi = { listTickets, getTicketById };

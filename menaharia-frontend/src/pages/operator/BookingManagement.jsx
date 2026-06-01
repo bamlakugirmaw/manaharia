@@ -7,9 +7,9 @@ import { Modal } from '../../components/ui/Modal';
 import { Plus, Ticket, Trash2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
-import { useBookings, useCreateBookingForUser } from '../../hooks/useBookings';
+import { useOperatorBookings, useCreateBookingForUser } from '../../hooks/useBookings';
 import { authApi } from '../../api/auth.api';
-import { useAllTrips, useRemoveTrip } from '../../hooks/useTrips';
+import { useOperatorTrips, useRemoveTrip } from '../../hooks/useTrips';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { tripOrigin, tripDest, tripCityLabel, parseTripDateTime, buildArrivalDateTime, parseAmenities, toTripDateISO } from '../../lib/tripHelpers';
 import { useBuses } from '../../hooks/useBuses';
@@ -22,6 +22,7 @@ import BusLayout from '../../components/seat-map/BusLayout';
 import { useTripSeatContext } from '../../hooks/useTripSeatContext';
 import { useSeats } from '../../hooks/useSeats';
 import { ensureBusSeatsReady } from '../../lib/tripSeats';
+import { buildSeatTypeMap, resolveSeatType, seatPriceForLabel } from '../../lib/seatPricing';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 const tripFrom = (t) => tripOrigin(t);
@@ -50,15 +51,20 @@ export default function BookingManagement() {
     const operatorId = user?.operatorId ?? null;
 
     // ── Data ──────────────────────────────────────────────────────────────────
-    // Fetch ALL trips (no origin/destination filter) so operator sees their trips
-    const { data: tripsRaw, isLoading: tripsLoading } = useAllTrips({ limit: 100, status: 'SCHEDULED' });
-    const tripList = useMemo(
-        () => (Array.isArray(tripsRaw) ? tripsRaw.filter((t) => t?.id) : []),
-        [tripsRaw]
+    const { data: buses = [] } = useBuses(operatorId ? { operatorId, limit: 50 } : {});
+    const operatorBusIds = useMemo(() => buses.map((b) => b.id).filter(Boolean), [buses]);
+
+    const { data: tripList = [], isLoading: tripsLoading } = useOperatorTrips(
+        operatorId,
+        { limit: 100, status: 'SCHEDULED' },
+        operatorBusIds
     );
     const firstTripId = tripList?.[0]?.id ?? null;
-    const { data: bookings = [], isLoading: bookingsLoading } = useBookings({ limit: 500 });
-    const { data: buses = [] } = useBuses(operatorId ? { operatorId, limit: 50 } : {});
+    const { data: bookings = [], isLoading: bookingsLoading } = useOperatorBookings(
+        operatorId,
+        { limit: 500 },
+        operatorBusIds
+    );
     const { data: routes = [] } = useRoutes({ limit: 100 });
     const [creatingTrip, setCreatingTrip] = useState(false);
     const { mutate: createRoute, isPending: creatingRoute } = useCreateRoute();
@@ -70,12 +76,16 @@ export default function BookingManagement() {
     // ── UI state ──────────────────────────────────────────────────────────────
     const [selectedTrip, setSelectedTrip] = useState(null);
 
-    // Auto-select first trip when list loads
+    // Keep selection on this operator's trips only
     useEffect(() => {
-        if (!selectedTrip && firstTripId) {
-            setSelectedTrip(firstTripId);
+        if (tripList.length === 0) {
+            setSelectedTrip(null);
+            return;
         }
-    }, [selectedTrip, firstTripId]);
+        if (!selectedTrip || !tripList.some((t) => t.id === selectedTrip)) {
+            setSelectedTrip(tripList[0].id);
+        }
+    }, [tripList, selectedTrip]);
     const [activeSection, setActiveSection] = useState('manifest');
     const [isAddTripModalOpen, setIsAddTripModalOpen] = useState(false);
 
@@ -102,7 +112,7 @@ export default function BookingManagement() {
     const [passengerEmail, setPassengerEmail] = useState('');
     const [emergencyContact, setEmergencyContact] = useState('');
     const [passengerUserId, setPassengerUserId] = useState('');
-    const [walkInPayment, setWalkInPayment] = useState('CASH');
+    const [walkInPayment, setWalkInPayment] = useState('chapa');
     const [walkInError, setWalkInError] = useState('');
     const [walkInSaving, setWalkInSaving] = useState(false);
 
@@ -136,8 +146,16 @@ export default function BookingManagement() {
         b.travelers?.[0]?.seat?.seatNumber ?? b.travelers?.[0]?.seatNumber ?? ''
     ).filter(Boolean);
     const occupiedSeats = [...new Set([...bookedSeatLabels, ...tripBookedLabels])];
+    const walkInTripPrice = currentTripObj?.price ?? 0;
+    const walkInSeatTypeMap = buildSeatTypeMap(tripSeats);
+    const selectedSeatPrice = selectedSeat
+        ? seatPriceForLabel(walkInTripPrice, selectedSeat, walkInSeatTypeMap[selectedSeat])
+        : null;
+    const selectedSeatType = selectedSeat
+        ? resolveSeatType(selectedSeat, walkInSeatTypeMap[selectedSeat])
+        : null;
 
-    const PAYMENT_MAP = { chapa: 'CHAPA', telebirr: 'TELEBIRR', cbe: 'CBE' };
+    const PAYMENT_MAP = { chapa: 'CHAPA', telebirr: 'TELEBIRR', santim: 'SANTIM', cash: 'CHAPA' };
 
     const resolveWalkInUserId = async () => {
         if (passengerUserId.trim()) return passengerUserId.trim();
@@ -451,6 +469,7 @@ export default function BookingManagement() {
                                         bookedSeats={occupiedSeats}
                                         tripSeats={tripSeats}
                                         disabled={!canWalkInBook}
+                                        basePrice={walkInTripPrice}
                                     />
                                     <button
                                         type="button"
@@ -473,7 +492,7 @@ export default function BookingManagement() {
                                         <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Selected Seat</label>
                                         <div className="h-11 px-4 bg-gray-50 border border-gray-200 rounded-xl flex items-center font-bold text-gray-800">
                                             {selectedSeat
-                                                ? `Seat ${selectedSeat}${seatIdMap[selectedSeat] ? '' : ' (no trip seat — recreate trip after adding bus seats)'}`
+                                                ? `Seat ${selectedSeat}${selectedSeatType ? ` · ${selectedSeatType}` : ''}${selectedSeatPrice != null ? ` · ETB ${selectedSeatPrice.toLocaleString()}` : ''}${seatIdMap[selectedSeat] ? '' : ' (no trip seat — recreate trip after adding bus seats)'}`
                                                 : 'None selected'}
                                         </div>
                                     </div>
@@ -488,7 +507,7 @@ export default function BookingManagement() {
                                             className="w-full h-11 rounded-xl border border-gray-300 px-3 text-sm focus:ring-primary focus:border-primary outline-none">
                                             <option value="chapa">Chapa</option>
                                             <option value="telebirr">Telebirr</option>
-                                            <option value="cbe">CBE Birr</option>
+                                            <option value="santim">Santim</option>
                                         </select>
                                     </div>
                                     <Button

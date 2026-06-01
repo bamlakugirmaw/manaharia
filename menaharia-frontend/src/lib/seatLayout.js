@@ -1,3 +1,5 @@
+import { VIP_SEAT_LABELS } from './seatPricing';
+
 /** Standard 45-seater layout: 0 = aisle, 1 = seat */
 export const DEFAULT_BUS_LAYOUT = [
     [1, 1, 0, 1, 1],
@@ -39,6 +41,7 @@ export const normaliseTripSeats = (trip) => {
     return raw.map((s) => ({
         id: s.id,
         seatNumber: s.seatNumber ?? s.seat?.seatNumber ?? '',
+        seatType: s.seatType ?? s.seat?.seatType ?? null,
         status: s.status ?? 'AVAILABLE',
     })).filter((s) => s.seatNumber);
 };
@@ -73,9 +76,10 @@ export function buildSeatDefinitionsForBus(totalSeats) {
     const layoutLabels = allDefaultSeatLabels();
     const seats = [];
     for (let i = 0; i < count; i++) {
+        const seatNumber = layoutLabels[i] ?? `S${i + 1}`;
         seats.push({
-            seatNumber: layoutLabels[i] ?? `S${i + 1}`,
-            seatType: 'STANDARD',
+            seatNumber,
+            seatType: VIP_SEAT_LABELS.has(seatNumber) ? 'VIP' : 'STANDARD',
         });
     }
     return seats;

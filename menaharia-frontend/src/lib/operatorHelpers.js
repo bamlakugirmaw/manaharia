@@ -8,6 +8,37 @@ const DEFAULT_BADGES = ['Verified Operator', 'Secure Payments', 'QR Ticketing'];
 export const tripOperatorId = (t) =>
     t?.bus?.operator?.id ?? t?.bus?.operatorId ?? t?.operator?.id ?? t?.operatorId ?? '';
 
+/** Operator id from a booking (via embedded trip). */
+export const bookingOperatorId = (booking) =>
+    tripOperatorId(booking?.trip ?? {});
+
+/**
+ * Keep only trips owned by this operator (GET /v1/trips is public — no server-side operator filter).
+ * Matches trip.bus.operator.id or trips on this operator's bus fleet.
+ */
+export function filterTripsForOperator(trips, operatorId, operatorBusIds = []) {
+    if (!operatorId) return [];
+    const busIds = new Set(operatorBusIds.filter(Boolean));
+    return (Array.isArray(trips) ? trips : []).filter((t) => {
+        const opId = tripOperatorId(t);
+        if (opId) return opId === operatorId;
+        const busId = t.busId ?? t.bus?.id;
+        return Boolean(busId && busIds.has(busId));
+    });
+}
+
+/** Bookings for this operator's trips only. */
+export function filterBookingsForOperator(bookings, operatorId, operatorBusIds = []) {
+    if (!operatorId) return [];
+    const busIds = new Set(operatorBusIds.filter(Boolean));
+    return (Array.isArray(bookings) ? bookings : []).filter((b) => {
+        const opId = bookingOperatorId(b);
+        if (opId) return opId === operatorId;
+        const busId = b.trip?.busId ?? b.trip?.bus?.id;
+        return Boolean(busId && busIds.has(busId));
+    });
+}
+
 /** Strip ISO datetime to HH:MM for display. */
 export function formatTripTime(value) {
     if (!value) return '—';

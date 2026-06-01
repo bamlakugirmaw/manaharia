@@ -1,5 +1,7 @@
+import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { bookingsApi } from '../api';
+import { filterBookingsForOperator } from '../lib/operatorHelpers';
 
 export const bookingKeys = {
     all:    ['bookings'],
@@ -16,6 +18,9 @@ function unwrapList(res) {
 }
 
 function unwrapSingle(res) {
+    if (res && typeof res === 'object' && res.id && (res.tripId != null || res.status)) {
+        return res;
+    }
     return res?.data ?? res;
 }
 
@@ -27,6 +32,24 @@ export function useBookings(params = {}) {
         enabled,
         staleTime: 30 * 1000,
     });
+}
+
+/**
+ * Bookings for one operator's trips (client filter when API returns a broad list).
+ */
+export function useOperatorBookings(operatorId, params = {}, operatorBusIds = []) {
+    const busKey = operatorBusIds.join(',');
+    const query = useBookings({
+        ...params,
+        enabled: params.enabled !== false && !!operatorId,
+    });
+
+    const data = useMemo(
+        () => filterBookingsForOperator(query.data ?? [], operatorId, operatorBusIds),
+        [query.data, operatorId, busKey]
+    );
+
+    return { ...query, data };
 }
 
 export function useBooking(bookingId) {

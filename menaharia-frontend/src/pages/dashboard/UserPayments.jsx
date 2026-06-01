@@ -3,11 +3,12 @@ import { Badge } from '../../components/ui/Badge';
 import { CreditCard, Calendar, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { usePayments } from '../../hooks/usePayments';
 import { useAuth } from '../../contexts/AuthContext';
+import { loadAllPaymentReceipts } from '../../lib/paymentReceipt';
 
-const METHOD_LABEL = { TELEBIRR: 'Telebirr', CBE: 'CBE Birr', CHAPA: 'Chapa' };
+const METHOD_LABEL = { TELEBIRR: 'Telebirr', SANTIM: 'Santim', CHAPA: 'Chapa', CBE: 'CBE Birr' };
 const STATUS_MAP = { SUCCESS: 'Completed', PENDING: 'Pending', FAILED: 'Failed' };
 
-function mapPayment(p) {
+function mapPayment(p, savedReceipts = {}) {
     const trip = p.booking?.trip ?? {};
     const route = trip.route ?? {};
     const from = trip.from ?? route.origin ?? '';
@@ -16,18 +17,28 @@ function mapPayment(p) {
         ? `Bus Ticket — ${from} to ${to}`
         : 'Bus ticket payment';
 
+    const bookingId = p.bookingId ?? p.booking?.id;
+    const saved = bookingId ? savedReceipts[bookingId] : null;
+
     return {
         id: p.id,
+        bookingId,
         date: p.createdAt
             ? new Date(p.createdAt).toLocaleDateString('en-US', {
                 month: 'short', day: 'numeric', year: 'numeric',
             })
             : '—',
-        amount: p.amount ?? 0,
-        method: METHOD_LABEL[p.method] ?? p.method ?? '—',
+        amount: p.amount ?? saved?.amount ?? 0,
+        method: METHOD_LABEL[p.method] ?? p.method ?? saved?.method ?? '—',
         status: STATUS_MAP[p.status] ?? p.status ?? 'Pending',
-        reference: p.gatewayReference ?? p.transactionCode ?? p.id,
+        reference:
+            p.gatewayReference
+            ?? p.transactionCode
+            ?? saved?.gatewayReference
+            ?? saved?.transactionId
+            ?? p.id,
         description,
+        savedReceipt: saved,
     };
 }
 
@@ -37,13 +48,37 @@ export default function UserPayments() {
 
     const payments = useMemo(() => {
         const list = Array.isArray(rawPayments) ? rawPayments : [];
-        return list
+        const savedReceipts = loadAllPaymentReceipts();
+        const mapped = list
             .filter((p) => {
                 if (!user?.id) return true;
                 const payUserId = p.userId ?? p.booking?.userId ?? p.booking?.user?.id;
                 return !payUserId || payUserId === user.id;
             })
-            .map(mapPayment);
+            .map((p) => mapPayment(p, savedReceipts));
+
+        const seenBookingIds = new Set(mapped.map((p) => p.bookingId).filter(Boolean));
+        for (const [bookingId, receipt] of Object.entries(savedReceipts)) {
+            if (seenBookingIds.has(bookingId)) continue;
+            if (receipt.status !== 'SUCCESS') continue;
+            mapped.push({
+                id: receipt.paymentId ?? receipt.gatewayReference ?? bookingId,
+                bookingId,
+                date: receipt.paidAt
+                    ? new Date(receipt.paidAt).toLocaleDateString('en-US', {
+                        month: 'short', day: 'numeric', year: 'numeric',
+                    })
+                    : '—',
+                amount: receipt.amount ?? 0,
+                method: METHOD_LABEL[receipt.method] ?? 'Chapa',
+                status: 'Completed',
+                reference: receipt.gatewayReference ?? receipt.transactionId ?? bookingId,
+                description: `Bus ticket — ref ${receipt.bookingReference ?? bookingId.slice(0, 8)}`,
+                savedReceipt: receipt,
+            });
+        }
+
+        return mapped.sort((a, b) => (b.date > a.date ? 1 : -1));
     }, [rawPayments, user?.id]);
 
     return (

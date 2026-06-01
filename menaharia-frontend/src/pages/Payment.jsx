@@ -2,20 +2,22 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import chapaLogo from '../assets/chapa-logo.jpg';
 import { Button } from '../components/ui/Button';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, ShieldCheck, Clock, ExternalLink } from 'lucide-react';
 import ProgressStepper from '../components/booking/ProgressStepper';
 import BookingSummary from '../components/booking/BookingSummary';
 import { useCreateBooking } from '../hooks/useBookings';
+import { useInitiatePayment } from '../hooks/usePayments';
 import { useAuth } from '../contexts/AuthContext';
 import { extractErrorMessage } from '../lib/api';
 import { fetchTripSeatContext, resolveSelectedSeats } from '../lib/tripSeats';
-import { loadBookingFlow, clearBookingFlow } from '../lib/bookingFlow';
+import {
+    loadBookingFlow,
+    savePendingPayment,
+} from '../lib/bookingFlow';
+import { buildSeatTypeMap, totalPriceForSelectedSeats } from '../lib/seatPricing';
 
-const METHOD_MAP = {
-    chapa: 'CHAPA',
-    telebirr: 'TELEBIRR',
-    cbe: 'CBE',
-};
+/** Backend payment_method enum on CreateBookingDto / InitiatePaymentDto */
+const PAYMENT_METHOD = 'CHAPA';
 
 export default function Payment() {
     const loc = useLocation();
@@ -34,10 +36,12 @@ export default function Payment() {
 
     const tripId = stateTripId ?? trip?.id;
 
-    const { mutateAsync: createBooking, isPending: loading } = useCreateBooking();
+    const { mutateAsync: createBooking, isPending: creating } = useCreateBooking();
+    const { mutateAsync: initiatePayment, isPending: initiating } = useInitiatePayment();
 
-    const [paymentMethod, setPaymentMethod] = useState('chapa');
     const [errorMsg, setErrorMsg] = useState('');
+    const [step, setStep] = useState('idle'); // idle | reserving | redirecting
+    const [reservation, setReservation] = useState(null);
 
     useEffect(() => {
         if (!tripId) {
@@ -59,24 +63,32 @@ export default function Payment() {
         return null;
     }
 
-    const paymentMethods = [
-        {
-            id: 'chapa',
-            name: 'Chapa',
-            description: 'Payment gateway coming soon — seats reserved on confirm (pending payment)',
-            iconUrl: chapaLogo,
-        },
-    ];
+    const computedTotal = totalPriceForSelectedSeats(
+        trip?.price ?? 0,
+        selectedSeats,
+        buildSeatTypeMap(trip?.tripSeats ?? [])
+    );
+    const displayTotal = computedTotal || totalPrice || 0;
 
-    const handleConfirmBooking = async () => {
+    const loading = creating || initiating || step !== 'idle';
+
+    const handlePayWithChapa = async () => {
         setErrorMsg('');
+        setStep('reserving');
 
         try {
             const ctx = await fetchTripSeatContext(tripId);
             const resolved = resolveSelectedSeats(selectedSeats, ctx.seatIdMap);
-            const missing = resolved.filter((s) => !s.tripSeatId);
+            const seatTypeMap = buildSeatTypeMap(ctx.tripSeats);
+            const amount = totalPriceForSelectedSeats(
+                ctx.trip?.price ?? trip?.price ?? 0,
+                resolved,
+                seatTypeMap
+            );
 
+            const missing = resolved.filter((s) => !s.tripSeatId);
             if (missing.length > 0) {
+                setStep('idle');
                 setErrorMsg(
                     ctx.unavailableMessage ??
                         'Selected seats are no longer available. Go back and choose different seats.'
@@ -92,35 +104,65 @@ export default function Payment() {
                 emergencyContact: passengerDetails?.emergencyContact ?? '',
             }));
 
-            const booking = await createBooking({
+            const result = await createBooking({
                 tripId,
-                paymentMethod: METHOD_MAP[paymentMethod] ?? 'CHAPA',
+                paymentMethod: PAYMENT_METHOD,
                 travelers,
             });
 
-            const bookingId = booking?.id ?? booking?.bookingId;
+            const bookingId = result?.bookingId;
             if (!bookingId) {
-                throw new Error('Booking was saved but no booking ID was returned.');
+                throw new Error('Booking was created but no booking ID was returned.');
             }
 
-            clearBookingFlow();
-
-            navigate(`/booking/ticket/${bookingId}`, {
-                state: {
-                    bookingId,
-                    booking,
-                    trip: ctx.trip ?? trip,
-                    tripId,
-                    selectedSeats: resolved,
-                    passengerDetails,
-                    totalPrice,
-                    paymentSkipped: true,
-                },
+            setReservation({
+                bookingId,
+                booking: result.booking,
+                payment: result.payment,
+                reservedUntil: result.reservedUntil,
+                totalAmount: result.totalAmount ?? amount,
             });
+
+            savePendingPayment({
+                bookingId,
+                tripId,
+                trip: ctx.trip ?? trip,
+                selectedSeats: resolved,
+                passengerDetails,
+                totalPrice: result.totalAmount ?? amount,
+            });
+
+            setStep('redirecting');
+
+            const checkout = await initiatePayment({
+                method: PAYMENT_METHOD,
+                bookingId,
+                customerReference: passengerDetails?.email ?? undefined,
+            });
+
+            if (!checkout?.paymentUrl) {
+                setStep('idle');
+                setErrorMsg(
+                    checkout?.message ??
+                        'Booking reserved, but Chapa checkout URL was not returned. Try again from My Bookings.'
+                );
+                navigate(`/booking/payment/return?bookingId=${bookingId}`, { replace: false });
+                return;
+            }
+
+            window.location.href = checkout.paymentUrl;
         } catch (err) {
+            setStep('idle');
             setErrorMsg(extractErrorMessage(err, 'Could not complete booking. Please try again.'));
         }
     };
+
+    const reservedUntilLabel = reservation?.reservedUntil
+        ? new Date(reservation.reservedUntil).toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+        })
+        : null;
 
     return (
         <div className="min-h-screen bg-gray-100">
@@ -130,10 +172,10 @@ export default function Payment() {
                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                     <div className="lg:col-span-3">
                         <div className="bg-white rounded-2xl shadow-sm p-8">
-                            <h1 className="text-2xl font-bold text-gray-900 mb-2">Confirm Your Booking</h1>
+                            <h1 className="text-2xl font-bold text-gray-900 mb-2">Pay with Chapa</h1>
                             <p className="text-sm text-gray-500 mb-6">
-                                POST /bookings reserves your seats and creates a pending booking. Payment gateway
-                                integration will complete the flow later.
+                                We reserve your seats first, then redirect you to Chapa&apos;s secure checkout to
+                                complete payment in ETB.
                             </p>
 
                             {errorMsg && (
@@ -142,52 +184,71 @@ export default function Payment() {
                                 </div>
                             )}
 
-                            <div className="space-y-4 mb-8">
-                                {paymentMethods.map((method) => {
-                                    const isSelected = paymentMethod === method.id;
-                                    return (
-                                        <button
-                                            key={method.id}
-                                            type="button"
-                                            onClick={() => setPaymentMethod(method.id)}
-                                            className={`w-full p-4 border-2 rounded-xl flex items-center gap-4 transition-all ${
-                                                isSelected
-                                                    ? 'border-[#0EA5E9] bg-blue-50'
-                                                    : 'border-gray-200 hover:border-gray-300 bg-white'
-                                            }`}
-                                        >
-                                            <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 bg-[#0B1536] overflow-hidden shadow-sm border border-gray-100 p-1">
-                                                <img
-                                                    src={method.iconUrl}
-                                                    alt={method.name}
-                                                    className="w-full h-full object-contain"
-                                                />
-                                            </div>
-                                            <div className="flex-1 text-left">
-                                                <div className="font-bold text-gray-900 text-base">{method.name}</div>
-                                                <div className="text-sm text-gray-600">{method.description}</div>
-                                            </div>
-                                        </button>
-                                    );
-                                })}
+                            <div className="border-2 border-[#0EA5E9] bg-blue-50/50 rounded-2xl p-5 mb-6">
+                                <div className="flex items-start gap-4">
+                                    <div className="w-14 h-14 rounded-xl bg-[#0B1536] flex items-center justify-center shrink-0 p-2">
+                                        <img
+                                            src={chapaLogo}
+                                            alt="Chapa"
+                                            className="w-full h-full object-contain"
+                                        />
+                                    </div>
+                                    <div className="flex-1">
+                                        <h2 className="font-bold text-gray-900 text-lg">Chapa</h2>
+                                        <p className="text-sm text-gray-600 mt-1">
+                                            Cards, mobile money, and bank transfer — powered by Chapa.
+                                        </p>
+                                        <ul className="mt-3 space-y-1.5 text-xs text-gray-600">
+                                            <li className="flex items-center gap-2">
+                                                <ShieldCheck size={14} className="text-emerald-600 shrink-0" />
+                                                Encrypted checkout on chapa.co
+                                            </li>
+                                            <li className="flex items-center gap-2">
+                                                <Clock size={14} className="text-amber-600 shrink-0" />
+                                                Seats held briefly while you pay
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
                             </div>
 
-                            <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 text-sm text-amber-800 mb-6">
-                                Stale reservations are released by the backend job{' '}
-                                <code className="text-xs">POST /jobs/expire-seat-reservations</code>. Complete payment
-                                when the gateway is enabled.
-                            </div>
+                            {reservation && (
+                                <div className="mb-6 p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-sm text-emerald-800">
+                                    <p className="font-semibold">Booking reserved</p>
+                                    <p className="mt-1 font-mono text-xs">
+                                        {reservation.booking?.bookingReference ?? reservation.bookingId}
+                                    </p>
+                                    {reservedUntilLabel && (
+                                        <p className="mt-1 text-xs">
+                                            Pay before {reservedUntilLabel} to keep your seats.
+                                        </p>
+                                    )}
+                                </div>
+                            )}
 
                             <Button
                                 fullWidth
                                 className="h-12 bg-[#0EA5E9] hover:bg-[#0284C7] text-white font-semibold text-sm rounded-lg"
-                                onClick={handleConfirmBooking}
+                                onClick={handlePayWithChapa}
                                 disabled={loading || !isAuthenticated}
                                 isLoading={loading}
                             >
-                                {loading ? 'Reserving seats…' : `Confirm Booking — ETB ${totalPrice?.toLocaleString() ?? 0}`}
-                                {!loading && <ArrowRight className="w-4 h-4 ml-2" />}
+                                {step === 'reserving'
+                                    ? 'Reserving seats…'
+                                    : step === 'redirecting'
+                                      ? 'Opening Chapa checkout…'
+                                      : (
+                                        <>
+                                            Pay ETB {displayTotal.toLocaleString()} with Chapa
+                                            <ExternalLink className="w-4 h-4 ml-2" />
+                                        </>
+                                    )}
                             </Button>
+
+                            <p className="text-xs text-gray-400 text-center mt-4">
+                                By continuing you agree to complete payment on Chapa. Unpaid reservations may be
+                                released automatically.
+                            </p>
                         </div>
                     </div>
 
@@ -195,8 +256,7 @@ export default function Payment() {
                         <BookingSummary
                             trip={trip}
                             tripId={tripId}
-                            selectedSeats={selectedSeats.map((s) => (typeof s === 'object' ? s.label : s))}
-                            showEncryption
+                            selectedSeats={selectedSeats}
                         />
                     </div>
                 </div>

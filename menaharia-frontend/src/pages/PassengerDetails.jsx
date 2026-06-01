@@ -182,7 +182,7 @@ export default function PassengerDetails() {
                         <BookingSummary
                             trip={trip}
                             tripId={tripId}
-                            selectedSeats={selectedSeats.map(s => s.label ?? s)}
+                            selectedSeats={selectedSeats}
                         />
                     </div>
                 </div>

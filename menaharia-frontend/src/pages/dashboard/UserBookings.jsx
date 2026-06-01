@@ -1,67 +1,21 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import PaymentReceiptCard from '../../components/PaymentReceiptCard';
 import {
     Eye, X, MessageSquare, Send, Bus, Calendar, Ticket,
     User, CreditCard, Phone, Hash, ArrowRight, AlertCircle,
     CheckCircle, Clock, ChevronLeft, MapPin, PlusCircle, Star,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { useBookings, useCancelBooking } from '../../hooks/useBookings';
-import { useCreateDispute } from '../../hooks/useDisputes';
+import { useBookings, useBooking, useCancelBooking } from '../../hooks/useBookings';
+import { useCreateDispute, useDisputes, DISPUTE_STATUS_LABEL } from '../../hooks/useDisputes';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
+import { normaliseBookingForUI } from '../../lib/bookingUi';
+import { getPaymentReceipt } from '../../lib/paymentReceipt';
+import { extractErrorMessage } from '../../lib/api';
 import { cn } from '../../lib/utils';
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/**
- * Normalise a backend booking object to the flat shape the UI modal expects.
- * Backend shape (simplified):
- *   { id, status, createdAt, trip: { route, departureTime, arrivalTime, date, bus, operator },
- *     travelers: [{ fullName, phone, seat: { seatNumber } }],
- *     payment: { status, amount, method } }
- */
-function normaliseBooking(b) {
-    const trip     = b.trip     ?? {};
-    const traveler = b.travelers?.[0] ?? {};
-    const payment  = b.payment  ?? {};
-    const route    = trip.route ?? {};
-    const operator = trip.operator ?? {};
-    const bus      = trip.bus ?? {};
-
-    const from = trip.from ?? route.origin ?? '';
-    const to   = trip.to   ?? route.destination ?? '';
-
-    return {
-        id:             b.id,
-        ticketId:       b.tickets?.[0]?.id ?? b.id,
-        operator:       operator.name ?? operator.companyName ?? 'Unknown',
-        operatorId:     operator.id ?? '',
-        busName:        bus.make ?? `${operator.name ?? ''} Coach`,
-        busPlate:       bus.plateNumber ?? '—',
-        route:          `${from} → ${to}`,
-        from,
-        to,
-        departure:      trip.departureTime ?? '',
-        arrival:        trip.arrivalTime   ?? '',
-        seatNumber:     traveler.seat?.seatNumber ?? traveler.seatNumber ?? '—',
-        date:           trip.date
-            ? new Date(trip.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-            : '—',
-        bookingDate:    b.createdAt
-            ? new Date(b.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-            : '—',
-        passengerName:  traveler.fullName ?? '',
-        passengerPhone: traveler.phone    ?? '',
-        status:         (b.status ?? '').toLowerCase(),
-        paymentStatus:  payment.status === 'SUCCESS' ? 'Paid' : (payment.status ?? 'Pending'),
-        amount:         payment.amount ?? trip.price ?? 0,
-        driverContact:  null,
-        // Keep raw for complaint context
-        _raw: b,
-    };
-}
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -95,11 +49,38 @@ function StarRating({ bookingId, ratings, setRatings }) {
 }
 
 function ComplaintStatusBadge({ status }) {
-    const styles = { Open: 'bg-blue-100 text-blue-700', 'In Progress': 'bg-orange-100 text-orange-700', Resolved: 'bg-green-100 text-green-700' };
-    const icons  = { Open: <AlertCircle size={10} />, 'In Progress': <Clock size={10} />, Resolved: <CheckCircle size={10} /> };
+    const label = DISPUTE_STATUS_LABEL[status] ?? status;
+    const styles = {
+        PENDING: 'bg-yellow-100 text-yellow-700',
+        IN_REVIEW: 'bg-orange-100 text-orange-700',
+        RESOLVED: 'bg-green-100 text-green-700',
+        REJECTED: 'bg-red-100 text-red-700',
+    };
+    const icons = {
+        PENDING: <Clock size={10} />,
+        IN_REVIEW: <AlertCircle size={10} />,
+        RESOLVED: <CheckCircle size={10} />,
+        REJECTED: <AlertCircle size={10} />,
+    };
     return (
         <span className={cn('inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full', styles[status] || 'bg-gray-100 text-gray-500')}>
-            {icons[status]}{status}
+            {icons[status]}{label}
+        </span>
+    );
+}
+
+function BookingStatusBadge({ rowStatus, paymentStatus }) {
+    const key = rowStatus?.key ?? 'pending';
+    const label = rowStatus?.label ?? paymentStatus ?? 'Pending';
+    const styles = {
+        confirmed: 'bg-emerald-100 text-emerald-700',
+        cancelled: 'bg-gray-100 text-gray-500',
+        failed: 'bg-red-100 text-red-700',
+        pending: 'bg-amber-100 text-amber-700',
+    };
+    return (
+        <span className={cn('text-[10px] font-bold uppercase px-2.5 py-1 rounded-full', styles[key] || styles.pending)}>
+            {label}
         </span>
     );
 }
@@ -128,21 +109,38 @@ export default function UserBookings() {
     const { mutate: cancelBooking, isPending: cancelling } = useCancelBooking();
     const { confirm, ConfirmDialogHost } = useConfirmDialog();
 
-    // GET /v1/bookings — returns the authenticated traveller's bookings
     const { data: rawBookings = [], isLoading, isError, refetch } = useBookings(
         user?.id ? { userId: user.id, limit: 50, enabled: true } : { enabled: false }
     );
 
-    // Normalise backend shape → flat UI shape
-    const bookings = rawBookings.map(normaliseBooking);
+    const { data: disputes = [] } = useDisputes({ limit: 100 });
 
-    // Derived stats
-    const pendingCount = bookings.filter((b) => b.status === 'pending').length;
-    const totalSpent     = bookings.reduce((sum, b) => sum + (b.amount ?? 0), 0);
+    const bookings = useMemo(
+        () => rawBookings.map(normaliseBookingForUI),
+        [rawBookings],
+    );
+
+    const disputeByBookingId = useMemo(() => {
+        const map = {};
+        for (const d of disputes) {
+            const bid = d.bookingId ?? d.booking?.id;
+            if (bid) map[bid] = d;
+        }
+        return map;
+    }, [disputes]);
+
+    const pendingCount = bookings.filter((b) => b.rowStatus?.key === 'pending').length;
+    const totalSpent = bookings
+        .filter((b) => b.paymentStatusRaw === 'SUCCESS')
+        .reduce((sum, b) => sum + (b.amount ?? 0), 0);
 
     const [selectedBooking, setSelectedBooking] = useState(null);
+    const { data: selectedBookingDetail } = useBooking(
+        selectedBooking?.id && selectedBooking.operator === 'Unknown' ? selectedBooking.id : null,
+    );
     const [showChat,        setShowChat]        = useState(false);
     const [chatMsg,         setChatMsg]         = useState('');
+    const [disputeError,    setDisputeError]    = useState('');
     const chatEndRef = useRef(null);
 
     const [ratings, setRatings] = useState(() => {
@@ -150,8 +148,21 @@ export default function UserBookings() {
         catch { return {}; }
     });
 
-    const existingComplaint = null; // Disputes are now managed via /v1/disputes — see UserComplaints page
-    const activeComplaint   = null;
+    const displayBooking = useMemo(() => {
+        if (!selectedBooking) return null;
+        if (selectedBookingDetail && selectedBooking.operator === 'Unknown') {
+            return normaliseBookingForUI(selectedBookingDetail);
+        }
+        return selectedBooking;
+    }, [selectedBooking, selectedBookingDetail]);
+
+    const existingComplaint = displayBooking
+        ? disputeByBookingId[displayBooking.id] ?? null
+        : null;
+    const activeComplaint = existingComplaint;
+    const selectedReceipt = displayBooking
+        ? getPaymentReceipt(displayBooking.id)
+        : null;
 
     useEffect(() => {
         if (showChat && chatEndRef.current)
@@ -161,37 +172,49 @@ export default function UserBookings() {
     const openComplaintChat = () => setShowChat(true);
 
     const handleSend = () => {
-        if (!chatMsg.trim() || !selectedBooking) return;
-        // File a new dispute via the backend
+        if (!chatMsg.trim() || !displayBooking) return;
+        if (!displayBooking.operatorId) {
+            setDisputeError('Cannot file a dispute: operator is not linked to this booking. Try refreshing the page.');
+            return;
+        }
+        setDisputeError('');
         createDispute({
-            operatorId: selectedBooking.operatorId,
-            bookingId:  selectedBooking._raw?.id ?? selectedBooking.id,
-            subject:    `Issue with booking ${selectedBooking.id}`,
-            message:    chatMsg,
+            operatorId: displayBooking.operatorId,
+            bookingId: displayBooking.id,
+            subject: `Issue with booking ${displayBooking.id.slice(0, 8)}…`,
+            message: chatMsg.trim(),
         }, {
             onSuccess: () => {
                 setChatMsg('');
                 setShowChat(false);
                 navigate('/traveller/complaints');
             },
+            onError: (err) => {
+                setDisputeError(extractErrorMessage(err, 'Could not file dispute.'));
+            },
         });
     };
 
-    const closeModal = () => { setSelectedBooking(null); setShowChat(false); setChatMsg(''); };
+    const closeModal = () => {
+        setSelectedBooking(null);
+        setShowChat(false);
+        setChatMsg('');
+        setDisputeError('');
+    };
     const openBookingDetail = (b) => { setSelectedBooking(b); setShowChat(false); setChatMsg(''); };
 
     const canCancelBooking = (b) =>
         ['pending', 'confirmed', 'paid'].includes((b.status ?? '').toLowerCase());
 
     const handleCancelBooking = async () => {
-        if (!selectedBooking || !canCancelBooking(selectedBooking)) return;
+        if (!displayBooking || !canCancelBooking(displayBooking)) return;
         const ok = await confirm({
             title: 'Cancel this booking?',
             description: 'Refund rules may apply per operator policy.',
             confirmLabel: 'Cancel Booking',
         });
         if (!ok) return;
-        cancelBooking(selectedBooking.id, {
+        cancelBooking(displayBooking.id, {
             onSuccess: () => closeModal(),
         });
     };
@@ -286,18 +309,10 @@ export default function UserBookings() {
                                     <td className="px-6 py-4 text-gray-600">{booking.route}</td>
                                     <td className="px-6 py-4 text-gray-600">{booking.date}</td>
                                     <td className="px-6 py-4">
-                                        <span
-                                            className={cn(
-                                                'text-[10px] font-bold uppercase px-2.5 py-1 rounded-full',
-                                                booking.status === 'confirmed' || booking.status === 'paid'
-                                                    ? 'bg-emerald-100 text-emerald-700'
-                                                    : booking.status === 'cancelled'
-                                                      ? 'bg-gray-100 text-gray-500'
-                                                      : 'bg-amber-100 text-amber-700'
-                                            )}
-                                        >
-                                            {booking.status}
-                                        </span>
+                                        <BookingStatusBadge
+                                            rowStatus={booking.rowStatus}
+                                            paymentStatus={booking.paymentStatus}
+                                        />
                                     </td>
                                     <td className="px-6 py-4">
                                         <StarRating bookingId={booking.id} ratings={ratings} setRatings={setRatings} />
@@ -319,7 +334,7 @@ export default function UserBookings() {
             </div>
 
             {/* ═══════════════════════ MODAL ═══════════════════════ */}
-            {selectedBooking && (
+            {displayBooking && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
 
@@ -336,10 +351,10 @@ export default function UserBookings() {
                             </div>
                             <div className="flex-1 min-w-0">
                                 <h2 className="font-bold text-gray-900 text-sm leading-tight truncate">
-                                    {showChat ? `Complaint — ${selectedBooking.busName}` : selectedBooking.busName}
+                                    {showChat ? `Complaint — ${displayBooking.busName}` : displayBooking.busName}
                                 </h2>
                                 <p className="text-[10px] text-gray-400 font-mono mt-0.5">
-                                    {showChat ? (activeComplaint?.id ?? 'New Complaint') : selectedBooking.ticketId}
+                                    {showChat ? (activeComplaint?.id ?? 'New Complaint') : displayBooking.ticketId}
                                 </p>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
@@ -361,8 +376,8 @@ export default function UserBookings() {
                                         </p>
                                         <div className="flex items-center gap-4">
                                             <div>
-                                                <p className="text-2xl font-black text-gray-900 leading-none">{selectedBooking.departure}</p>
-                                                <p className="text-sm font-bold text-blue-600 mt-1">{selectedBooking.from}</p>
+                                                <p className="text-2xl font-black text-gray-900 leading-none">{displayBooking.departure}</p>
+                                                <p className="text-sm font-bold text-blue-600 mt-1">{displayBooking.from}</p>
                                             </div>
                                             <div className="flex-1 flex items-center gap-2">
                                                 <div className="flex-1 h-px bg-blue-200/80" />
@@ -372,29 +387,33 @@ export default function UserBookings() {
                                                 <div className="flex-1 h-px bg-blue-200/80" />
                                             </div>
                                             <div className="text-right">
-                                                <p className="text-2xl font-black text-gray-900 leading-none">{selectedBooking.arrival}</p>
-                                                <p className="text-sm font-bold text-blue-600 mt-1">{selectedBooking.to}</p>
+                                                <p className="text-2xl font-black text-gray-900 leading-none">{displayBooking.arrival}</p>
+                                                <p className="text-sm font-bold text-blue-600 mt-1">{displayBooking.to}</p>
                                             </div>
                                         </div>
                                     </div>
 
                                     {/* Info Grid */}
                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                        <InfoTile icon={Bus}        label="Bus Name"     value={selectedBooking.busName} />
-                                        <InfoTile icon={User}       label="Operator"     value={selectedBooking.operator} />
-                                        <InfoTile icon={Ticket}     label="Ticket ID"    value={selectedBooking.ticketId} />
-                                        <InfoTile icon={Hash}       label="Seat Number"  value={selectedBooking.seatNumber} accent="blue" />
-                                        <InfoTile icon={Calendar}   label="Travel Date"  value={selectedBooking.date} />
-                                        <InfoTile icon={Calendar}   label="Booking Date" value={selectedBooking.bookingDate} />
-                                        <InfoTile icon={User}       label="Passenger"    value={selectedBooking.passengerName} />
-                                        <InfoTile icon={Phone}      label="Phone"        value={selectedBooking.passengerPhone} />
-                                        <InfoTile icon={CreditCard} label="Payment"      value={selectedBooking.paymentStatus} accent="green" />
-                                        <InfoTile icon={CreditCard} label="Amount Paid"  value={`ETB ${(selectedBooking.amount ?? 0).toLocaleString()}`} />
-                                        {selectedBooking.driverContact && (
-                                            <InfoTile icon={Phone} label="Driver Contact" value={selectedBooking.driverContact} />
+                                        <InfoTile icon={Bus}        label="Bus Name"     value={displayBooking.busName} />
+                                        <InfoTile icon={User}       label="Operator"     value={displayBooking.operator} />
+                                        <InfoTile icon={Ticket}     label="Ticket ID"    value={displayBooking.ticketId} />
+                                        <InfoTile icon={Hash}       label="Seat Number"  value={displayBooking.seatNumber} accent="blue" />
+                                        <InfoTile icon={Calendar}   label="Travel Date"  value={displayBooking.date} />
+                                        <InfoTile icon={Calendar}   label="Booking Date" value={displayBooking.bookingDate} />
+                                        <InfoTile icon={User}       label="Passenger"    value={displayBooking.passengerName} />
+                                        <InfoTile icon={Phone}      label="Phone"        value={displayBooking.passengerPhone} />
+                                        <InfoTile icon={CreditCard} label="Payment"      value={displayBooking.paymentStatus} accent="green" />
+                                        <InfoTile icon={CreditCard} label="Amount Paid"  value={`ETB ${(displayBooking.amount ?? 0).toLocaleString()}`} />
+                                        {displayBooking.driverContact && (
+                                            <InfoTile icon={Phone} label="Driver Contact" value={displayBooking.driverContact} />
                                         )}
-                                        <InfoTile icon={Hash} label="Bus Plate" value={selectedBooking.busPlate} />
+                                        <InfoTile icon={Hash} label="Bus Plate" value={displayBooking.busPlate} />
                                     </div>
+
+                                    {selectedReceipt && (
+                                        <PaymentReceiptCard receipt={selectedReceipt} compact />
+                                    )}
 
                                     {existingComplaint && (
                                         <div className="flex items-center gap-3 p-3.5 bg-amber-50 border border-amber-100 rounded-xl">
@@ -416,7 +435,7 @@ export default function UserBookings() {
                                             <Ticket size={12} className="text-primary" />
                                         </div>
                                         <p className="text-xs font-bold text-gray-600 truncate">
-                                            {selectedBooking.route} · Seat {selectedBooking.seatNumber} · {selectedBooking.date}
+                                            {displayBooking.route} · Seat {displayBooking.seatNumber} · {displayBooking.date}
                                         </p>
                                     </div>
 
@@ -430,6 +449,11 @@ export default function UserBookings() {
                                         </p>
                                     </div>
 
+                                    {disputeError && (
+                                        <p className="px-4 py-2 text-xs text-red-600 bg-red-50 border-t border-red-100 shrink-0">
+                                            {disputeError}
+                                        </p>
+                                    )}
                                     <div className="px-4 py-3 bg-white border-t border-gray-100 flex gap-2 items-center shrink-0">
                                         <input type="text"
                                             placeholder="Describe your issue..."
@@ -439,7 +463,7 @@ export default function UserBookings() {
                                             className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                                             autoFocus
                                         />
-                                        <button onClick={handleSend} disabled={!chatMsg.trim() || filingDispute}
+                                        <button onClick={handleSend} disabled={!chatMsg.trim() || filingDispute || !displayBooking.operatorId}
                                             className="w-10 h-10 rounded-xl bg-primary text-white flex items-center justify-center hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all shrink-0 shadow-sm">
                                             <Send size={16} />
                                         </button>
@@ -450,11 +474,23 @@ export default function UserBookings() {
 
                         {/* Modal Footer */}
                         {!showChat && (
-                            <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3 shrink-0 bg-white">
+                            <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3 shrink-0 bg-white flex-wrap">
                                 <Button variant="outline" onClick={closeModal} className="h-10 px-5 rounded-xl text-sm font-semibold border-gray-200">
                                     Close
                                 </Button>
-                                {canCancelBooking(selectedBooking) && (
+                                {(displayBooking.rowStatus?.key === 'confirmed' || displayBooking.paymentStatusRaw === 'SUCCESS') && (
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => navigate(`/booking/ticket/${displayBooking.id}`, {
+                                            state: { bookingId: displayBooking.id, receipt: selectedReceipt },
+                                        })}
+                                        className="h-10 px-5 rounded-xl text-sm font-semibold border-primary/30 text-primary"
+                                    >
+                                        <Ticket size={14} className="mr-1.5" />
+                                        View ticket
+                                    </Button>
+                                )}
+                                {canCancelBooking(displayBooking) && (
                                     <Button
                                         variant="outline"
                                         onClick={handleCancelBooking}
@@ -464,12 +500,26 @@ export default function UserBookings() {
                                         {cancelling ? 'Cancelling…' : 'Cancel Booking'}
                                     </Button>
                                 )}
-                                <button onClick={openComplaintChat}
-                                    className={cn('h-10 px-5 rounded-xl text-sm font-bold flex items-center gap-2 text-white shadow-sm transition-all hover:opacity-90',
-                                        existingComplaint ? 'bg-orange-500 shadow-orange-200/60' : 'bg-rose-500 shadow-rose-200/60')}>
-                                    <MessageSquare size={14} />
-                                    {existingComplaint ? 'Open Complaint Chat' : 'File a Complaint'}
-                                </button>
+                                {existingComplaint ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate('/traveller/complaints')}
+                                        className="h-10 px-5 rounded-xl text-sm font-bold flex items-center gap-2 text-white bg-orange-500 shadow-sm hover:opacity-90"
+                                    >
+                                        <MessageSquare size={14} />
+                                        View dispute
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={openComplaintChat}
+                                        disabled={!displayBooking.operatorId}
+                                        className="h-10 px-5 rounded-xl text-sm font-bold flex items-center gap-2 text-white bg-rose-500 shadow-sm hover:opacity-90 disabled:opacity-40"
+                                    >
+                                        <MessageSquare size={14} />
+                                        File a Complaint
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>

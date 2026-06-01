@@ -5,12 +5,12 @@
  *   import { useTrips, useBookings, useCreateBooking } from '../hooks';
  */
 
-export { useTrips, useTrip, useAllTrips, useCreateTrip, useUpdateTrip, useRemoveTrip, tripKeys } from './useTrips';
+export { useTrips, useTrip, useAllTrips, useOperatorTrips, useCreateTrip, useUpdateTrip, useRemoveTrip, tripKeys } from './useTrips';
 export { useOperators, useOperator, useOperatorDashboard, usePublicOperators, usePublicOperator, useRemoveOperator, operatorKeys } from './useOperators';
 export { useRoutes, useRoute, routeKeys, useCreateRoute, useUpdateRoute, useRemoveRoute } from './useRoutes';
 export { useBuses, useBus, useRemoveBus, busKeys } from './useBuses';
 export { useSeats, seatKeys } from './useSeats';
-export { useBookings, useBooking, useCreateBooking, useCancelBooking, bookingKeys } from './useBookings';
+export { useBookings, useOperatorBookings, useBooking, useCreateBooking, useCancelBooking, bookingKeys } from './useBookings';
 export { usePayments, usePayment, useInitiatePayment, paymentKeys } from './usePayments';
 export { useTickets, useTicketsByBooking, useTicket, ticketKeys } from './useTickets';
 export { useUsers, useUser, useUpdateUserStatus, useRemoveUser, useHardRemoveUser, useRemoveUserRole, userKeys } from './useUsers';

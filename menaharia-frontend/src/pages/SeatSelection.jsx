@@ -10,6 +10,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTripSeatContext } from '../hooks/useTripSeatContext';
 import { resolveSelectedSeats } from '../lib/tripSeats';
 import { saveBookingFlow } from '../lib/bookingFlow';
+import { buildSeatTypeMap, totalPriceForSelectedSeats } from '../lib/seatPricing';
 
 export default function SeatSelection() {
     const { isAuthenticated } = useAuth();
@@ -57,6 +58,8 @@ export default function SeatSelection() {
         );
     }
 
+    const seatTypeMap = buildSeatTypeMap(tripSeats);
+
     const handleToggleSeat = (seatLabel) => {
         if (!canSelectSeats) return;
 
@@ -70,12 +73,17 @@ export default function SeatSelection() {
             }
             const tripSeatId = seatIdMap[seatLabel] ?? null;
             if (!tripSeatId) return;
-            setSelectedSeats((prev) => [...prev, { label: seatLabel, tripSeatId }]);
+            const tripSeat = tripSeats.find((s) => s.seatNumber === seatLabel);
+            setSelectedSeats((prev) => [...prev, {
+                label: seatLabel,
+                tripSeatId,
+                seatType: seatTypeMap[seatLabel] ?? tripSeat?.seatType ?? null,
+            }]);
         }
     };
 
     const selectedLabels = selectedSeats.map((s) => s.label);
-    const totalPrice = selectedSeats.length * (trip.price ?? 0);
+    const totalPrice = totalPriceForSelectedSeats(trip.price ?? 0, selectedSeats, seatTypeMap);
 
     const handleContinue = () => {
         if (!canSelectSeats) return;
@@ -137,8 +145,11 @@ export default function SeatSelection() {
                             <h2 className="text-2xl font-extrabold text-gray-900 tracking-tight mb-2">
                                 Choose Your Seats
                             </h2>
-                            <p className="text-[11px] text-gray-400 font-bold uppercase tracking-[0.2em] mb-12">
+                            <p className="text-[11px] text-gray-400 font-bold uppercase tracking-[0.2em] mb-4">
                                 Seats are reserved when you confirm booking
+                            </p>
+                            <p className="text-xs text-amber-700 font-semibold mb-8 bg-amber-50 border border-amber-100 rounded-xl px-4 py-2">
+                                Front row seats A1–A4 are VIP (+5% on base fare)
                             </p>
                             <BusLayout
                                 selectedSeats={selectedLabels}
@@ -146,12 +157,13 @@ export default function SeatSelection() {
                                 bookedSeats={bookedSeats}
                                 tripSeats={tripSeats}
                                 disabled={!canSelectSeats}
+                                basePrice={trip.price ?? 0}
                             />
                         </Card>
                     </div>
 
                     <div className="lg:col-span-2 space-y-6">
-                        <BookingSummary trip={trip} selectedSeats={selectedLabels} />
+                        <BookingSummary trip={trip} selectedSeats={selectedSeats} seatTypeMap={seatTypeMap} />
                         <Button
                             fullWidth
                             className="h-14 rounded-2xl bg-primary hover:bg-primary/90 text-white font-bold text-base"
