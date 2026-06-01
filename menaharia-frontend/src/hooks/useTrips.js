@@ -2,20 +2,13 @@ import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { tripsApi } from '../api';
 import { filterTripsForOperator } from '../lib/operatorHelpers';
+import { normaliseTripForDisplay, prepareTripsList } from '../lib/normaliseTrip';
 
 export const tripKeys = {
     all:    ['trips'],
     list:   (params) => ['trips', 'list', params],
     detail: (id)     => ['trips', 'detail', id],
 };
-
-function unwrapList(res) {
-    const p = res?.data ?? res;
-    if (Array.isArray(p))        return p;
-    if (Array.isArray(p?.items)) return p.items;
-    if (Array.isArray(p?.data))  return p.data;
-    return [];
-}
 
 function unwrapSingle(res) {
     if (res && typeof res === 'object' && res.id && (res.routeId != null || res.busId != null)) {
@@ -31,7 +24,7 @@ function unwrapSingle(res) {
 export function useTrips(params = {}) {
     return useQuery({
         queryKey: tripKeys.list(params),
-        queryFn: async () => unwrapList(await tripsApi.listTrips(params)),
+        queryFn: async () => prepareTripsList(await tripsApi.listTrips(params)),
         // Only require origin+destination for the public search flow.
         // Pass enabled:true explicitly to bypass this guard for operator views.
         enabled: params.enabled !== undefined ? params.enabled : !!(params.origin && params.destination),
@@ -47,10 +40,7 @@ export function useAllTrips(params = {}) {
     const { enabled = true, ...queryParams } = params;
     return useQuery({
         queryKey: tripKeys.list({ _all: true, ...queryParams }),
-        queryFn: async () => {
-            const list = unwrapList(await tripsApi.listTrips(queryParams));
-            return Array.isArray(list) ? list : [];
-        },
+        queryFn: async () => prepareTripsList(await tripsApi.listTrips(queryParams)),
         enabled,
         placeholderData: (prev) => (Array.isArray(prev) ? prev : []),
         staleTime: 30 * 1000, // 30s — operator needs fresh data after creating a trip
@@ -82,7 +72,10 @@ export function useTrip(tripId, options = {}) {
     const { enabled = true, staleTime = 2 * 60 * 1000, refetchOnMount } = options;
     return useQuery({
         queryKey: tripKeys.detail(tripId),
-        queryFn: async () => unwrapSingle(await tripsApi.getTripById(tripId)),
+        queryFn: async () => {
+            const raw = unwrapSingle(await tripsApi.getTripById(tripId));
+            return raw ? normaliseTripForDisplay(raw) : null;
+        },
         enabled: !!tripId && enabled,
         staleTime,
         refetchOnMount,

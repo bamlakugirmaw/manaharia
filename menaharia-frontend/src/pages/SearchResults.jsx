@@ -10,18 +10,22 @@ import {
 import { useAllTrips } from '../hooks/useTrips';
 import { useRoutes } from '../hooks/useRoutes';
 import { LOCATIONS } from '../data/mock-db';
-import { tripOrigin, tripDest, tripOperatorName } from '../lib/tripHelpers';
+import { tripOrigin, tripDest } from '../lib/tripHelpers';
+import { tripOperatorId, TRIP_DISPLAY_TZ } from '../lib/normaliseTrip';
 import heroBg from '../assets/hero-bus-bg.png';
 
-const tripOperatorId = (t) =>
-    t?.bus?.operator?.id ?? t?.bus?.operatorId ?? t?.operator?.id ?? t?.operatorId ?? '';
-
-// Extract hour from ISO datetime or "HH:MM"
-const isoHour = (s) => {
-    if (!s) return -1;
-    const part = s.includes('T') ? s.split('T')[1] : s;
-    return parseInt(part.split(':')[0], 10);
-};
+function departureHourLocal(trip) {
+    if (!trip?.departureTime) return -1;
+    const d = new Date(trip.departureTime);
+    if (Number.isNaN(d.getTime())) return -1;
+    const parts = new Intl.DateTimeFormat('en-GB', {
+        hour: 'numeric',
+        hour12: false,
+        timeZone: TRIP_DISPLAY_TZ,
+    }).formatToParts(d);
+    const hour = parts.find((p) => p.type === 'hour')?.value;
+    return hour != null ? parseInt(hour, 10) : -1;
+}
 
 export default function SearchResults() {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -48,13 +52,13 @@ export default function SearchResults() {
         setDateVal(date);
     }, [from, to, date]);
 
-    // ── Fetch all scheduled trips from every operator (public GET /trips) ─────
+    // GET /v1/trips — server filters origin, destination, date, status
     const { data: rawTrips = [], isLoading, isError, refetch } = useAllTrips({
+        limit: 100,
+        status: 'SCHEDULED',
         ...(from ? { origin: from } : {}),
         ...(to ? { destination: to } : {}),
         ...(date ? { date } : {}),
-        limit: 100,
-        status: 'SCHEDULED',
     });
 
     const { data: apiRoutes = [] } = useRoutes({ limit: 100 });
@@ -76,71 +80,53 @@ export default function SearchResults() {
         return fromApi.length > 0 ? fromApi : LOCATIONS;
     }, [apiRoutes, rawTrips]);
 
-    // ── Client-side filtering + sorting ──────────────────────────────────────
+    // Client-side: time band, operator checkboxes, sort (route/date already applied by API)
     const trips = useMemo(() => {
         let filtered = [...rawTrips];
 
-        // Route filter using backend field names
-        if (from) {
-            filtered = filtered.filter(t =>
-                tripOrigin(t).toLowerCase().includes(from.toLowerCase())
-            );
-        }
-        if (to) {
-            filtered = filtered.filter(t =>
-                tripDest(t).toLowerCase().includes(to.toLowerCase())
-            );
-        }
-
-        // Date filter — trip.date is a full ISO string e.g. "2026-04-30T00:00:00.000Z"
-        if (date) {
-            filtered = filtered.filter(t => {
-                if (!t.date) return true;
-                return t.date.startsWith(date);
-            });
-        }
-
-        // Time band filter
         if (selectedTime) {
-            filtered = filtered.filter(t => {
-                const h = isoHour(t.departureTime);
-                if (selectedTime === 'Before 6:00 AM')      return h >= 0 && h < 6;
-                if (selectedTime === '6:00 AM - 12:00 PM')  return h >= 6  && h < 12;
-                if (selectedTime === '12:00 PM - 6:00 PM')  return h >= 12 && h < 18;
-                if (selectedTime === 'After 6:00 PM')       return h >= 18;
+            filtered = filtered.filter((t) => {
+                const h = departureHourLocal(t);
+                if (h < 0) return true;
+                if (selectedTime === 'Before 6:00 AM') return h < 6;
+                if (selectedTime === '6:00 AM - 12:00 PM') return h >= 6 && h < 12;
+                if (selectedTime === '12:00 PM - 6:00 PM') return h >= 12 && h < 18;
+                if (selectedTime === 'After 6:00 PM') return h >= 18;
                 return true;
             });
         }
 
-        // Operator filter
         if (selectedOperators.length > 0) {
-            filtered = filtered.filter(t => selectedOperators.includes(tripOperatorId(t)));
+            filtered = filtered.filter((t) => selectedOperators.includes(tripOperatorId(t)));
         }
 
-        // Sorting
-        if (sortBy === 'earliest')   filtered.sort((a, b) => isoHour(a.departureTime) - isoHour(b.departureTime));
-        if (sortBy === 'latest')     filtered.sort((a, b) => isoHour(b.departureTime) - isoHour(a.departureTime));
-        if (sortBy === 'price-low')  filtered.sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
+        const byDeparture = (a, b) =>
+            new Date(a.departureTime).getTime() - new Date(b.departureTime).getTime();
+
+        if (sortBy === 'earliest') filtered.sort(byDeparture);
+        if (sortBy === 'latest') filtered.sort((a, b) => -byDeparture(a, b));
+        if (sortBy === 'price-low') filtered.sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
         if (sortBy === 'price-high') filtered.sort((a, b) => (b.price ?? 0) - (a.price ?? 0));
         if (sortBy === 'rating') {
             filtered.sort((a, b) =>
-                (b.bus?.operator?.rating ?? 0) - (a.bus?.operator?.rating ?? 0)
+                (b.operatorRating ?? b.bus?.operator?.rating ?? 0)
+                - (a.operatorRating ?? a.bus?.operator?.rating ?? 0),
             );
         }
 
         return filtered;
-    }, [rawTrips, from, to, date, selectedTime, selectedOperators, sortBy]);
+    }, [rawTrips, selectedTime, selectedOperators, sortBy]);
 
     // Operators present in the current filtered result set
     const operatorsInResults = useMemo(() => {
         const seen = new Map();
-        trips.forEach((t) => {
+        rawTrips.forEach((t) => {
             const id = tripOperatorId(t);
-            const name = tripOperatorName(t);
+            const name = t.operatorName ?? t.bus?.operator?.companyName ?? '';
             if (id && !seen.has(id)) seen.set(id, { id, name: name || id });
         });
         return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
-    }, [trips]);
+    }, [rawTrips]);
 
     const SORT_OPTIONS = [
         { value: 'earliest',   label: 'Departure: Earliest First', icon: Clock },

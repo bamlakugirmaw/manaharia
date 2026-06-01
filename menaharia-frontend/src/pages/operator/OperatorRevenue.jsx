@@ -3,26 +3,15 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { TrendingUp, TrendingDown, DollarSign, Calendar, PieChart, BarChart as BarChartIcon } from 'lucide-react';
 import { ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { useAuth } from '../../contexts/AuthContext';
 import { useOperatorDashboard } from '../../hooks/useOperators';
-import { useOperatorBookings } from '../../hooks/useBookings';
-import { useBuses } from '../../hooks/useBuses';
+import { useOperatorScope } from '../../hooks/useOperatorScope';
+import OperatorScopeBanner from '../../components/operator/OperatorScopeBanner';
 
 export default function OperatorRevenue() {
-    const { user } = useAuth();
-    const operatorId = user?.operatorId ?? null;
+    const { operatorId, bookings } = useOperatorScope({ limit: 500 });
 
     // GET /v1/operators/:id/dashboard
     const { data: dash, isLoading: dashLoading } = useOperatorDashboard(operatorId);
-
-    const { data: buses = [] } = useBuses(operatorId ? { operatorId, limit: 100 } : {});
-    const operatorBusIds = useMemo(() => buses.map((b) => b.id).filter(Boolean), [buses]);
-
-    const { data: bookings = [] } = useOperatorBookings(
-        operatorId,
-        { limit: 500 },
-        operatorBusIds
-    );
 
     // ── KPI values from dashboard ─────────────────────────────────────────────
     const totalRevenue   = dash?.totalRevenue   ?? dash?.payments?.revenue ?? 0;
@@ -74,6 +63,7 @@ export default function OperatorRevenue() {
 
     return (
         <div className="space-y-8">
+            <OperatorScopeBanner />
             {/* Key Metrics Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <Card className="p-6 border-none shadow-sm bg-gradient-to-br from-blue-600 to-blue-700 text-white">

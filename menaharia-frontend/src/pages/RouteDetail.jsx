@@ -4,16 +4,7 @@ import { Button } from '../components/ui/Button';
 import { MapPin, ArrowLeft, Clock, Users, Bus } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { useAllTrips } from '../hooks/useTrips';
-import { tripOrigin, tripDest, tripOperatorName, tripSeatsLeft } from '../lib/tripHelpers';
-
-const formatTime = (iso) => {
-    if (!iso) return '—';
-    try {
-        return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    } catch {
-        return iso;
-    }
-};
+import { formatTripDisplayTime } from '../lib/normaliseTrip';
 
 export default function RouteDetail() {
     const { from, to } = useParams();
@@ -30,10 +21,7 @@ export default function RouteDetail() {
         limit: 100,
     });
 
-    const routeTrips = useMemo(
-        () => rawTrips.filter((t) => tripOrigin(t) === fromCity && tripDest(t) === toCity),
-        [rawTrips, fromCity, toCity]
-    );
+    const routeTrips = useMemo(() => rawTrips, [rawTrips]);
 
     const distance = routeTrips[0]?.route?.distance ?? 0;
 
@@ -45,7 +33,7 @@ export default function RouteDetail() {
                 case 'time':
                     return String(a.departureTime).localeCompare(String(b.departureTime));
                 case 'seats':
-                    return tripSeatsLeft(b) - tripSeatsLeft(a);
+                    return (b.seatsAvailable ?? 0) - (a.seatsAvailable ?? 0);
                 default:
                     return 0;
             }
@@ -153,7 +141,7 @@ export default function RouteDetail() {
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {sortedTrips.map((trip) => {
-                                    const seatsLeft = tripSeatsLeft(trip);
+                                    const seatsLeft = trip.seatsAvailable ?? 0;
                                     return (
                                         <tr key={trip.id} className="hover:bg-gray-50 transition-colors">
                                             <td className="px-6 py-4">
@@ -162,14 +150,14 @@ export default function RouteDetail() {
                                                         <Bus className="w-5 h-5 text-primary" />
                                                     </div>
                                                     <div>
-                                                        <p className="font-semibold text-gray-900">{tripOperatorName(trip)}</p>
+                                                        <p className="font-semibold text-gray-900">{trip.operatorName ?? trip.bus?.operator?.companyName}</p>
                                                     </div>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-2">
                                                     <Clock className="w-4 h-4 text-gray-400" />
-                                                    <span className="font-semibold text-gray-900">{formatTime(trip.departureTime)}</span>
+                                                    <span className="font-semibold text-gray-900">{trip.departureDisplay ?? formatTripDisplayTime(trip.departureTime)}</span>
                                                 </div>
                                             </td>
 
@@ -206,7 +194,7 @@ export default function RouteDetail() {
                     {/* Mobile Cards */}
                     <div className="md:hidden divide-y divide-gray-100">
                         {sortedTrips.map((trip) => {
-                            const seatsLeft = tripSeatsLeft(trip);
+                            const seatsLeft = trip.seatsAvailable ?? 0;
                             return (
                                 <div key={trip.id} className="p-6">
                                     <div className="flex items-center justify-between mb-4">
@@ -215,7 +203,7 @@ export default function RouteDetail() {
                                                 <Bus className="w-5 h-5 text-primary" />
                                             </div>
                                             <div>
-                                                <p className="font-semibold text-gray-900">{tripOperatorName(trip)}</p>
+                                                <p className="font-semibold text-gray-900">{trip.operatorName ?? trip.bus?.operator?.companyName}</p>
                                             </div>
                                         </div>
 
@@ -223,7 +211,7 @@ export default function RouteDetail() {
                                     <div className="grid grid-cols-2 gap-4 mb-4">
                                         <div>
                                             <p className="text-xs text-gray-500 mb-1">Departure</p>
-                                            <p className="font-semibold text-gray-900">{formatTime(trip.departureTime)}</p>
+                                            <p className="font-semibold text-gray-900">{trip.departureDisplay ?? formatTripDisplayTime(trip.departureTime)}</p>
                                         </div>
                                         <div>
                                             <p className="text-xs text-gray-500 mb-1">Seats Left</p>

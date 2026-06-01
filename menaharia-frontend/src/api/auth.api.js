@@ -74,22 +74,23 @@ export const changePassword = (data) =>
     api.post('/auth/change-password', data).then(unwrap);
 
 /**
- * Request a password reset link (email or SMS).
- * @param {{ identifier: string }} data — email or phone (same as login)
+ * Send a password-reset OTP to the account email.
+ * @param {{ email: string }} data
  */
 export const forgotPassword = (data) =>
     api
-        .post('/auth/forgot-password', { identifier: data.identifier?.trim() }, publicAuthConfig)
+        .post('/auth/forgot-password', { email: data.email?.trim() }, publicAuthConfig)
         .then(unwrapEnvelope);
 
 /**
- * Set a new password using the token from the reset email/link.
- * @param {{ token: string, newPassword: string }} data
+ * Reset password with the OTP emailed to the user.
+ * @param {{ email: string, otp: string, newPassword: string }} data
  */
 export const resetPassword = (data) =>
     api
         .post('/auth/reset-password', {
-            token: data.token,
+            email: data.email?.trim(),
+            otp: data.otp?.trim(),
             newPassword: data.newPassword,
         }, publicAuthConfig)
         .then(unwrapEnvelope);

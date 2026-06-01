@@ -11,7 +11,6 @@ import ProfileAvatar from '../components/profile/ProfileAvatar';
 // Sidebar Items for Traveller
 const TRAVELLER_NAV = [
     { name: 'My Bookings', href: '/traveller/bookings', icon: Ticket },
-    { name: 'Upcoming Trips', href: '/traveller/upcoming', icon: CalendarIcon },
     { name: 'Payment History', href: '/traveller/payments', icon: CreditCard },
     { name: 'Complaints', href: '/traveller/complaints', icon: MessageSquare },
     { name: 'Profile Settings', href: '/traveller/profile', icon: User },

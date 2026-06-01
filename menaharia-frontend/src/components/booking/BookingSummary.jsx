@@ -85,7 +85,7 @@ export default function BookingSummary({
 
                 <div className="flex items-start gap-3 text-sm font-semibold text-slate-600">
                     <Clock className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
-                    <span>Departure: {trip.departureTime ?? '—'}</span>
+                    <span>Departure: {trip.departureDisplay ?? trip.departureTime ?? '—'}</span>
                 </div>
 
                 <p className="text-xs text-slate-500 font-semibold">

@@ -1,4 +1,15 @@
-import { api, unwrap, unwrapEnvelope, sanitizeListParams } from '../lib/api';
+import { api, unwrapEnvelope, sanitizeListParams } from '../lib/api';
+
+function unwrapBusList(response) {
+    const body = response?.data ?? response;
+    const payload = body?.success !== undefined && body?.data !== undefined
+        ? body.data
+        : body;
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.items)) return payload.items;
+    if (Array.isArray(payload?.data)) return payload.data;
+    return [];
+}
 
 /**
  * Buses API  (all endpoints require auth)
@@ -19,13 +30,13 @@ import { api, unwrap, unwrapEnvelope, sanitizeListParams } from '../lib/api';
  * }} params
  */
 export const listBuses = (params = {}) =>
-    api.get('/buses', { params: sanitizeListParams(params) }).then(unwrap);
+    api.get('/buses', { params: sanitizeListParams(params) }).then(unwrapBusList);
 
 /**
  * @param {string} id
  */
 export const getBusById = (id) =>
-    api.get(`/buses/${id}`).then(unwrap);
+    api.get(`/buses/${id}`).then(unwrapEnvelope);
 
 /**
  * @param {{
@@ -44,12 +55,12 @@ export const createBus = (data) =>
  * @param {Partial<CreateBusDto>} data
  */
 export const updateBus = (id, data) =>
-    api.patch(`/buses/${id}`, data).then(unwrap);
+    api.patch(`/buses/${id}`, data).then(unwrapEnvelope);
 
 /**
  * @param {string} id
  */
 export const removeBus = (id) =>
-    api.delete(`/buses/${id}`).then(unwrap);
+    api.delete(`/buses/${id}`).then(unwrapEnvelope);
 
 export const busesApi = { listBuses, getBusById, createBus, updateBus, removeBus };

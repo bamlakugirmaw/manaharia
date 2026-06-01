@@ -20,9 +20,11 @@ function unwrapSingle(res) {
 }
 
 export function useRoutes(params = {}) {
+    const { enabled = true, ...queryParams } = params;
     return useQuery({
-        queryKey: routeKeys.list(params),
-        queryFn: async () => unwrapList(await routesApi.listRoutes(params)),
+        queryKey: routeKeys.list(queryParams),
+        queryFn: async () => unwrapList(await routesApi.listRoutes(queryParams)),
+        enabled,
         staleTime: 30 * 60 * 1000,
     });
 }

@@ -32,6 +32,7 @@ export {
 } from './useDestinations';
 export { useCreateSeatBatch } from './useSeats';
 export { useProfileImage } from './useProfileImage';
+export { useOperatorScope } from './useOperatorScope';
 export { useConfirmDialog } from './useConfirmDialog.jsx';
 export { useDisputes, useUpdateDispute, useRemoveDispute, DISPUTE_STATUS_LABEL } from './useDisputes';
 export {
