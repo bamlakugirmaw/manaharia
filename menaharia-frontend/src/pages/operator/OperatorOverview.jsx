@@ -10,30 +10,24 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { cn } from '../../lib/utils';
 import { useOperator } from '../../hooks/useOperators';
 import { useOperatorScope } from '../../hooks/useOperatorScope';
+import { useOperatorPayments } from '../../hooks/useOperatorPayments';
 import OperatorScopeBanner from '../../components/operator/OperatorScopeBanner';
-import { tripOrigin, tripDest } from '../../lib/tripHelpers';
-
-/** Platform fee deducted from each booking payment (5%). */
-const PLATFORM_FEE_RATE = 0.05;
-
-/** Net amount the operator receives after platform fee. */
-function netAmount(gross) {
-    return gross * (1 - PLATFORM_FEE_RATE);
-}
 
 export default function OperatorOverview() {
     const navigate = useNavigate();
 
-    const {
-        operatorId,
-        bookings,
-        bookingsQuery,
-        trips,
-        tripsQuery,
-    } = useOperatorScope({ limit: 200 });
+    // operatorId from scope (lightweight call)
+    const { operatorId } = useOperatorScope({ limit: 10 });
 
-    const bookingsLoading = bookingsQuery.isLoading;
-    const tripsLoading   = tripsQuery.isLoading;
+    const {
+        rows: paymentRows,
+        totalNet,
+        totalGross,
+        activeBookings,
+        scheduledTrips,
+        revenueData,
+        isLoading,
+    } = useOperatorPayments();
 
     const { data: operatorRecord } = useOperator(operatorId);
     const operatorProfile = operatorRecord?.data ?? operatorRecord;
@@ -46,120 +40,24 @@ export default function OperatorOverview() {
     const reviewAverage = averageFromRatings(recentReviews);
     const displayOperatorRating = operatorProfile?.rating ?? reviewAverage;
 
-    // ── Compute KPIs from real data ───────────────────────────────────────────
-    const stats = useMemo(() => {
-        const confirmedBookings = (bookings ?? []).filter((b) => {
-            const bs = (b.status ?? '').toUpperCase();
-            const payment = b.payment ?? (Array.isArray(b.payments) ? b.payments[0] : null);
-            const ps = (payment?.status ?? '').toUpperCase();
-            return bs === 'CONFIRMED'
-                || ps === 'SUCCESS'
-                || ps === 'COMPLETED'
-                || ps === 'PAID';
-        });
-
-        // Total gross revenue from confirmed bookings
-        const grossRevenue = confirmedBookings.reduce((sum, b) => {
-            const amt = b.payment?.amount ?? b.totalAmount ?? b.trip?.price ?? 0;
-            return sum + Number(amt);
-        }, 0);
-
-        // Net revenue after 5% platform fee
-        const netRevenue = netAmount(grossRevenue);
-
-        // Active (CONFIRMED) booking count
-        const activeBookings = confirmedBookings.length;
-
-        // Scheduled trips — count all trips owned by this operator
-        const scheduledTrips = (trips ?? []).length;
-
-        // Unique passengers from confirmed bookings
-        const passengerSet = new Set();
-        for (const b of confirmedBookings) {
-            const travelers = b.travelers ?? b.bookingTravelers ?? [];
-            for (const t of travelers) {
-                if (t.id) passengerSet.add(t.id);
-                else if (t.phone) passengerSet.add(t.phone);
-            }
-            // At minimum count the booking itself as 1 passenger
-            if (passengerSet.size === 0 || travelers.length === 0) {
-                passengerSet.add(b.id);
-            }
-        }
-        const totalPassengers = passengerSet.size || activeBookings;
-
-        // Revenue trend: group confirmed bookings by week day label
-        const dayMap = {};
-        const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        for (const b of confirmedBookings) {
-            const d = new Date(b.createdAt || b.trip?.date || Date.now());
-            const label = dayLabels[d.getDay()];
-            const amt = b.payment?.amount ?? b.totalAmount ?? b.trip?.price ?? 0;
-            dayMap[label] = (dayMap[label] ?? 0) + netAmount(Number(amt));
-        }
-        // Only show days that have data; if none, return empty
-        const revenueData = Object.entries(dayMap).map(([name, revenue]) => ({
-            name,
-            revenue: Math.round(revenue),
-        }));
-
-        // Top routes by booking count
-        const routeMap = {};
-        for (const b of confirmedBookings) {
-            const from = b.trip ? tripOrigin(b.trip) : '';
-            const to   = b.trip ? tripDest(b.trip) : '';
-            if (!from || !to) continue;
-            const key = `${from} → ${to}`;
-            routeMap[key] = (routeMap[key] ?? 0) + 1;
-        }
-        const totalForRoutes = Object.values(routeMap).reduce((s, n) => s + n, 0) || 1;
-        const topRoutes = Object.entries(routeMap)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 3)
-            .map(([name, count]) => ({
-                name,
-                occupancy: Math.round((count / totalForRoutes) * 100),
-            }));
-
-        // Recent bookings for table (last 5)
-        const recentBookings = confirmedBookings
-            .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
-            .slice(0, 5)
-            .map((b) => {
-                const gross = b.payment?.amount ?? b.totalAmount ?? b.trip?.price ?? 0;
-                return {
-                    id:        b.id,
-                    passenger: b.travelers?.[0]?.fullName ?? b.bookingTravelers?.[0]?.fullName ?? '—',
-                    route:     b.trip
-                        ? `${tripOrigin(b.trip)} → ${tripDest(b.trip)}`
-                        : b.bookingReference ?? '—',
-                    date:      b.createdAt
-                        ? new Date(b.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                        : '—',
-                    gross:     Number(gross),
-                    net:       netAmount(Number(gross)),
-                    status:    (b.status ?? 'pending').toLowerCase(),
-                    reference: b.bookingReference ?? b.id?.slice(0, 8),
-                };
-            });
-
-        return { netRevenue, grossRevenue, activeBookings, scheduledTrips, totalPassengers, revenueData, topRoutes, recentBookings };
-    }, [bookings, trips]);
-
-    const loading = bookingsLoading || tripsLoading;
+    // Recent 5 completed payment rows for the table
+    const recentRows = useMemo(
+        () => paymentRows.filter((r) => r.status === 'completed').slice(0, 5),
+        [paymentRows],
+    );
 
     const kpis = [
         {
             title:    'Total Revenue',
-            value:    loading ? '—' : `ETB ${Math.round(stats.netRevenue).toLocaleString()}`,
-            subtitle: loading ? '' : `Gross ETB ${Math.round(stats.grossRevenue).toLocaleString()} · 5% fee deducted`,
+            value:    isLoading ? '—' : `ETB ${Math.round(totalNet).toLocaleString()}`,
+            subtitle: isLoading ? '' : `Gross ETB ${Math.round(totalGross).toLocaleString()} · 5% fee deducted`,
             icon:     CreditCard,
             color:    'text-emerald-600',
             bg:       'bg-emerald-50',
         },
         {
             title:    'Active Bookings',
-            value:    loading ? '—' : stats.activeBookings.toString(),
+            value:    isLoading ? '—' : activeBookings.toString(),
             subtitle: 'Confirmed & paid',
             icon:     Ticket,
             color:    'text-blue-600',
@@ -167,7 +65,7 @@ export default function OperatorOverview() {
         },
         {
             title:    'Scheduled Trips',
-            value:    loading ? '—' : stats.scheduledTrips.toString(),
+            value:    isLoading ? '—' : scheduledTrips.toString(),
             subtitle: 'Upcoming departures',
             icon:     Bus,
             color:    'text-orange-600',
@@ -175,7 +73,7 @@ export default function OperatorOverview() {
         },
         {
             title:    'Passengers',
-            value:    loading ? '—' : stats.totalPassengers.toString(),
+            value:    isLoading ? '—' : activeBookings.toString(),
             subtitle: 'From confirmed bookings',
             icon:     Users,
             color:    'text-purple-600',
@@ -195,9 +93,7 @@ export default function OperatorOverview() {
                             <div className="min-w-0 flex-1 pr-2">
                                 <p className="text-sm font-medium text-gray-500">{kpi.title}</p>
                                 <h3 className="text-2xl font-bold mt-1 tabular-nums">{kpi.value}</h3>
-                                {kpi.subtitle && (
-                                    <p className="text-[11px] text-gray-400 mt-1 leading-tight">{kpi.subtitle}</p>
-                                )}
+                                {kpi.subtitle && <p className="text-[11px] text-gray-400 mt-1 leading-tight">{kpi.subtitle}</p>}
                             </div>
                             <div className={cn('p-3 rounded-xl shrink-0', kpi.bg, kpi.color)}>
                                 <kpi.icon size={22} />
@@ -207,7 +103,7 @@ export default function OperatorOverview() {
                 ))}
             </div>
 
-            {/* Charts — Revenue Trend full width */}
+            {/* Revenue Trend */}
             <div className="h-[400px]">
                 <Card className="p-6 border-none shadow-sm flex flex-col h-full">
                     <div className="flex justify-between items-center mb-6">
@@ -215,23 +111,19 @@ export default function OperatorOverview() {
                             <h3 className="font-bold text-lg">Revenue Trend</h3>
                             <p className="text-sm text-gray-500">Net weekly revenue (after 5% fee)</p>
                         </div>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-primary hover:bg-primary/5"
-                            onClick={() => navigate('/operator/reports')}
-                        >
+                        <Button variant="ghost" size="sm" className="text-primary hover:bg-primary/5"
+                            onClick={() => navigate('/operator/reports')}>
                             View Report
                         </Button>
                     </div>
                     <div className="flex-1 w-full min-h-0">
-                        {stats.revenueData.length === 0 && !loading ? (
+                        {revenueData.length === 0 && !isLoading ? (
                             <p className="text-sm text-gray-400 text-center py-16">
                                 No revenue data yet. Revenue appears once bookings are confirmed.
                             </p>
                         ) : (
                             <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={stats.revenueData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                <AreaChart data={revenueData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                                     <defs>
                                         <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
                                             <stop offset="5%"  stopColor="#0EA5E9" stopOpacity={0.15} />
@@ -270,14 +162,8 @@ export default function OperatorOverview() {
                             {displayOperatorRating != null ? Number(displayOperatorRating).toFixed(1) : '—'}
                         </span>
                         <div>
-                            <StarRatingInput
-                                value={displayOperatorRating != null ? Math.round(displayOperatorRating) : 0}
-                                disabled
-                                size={16}
-                            />
-                            <p className="text-[10px] font-bold text-gray-500 mt-1 uppercase tracking-wide">
-                                Platform average
-                            </p>
+                            <StarRatingInput value={displayOperatorRating != null ? Math.round(displayOperatorRating) : 0} disabled size={16} />
+                            <p className="text-[10px] font-bold text-gray-500 mt-1 uppercase tracking-wide">Platform average</p>
                         </div>
                     </div>
                 </div>
@@ -293,9 +179,7 @@ export default function OperatorOverview() {
                             <li key={r.id} className="px-5 py-4 flex items-start justify-between gap-4 bg-white">
                                 <div className="min-w-0">
                                     <p className="font-bold text-sm text-gray-900">{r.reviewerName}</p>
-                                    {r.comment && (
-                                        <p className="text-xs text-gray-600 mt-1 line-clamp-2">{r.comment}</p>
-                                    )}
+                                    {r.comment && <p className="text-xs text-gray-600 mt-1 line-clamp-2">{r.comment}</p>}
                                 </div>
                                 <StarRatingInput value={r.rating} disabled size={14} />
                             </li>
@@ -304,16 +188,14 @@ export default function OperatorOverview() {
                 )}
             </Card>
 
-            {/* Recent Bookings */}
+            {/* Recent Confirmed Payments */}
             <Card className="p-6 border-none shadow-sm overflow-hidden">
                 <div className="flex justify-between items-center mb-6">
                     <div>
                         <h3 className="font-bold text-lg">Recent Confirmed Bookings</h3>
                         <p className="text-xs text-gray-400 mt-0.5">Net amounts shown after 5% platform fee</p>
                     </div>
-                    <Button variant="ghost" size="sm" onClick={() => navigate('/operator/bookings')}>
-                        View All
-                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => navigate('/operator/reports')}>View All</Button>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
@@ -329,24 +211,24 @@ export default function OperatorOverview() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
-                            {loading ? (
+                            {isLoading ? (
                                 <tr><td colSpan={7} className="py-8 text-center text-gray-400 text-sm">Loading…</td></tr>
-                            ) : stats.recentBookings.length === 0 ? (
+                            ) : recentRows.length === 0 ? (
                                 <tr><td colSpan={7} className="py-8 text-center text-gray-400 text-sm">No confirmed bookings yet.</td></tr>
-                            ) : stats.recentBookings.map((b) => (
-                                <tr key={b.id} className="hover:bg-gray-50/50">
-                                    <td className="py-4 pl-2 font-mono text-xs text-primary">{b.reference}</td>
-                                    <td className="py-4 font-medium">{b.passenger}</td>
-                                    <td className="py-4 text-gray-500 text-xs">{b.route}</td>
-                                    <td className="py-4 text-gray-500 text-xs">{b.date}</td>
-                                    <td className="py-4 text-gray-500 text-xs">ETB {b.gross.toLocaleString()}</td>
-                                    <td className="py-4 font-bold text-emerald-700 text-xs">
-                                        ETB {Math.round(b.net).toLocaleString()}
+                            ) : recentRows.map((r) => (
+                                <tr key={r.id} className="hover:bg-gray-50/50">
+                                    <td className="py-4 pl-2 font-mono text-xs text-primary">{r.reference}</td>
+                                    <td className="py-4 font-medium text-sm">
+                                        {r._loadingUser
+                                            ? <span className="inline-block w-20 h-3 bg-gray-200 rounded animate-pulse" />
+                                            : r.user}
                                     </td>
+                                    <td className="py-4 text-gray-500 text-xs">{r.route}</td>
+                                    <td className="py-4 text-gray-500 text-xs">{r.dateDisplay}</td>
+                                    <td className="py-4 text-gray-500 text-xs">ETB {r.gross.toLocaleString()}</td>
+                                    <td className="py-4 font-bold text-emerald-700 text-xs">ETB {Math.round(r.net).toLocaleString()}</td>
                                     <td className="py-4">
-                                        <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">
-                                            Confirmed
-                                        </span>
+                                        <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">Confirmed</span>
                                     </td>
                                 </tr>
                             ))}

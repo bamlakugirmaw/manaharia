@@ -37,6 +37,20 @@ function userEmailFromBooking(booking) {
     );
 }
 
+/** Extract operator/company name for a payment row. */
+function operatorNameFromBooking(booking) {
+    if (!booking) return null;
+    return (
+        booking.trip?.bus?.operator?.companyName
+        ?? booking.trip?.bus?.operator?.name
+        ?? booking.trip?.operator?.companyName
+        ?? booking.trip?.operator?.name
+        ?? booking.operator?.companyName
+        ?? booking.operator?.name
+        ?? null
+    );
+}
+
 function fmtDate(iso) {
     if (!iso) return '—';
     return new Date(iso).toLocaleString('en-US', {
@@ -102,11 +116,19 @@ export default function AdminPayments() {
             ?? p.booking?.bookingReference
             ?? (p.bookingId ? p.bookingId.slice(0, 8) : null);
 
+        const operator =
+            operatorNameFromBooking(booking)
+            ?? operatorNameFromBooking(p.booking)
+            ?? p.operator?.companyName
+            ?? p.operator?.name
+            ?? '—';
+
         return {
             id:              p.id,
             bookingId:       p.bookingId ?? null,
             user:            userName,
             userEmail,
+            operator,
             bookingRef,
             amount:          `ETB ${(p.amount ?? 0).toLocaleString()}`,
             amountRaw:       p.amount ?? 0,
@@ -128,7 +150,8 @@ export default function AdminPayments() {
                 || r.id.toLowerCase().includes(q)
                 || r.user.toLowerCase().includes(q)
                 || (r.userEmail ?? '').toLowerCase().includes(q)
-                || (r.bookingRef ?? '').toLowerCase().includes(q);
+                || (r.bookingRef ?? '').toLowerCase().includes(q)
+                || (r.operator ?? '').toLowerCase().includes(q);
             const matchMethod = methodFilter === 'all' || r.method === methodFilter;
             return matchSearch && matchMethod;
         });
@@ -216,6 +239,7 @@ export default function AdminPayments() {
                                 <tr>
                                     <th className="px-6 py-4 font-bold">Transaction ID</th>
                                     <th className="px-6 py-4 font-bold">User</th>
+                                    <th className="px-6 py-4 font-bold">Operator</th>
                                     <th className="px-6 py-4 font-bold">Amount</th>
                                     <th className="px-6 py-4 font-bold">Method</th>
                                     <th className="px-6 py-4 font-bold">Date</th>
@@ -259,6 +283,13 @@ export default function AdminPayments() {
                                                     )}
                                                 </div>
                                             </div>
+                                        </td>
+
+                                        {/* Operator */}
+                                        <td className="px-6 py-4">
+                                            <p className="text-sm font-semibold text-gray-900 truncate max-w-[180px]">
+                                                {row.operator}
+                                            </p>
                                         </td>
 
                                         {/* Amount */}
@@ -314,7 +345,7 @@ export default function AdminPayments() {
                                 ))}
                                 {filtered.length === 0 && (
                                     <tr>
-                                        <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                                        <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
                                             No payments found matching your criteria.
                                         </td>
                                     </tr>
@@ -340,6 +371,7 @@ export default function AdminPayments() {
                         {selectedPayment.userEmail && (
                             <ModalDataRow label="Email"        value={selectedPayment.userEmail} />
                         )}
+                        <ModalDataRow label="Operator"         value={selectedPayment.operator} />
                         {selectedPayment.bookingRef && (
                             <ModalDataRow label="Booking Ref"  value={selectedPayment.bookingRef} />
                         )}

@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
+import { useQueries } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { useBuses } from './useBuses';
 import { useOperatorTrips } from './useTrips';
 import { useBookings } from './useBookings';
+import { bookingsApi } from '../api/bookings.api';
 
 /**
  * Central operator tenancy: correct operatorId + fleet bus ids + scoped trips/bookings.
@@ -14,13 +16,14 @@ import { useBookings } from './useBookings';
  */
 export function useOperatorScope(bookingParams = {}) {
     const { user } = useAuth();
-    const operatorId = user?.role === 'operator' ? (user?.operatorId ?? null) : null;
-    const scopeReady = !!operatorId;
+    const isOperatorUser = user?.role === 'operator';
+    const operatorId = isOperatorUser ? (user?.operatorId ?? null) : null;
+    const scopeReady = isOperatorUser;
 
     const busesQuery = useBuses({
         operatorId: operatorId ?? undefined,
         limit: 100,
-        enabled: scopeReady,
+        enabled: scopeReady && !!operatorId,
     });
 
     const operatorBusIds = useMemo(
@@ -52,8 +55,48 @@ export function useOperatorScope(bookingParams = {}) {
         enabled: scopeReady && (bookingParams.enabled !== false),
     });
 
+    const shouldUseTripBookingFallback =
+        scopeReady
+        && (bookingsQuery.data ?? []).length === 0
+        && operatorTripIds.length > 0;
+
+    const tripBookingsQueries = useQueries({
+        queries: shouldUseTripBookingFallback
+            ? operatorTripIds.map((tripId) => ({
+                queryKey: ['bookings', 'trip-fallback', tripId],
+                queryFn: async () =>
+                    bookingsApi.listBookings({
+                        tripId,
+                        limit: bookingParams.limit ?? 200,
+                    }),
+                staleTime: 30 * 1000,
+                enabled: true,
+            }))
+            : [],
+    });
+
+    const tripFallbackBookings = useMemo(() => {
+        if (!shouldUseTripBookingFallback) return [];
+        const map = new Map();
+        for (const q of tripBookingsQueries) {
+            for (const b of q.data ?? []) {
+                if (b?.id) map.set(b.id, b);
+            }
+        }
+        return [...map.values()];
+    }, [shouldUseTripBookingFallback, tripBookingsQueries]);
+
+    const effectiveBookings = (bookingsQuery.data ?? []).length > 0
+        ? (bookingsQuery.data ?? [])
+        : tripFallbackBookings;
+
     const operatorBookings = useMemo(() => {
-        const all = bookingsQuery.data ?? [];
+        const all = effectiveBookings;
+        if (!isOperatorUser) return [];
+        if (!operatorId) {
+            // Fallback: if backend auth payload omitted operatorId, trust operator-scoped list endpoint.
+            return all;
+        }
 
         // The backend already returns only this operator's bookings for an operator role.
         // Trust the API response — return all bookings as-is.
@@ -74,6 +117,7 @@ export function useOperatorScope(bookingParams = {}) {
             const opId =
                 b.trip?.bus?.operator?.id
                 ?? b.trip?.bus?.operatorId
+                ?? b.trip?.operator?.operatorId
                 ?? b.trip?.operator?.id
                 ?? b.trip?.operatorId
                 ?? b.operatorId
@@ -89,32 +133,52 @@ export function useOperatorScope(bookingParams = {}) {
             // This handles list responses that don't embed nested trip/bus/operator.
             return true;
         });
-    }, [bookingsQuery.data, operatorId, operatorBusIds, operatorTripIds]);
+    }, [effectiveBookings, isOperatorUser, operatorId, operatorBusIds, operatorTripIds]);
+
+    const operatorTrips = useMemo(() => {
+        if (!isOperatorUser) return [];
+        const trips = tripsQuery.data ?? [];
+        if (trips.length > 0) return trips;
+        if (operatorId) return [];
+
+        // Fallback when operatorId is missing: infer trips from bookings payload.
+        const inferred = [];
+        const seen = new Set();
+        for (const b of operatorBookings) {
+            const t = b.trip;
+            if (!t?.id || seen.has(t.id)) continue;
+            seen.add(t.id);
+            inferred.push(t);
+        }
+        return inferred;
+    }, [isOperatorUser, operatorId, tripsQuery.data, operatorBookings]);
 
     const operatorRouteIds = useMemo(() => {
         const set = new Set();
-        for (const t of tripsQuery.data ?? []) {
+        for (const t of operatorTrips) {
             const rid = t.routeId ?? t.route?.id;
             if (rid) set.add(rid);
         }
         return set;
-    }, [tripsQuery.data]);
+    }, [operatorTrips]);
 
     return {
         user,
         operatorId,
         scopeReady,
-        scopeError: user?.role === 'operator' && !scopeReady
-            ? 'Your account is not linked to a bus operator profile. Contact support.'
-            : null,
+        scopeError: null,
         buses: busesBelongToOperator,
         busesQuery,
         operatorBusIds,
-        trips: tripsQuery.data ?? [],
+        trips: operatorTrips,
         tripsQuery,
-        operatorTripIds,
+        operatorTripIds: operatorTrips.map((t) => t.id).filter(Boolean),
         bookings: operatorBookings,
-        bookingsQuery,
+        bookingsQuery: {
+            ...bookingsQuery,
+            isFetching: bookingsQuery.isFetching || tripBookingsQueries.some((q) => q.isFetching),
+            isLoading: bookingsQuery.isLoading || (shouldUseTripBookingFallback && tripBookingsQueries.some((q) => q.isLoading)),
+        },
         operatorRouteIds,
     };
 }
