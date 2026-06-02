@@ -32,7 +32,6 @@ import DestinationDetail from './pages/DestinationDetail';
 import UserComplaints from './pages/dashboard/UserComplaints';
 import UserBookings from './pages/dashboard/UserBookings';
 import UserProfile from './pages/dashboard/UserProfile';
-import UserPayments from './pages/dashboard/UserPayments';
 import OperatorRevenue from './pages/operator/OperatorRevenue';
 import OperatorPayouts from './pages/operator/OperatorPayouts';
 
@@ -49,7 +48,6 @@ import AdminOperatorManagement from './pages/admin/AdminOperatorManagement';
 import AdminLogs from './pages/admin/AdminLogs';
 import AdminSettings from './pages/admin/AdminSettings';
 import AdminTrips from './pages/admin/AdminTrips';
-import AdminBookings from './pages/admin/AdminBookings';
 import AdminPayments from './pages/admin/AdminPayments';
 
 function App() {
@@ -96,7 +94,6 @@ function App() {
           <Route path="/traveller/bookings" element={<ProtectedRoute allowedRoles={['traveller']}><DashboardLayout><UserBookings /></DashboardLayout></ProtectedRoute>} />
           <Route path="/traveller/complaints" element={<ProtectedRoute allowedRoles={['traveller']}><DashboardLayout><UserComplaints /></DashboardLayout></ProtectedRoute>} />
           <Route path="/traveller/profile" element={<ProtectedRoute allowedRoles={['traveller']}><DashboardLayout><UserProfile /></DashboardLayout></ProtectedRoute>} />
-          <Route path="/traveller/payments" element={<ProtectedRoute allowedRoles={['traveller']}><DashboardLayout><UserPayments /></DashboardLayout></ProtectedRoute>} />
 
 
           {/* Operator Dashboard Routes */}
@@ -117,7 +114,6 @@ function App() {
           <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminUserManagement /></DashboardLayout></ProtectedRoute>} />
           <Route path="/admin/operators" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminOperatorManagement /></DashboardLayout></ProtectedRoute>} />
           <Route path="/admin/payments" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminPayments /></DashboardLayout></ProtectedRoute>} />
-          <Route path="/admin/bookings" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminBookings /></DashboardLayout></ProtectedRoute>} />
           <Route path="/admin/trips" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminTrips /></DashboardLayout></ProtectedRoute>} />
           <Route path="/admin/logs" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><AdminLogs /></DashboardLayout></ProtectedRoute>} />
           <Route path="/admin/profile" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout><UserProfile /></DashboardLayout></ProtectedRoute>} />

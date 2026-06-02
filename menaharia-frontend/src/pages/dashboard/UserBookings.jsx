@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -7,6 +7,7 @@ import {
     X, MessageSquare, Send, Bus, Calendar, Ticket,
     User, CreditCard, Phone, Hash, ArrowRight, AlertCircle,
     CheckCircle, Clock, ChevronLeft, MapPin, PlusCircle, Star,
+    Loader2, ExternalLink,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBookings, useCancelBooking } from '../../hooks/useBookings';
@@ -23,6 +24,8 @@ import { canRateBooking } from '../../lib/ratingHelpers';
 import { useMyRatingsByBooking } from '../../hooks/useOperatorRatings';
 import BookingOperatorRating from '../../components/ratings/BookingOperatorRating';
 import { cn } from '../../lib/utils';
+import { useTicketsByBooking } from '../../hooks/useTickets';
+import { ticketsApi } from '../../api/tickets.api';
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -63,6 +66,37 @@ function InfoTile({ icon: Icon, label, value, accent, hideIfEmpty }) {
     );
 }
 
+// ─── Open ticket PDF in new tab ───────────────────────────────────────────────
+
+function useOpenTicketPdf() {
+    const [loadingId, setLoadingId] = useState(null);
+
+    const open = useCallback(async (bookingId) => {
+        if (!bookingId || loadingId) return;
+        setLoadingId(bookingId);
+        try {
+            const raw = await ticketsApi.getTicketsByBooking(bookingId);
+            const list = Array.isArray(raw) ? raw
+                : Array.isArray(raw?.items) ? raw.items
+                : Array.isArray(raw?.data) ? raw.data : [];
+            const ticket = list[0];
+            if (!ticket?.id) return;
+
+            const blob = await ticketsApi.getTicketPdf(ticket.id);
+            const url = URL.createObjectURL(blob);
+            const tab = window.open(url, '_blank');
+            setTimeout(() => URL.revokeObjectURL(url), 60_000);
+            if (!tab) window.location.href = url;
+        } catch {
+            // silently fail — ticket may not be ready yet
+        } finally {
+            setLoadingId(null);
+        }
+    }, [loadingId]);
+
+    return { open, loadingId };
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function UserBookings() {
@@ -70,6 +104,7 @@ export default function UserBookings() {
     const location = useLocation();
     const { user } = useAuth();
     const query = useMemo(() => new URLSearchParams(location.search), [location.search]);
+    const { open: openTicketPdf, loadingId: ticketLoadingId } = useOpenTicketPdf();
 
     const [paymentSuccess, setPaymentSuccess] = useState(() => location.state?.paymentSuccess ?? false);
     const [successReceipt, setSuccessReceipt] = useState(() => location.state?.receipt ?? null);
@@ -319,11 +354,14 @@ export default function UserBookings() {
                             <div className="flex flex-wrap gap-3 mt-3">
                                 <Button
                                     size="sm"
-                                    className="h-9"
-                                    onClick={() => navigate(`/booking/ticket/${successBookingId}`)}
-                                    disabled={!successBookingId}
+                                    className="h-9 gap-1.5"
+                                    onClick={() => openTicketPdf(successBookingId)}
+                                    disabled={!successBookingId || ticketLoadingId === successBookingId}
                                 >
-                                    View ticket
+                                    {ticketLoadingId === successBookingId
+                                        ? <><Loader2 size={13} className="animate-spin" /> Opening…</>
+                                        : <><ExternalLink size={13} /> View ticket</>
+                                    }
                                 </Button>
                                 <Button
                                     size="sm"
@@ -660,13 +698,14 @@ export default function UserBookings() {
                                 {displayBooking.isPaid && (
                                     <Button
                                         variant="outline"
-                                        onClick={() => navigate(`/booking/ticket/${displayBooking.id}`, {
-                                            state: { bookingId: displayBooking.id, receipt: selectedReceipt },
-                                        })}
-                                        className="h-10 px-5 rounded-xl text-sm font-semibold border-primary/30 text-primary"
+                                        onClick={() => openTicketPdf(displayBooking.id)}
+                                        disabled={ticketLoadingId === displayBooking.id}
+                                        className="h-10 px-5 rounded-xl text-sm font-semibold border-primary/30 text-primary gap-1.5"
                                     >
-                                        <Ticket size={14} className="mr-1.5" />
-                                        View ticket
+                                        {ticketLoadingId === displayBooking.id
+                                            ? <><Loader2 size={14} className="animate-spin" /> Opening…</>
+                                            : <><ExternalLink size={14} /> View ticket</>
+                                        }
                                     </Button>
                                 )}
                                 {displayBooking.canPayNow && (

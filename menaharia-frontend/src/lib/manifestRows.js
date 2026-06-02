@@ -95,9 +95,8 @@ export function buildManifestRows(
             payment: paymentsByBookingId[booking.id] ?? booking.payment,
         });
 
-        // Show booking if:
-        // 1. booking.status is CONFIRMED (most reliable — set by backend after payment)
-        // 2. OR payment status indicates success (fallback when booking status lags)
+        // Show booking if booking.status is CONFIRMED, OR payment indicates success.
+        // Do NOT require the payment object to be present — the list API often omits it.
         const bookingStatus = (booking.status ?? '').toUpperCase();
         const isConfirmed = bookingStatus === 'CONFIRMED';
         const isPaymentSuccess = isBookingVisibleOnOperatorManifest(booking, payment);

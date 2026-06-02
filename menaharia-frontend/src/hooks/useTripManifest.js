@@ -9,95 +9,84 @@ import { travelerKeys } from './useTravelers';
 import { bookingKeys } from './useBookings';
 import { unwrapTravelersList, buildTripSeatLabelMap } from '../lib/bookingEnrichment';
 import { buildManifestRows, countBookedSeatsFromRows } from '../lib/manifestRows';
-import { bookingOperatorId } from '../lib/operatorHelpers';
 
 function unwrapBookingList(res) {
-    const p = res?.data ?? res;
-    if (Array.isArray(p)) return p;
-    if (Array.isArray(p?.items)) return p.items;
-    if (Array.isArray(p?.data)) return p.data;
+    // Backend envelope: { success, data: { items: [...], meta: {} } } OR { success, data: [...] }
+    const body = res?.data ?? res;
+    // Already unwrapped by listBookings → unwrapEnvelope, so body may be { items, meta } or []
+    if (Array.isArray(body)) return body;
+    if (Array.isArray(body?.items)) return body.items;
+    if (Array.isArray(body?.data)) return body.data;
     return [];
 }
 
 /**
- * Passenger manifest for one trip: fetches confirmed bookings directly by tripId,
- * then loads travelers, payments, and tickets for each booking.
+ * Passenger manifest for one trip.
+ *
+ * Strategy (most-reliable-first):
+ * 1. Client-filter the pre-fetched operator bookings by tripId (fastest, always works)
+ * 2. Also fetch GET /v1/bookings?tripId=... in case the backend supports it (extra coverage)
+ * 3. Merge both sources, then load travelers/payments/tickets per booking
+ * 4. Show any booking that is CONFIRMED or has a successful payment
  */
 export function useTripManifest({
     tripId,
     operatorId,
     operatorBusIds = [],
-    bookings = [],        // fallback pre-fetched bookings (used when tripId query not supported)
+    bookings = [],       // pre-fetched operator bookings from useOperatorScope — primary source
     tripSeats = [],
     enabled = true,
 }) {
-    const busIdSet = useMemo(
-        () => new Set(operatorBusIds.filter(Boolean)),
-        [operatorBusIds],
-    );
-
     const active = enabled && !!tripId && !!operatorId;
 
-    // Fetch confirmed bookings directly for this trip — most reliable source
-    const tripBookingsQuery = useQuery({
-        queryKey: bookingKeys.list({ tripId, status: 'CONFIRMED', limit: 200 }),
-        queryFn: async () => unwrapBookingList(
-            await bookingsApi.listBookings({ tripId, status: 'CONFIRMED', limit: 200 })
-        ),
-        enabled: active,
-        staleTime: 0,
-    });
-
-    // Also fetch all bookings for this trip (PENDING + CONFIRMED) as fallback
-    const allTripBookingsQuery = useQuery({
-        queryKey: bookingKeys.list({ tripId, limit: 200 }),
-        queryFn: async () => unwrapBookingList(
-            await bookingsApi.listBookings({ tripId, limit: 200 })
-        ),
-        enabled: active,
-        staleTime: 0,
-    });
-
-    // Merge: confirmed bookings from direct query + any confirmed ones from the pre-fetched list
-    const tripBookings = useMemo(() => {
-        if (!tripId || !operatorId) return [];
-
-        // Start with directly fetched confirmed bookings
-        const directConfirmed = tripBookingsQuery.data ?? [];
-
-        // Also include any confirmed bookings from the pre-fetched list (fallback)
-        const preFiltered = (bookings ?? []).filter((b) => {
-            const tripMatch = (b.tripId ?? b.trip?.id) === tripId;
-            if (!tripMatch) return false;
-            const opId = bookingOperatorId(b);
-            if (opId) return opId === operatorId;
-            const busId = b.trip?.busId ?? b.trip?.bus?.id;
-            return Boolean(busId && busIdSet.has(busId));
+    // ── 1. Client-side filter of pre-fetched bookings ─────────────────────────
+    // This is the primary source — bookings already loaded by useOperatorScope.
+    // Filter to only those matching the selected trip.
+    const preFilteredBookings = useMemo(() => {
+        if (!tripId) return [];
+        return (bookings ?? []).filter((b) => {
+            const tid = b.tripId ?? b.trip?.id;
+            return tid === tripId;
         });
+    }, [bookings, tripId]);
 
-        // Merge by id, preferring directly fetched data
+    // ── 2. Direct server fetch by tripId (supplementary) ─────────────────────
+    // Catches bookings that aren't in the pre-fetched list (e.g. just created).
+    const directQuery = useQuery({
+        queryKey: bookingKeys.list({ tripId, limit: 100 }),
+        queryFn: async () => {
+            const res = await bookingsApi.listBookings({ tripId, limit: 100 });
+            return unwrapBookingList(res);
+        },
+        enabled: active,
+        staleTime: 0,
+    });
+
+    // ── 3. Merge both sources, deduplicate by booking id ─────────────────────
+    const tripBookings = useMemo(() => {
         const merged = new Map();
-        for (const b of preFiltered) merged.set(b.id, b);
-        for (const b of directConfirmed) merged.set(b.id, b);
-
-        // Also include all bookings from the all-trip query (for payment status check)
-        for (const b of (allTripBookingsQuery.data ?? [])) {
-            if (!merged.has(b.id)) merged.set(b.id, b);
+        // Pre-fetched first (may have richer nested data)
+        for (const b of preFilteredBookings) {
+            if (b.id) merged.set(b.id, b);
         }
-
+        // Direct fetch overrides/adds (fresher status)
+        for (const b of (directQuery.data ?? [])) {
+            if (b.id) merged.set(b.id, b);
+        }
         return [...merged.values()];
-    }, [bookings, tripId, operatorId, busIdSet, tripBookingsQuery.data, allTripBookingsQuery.data]);
+    }, [preFilteredBookings, directQuery.data]);
 
     const bookingIds = useMemo(
         () => tripBookings.map((b) => b.id).filter(Boolean),
         [tripBookings],
     );
 
-    const seatLabelMap = useMemo(() => {
-        const trip = { tripSeats };
-        return buildTripSeatLabelMap(trip);
-    }, [tripSeats]);
+    const seatLabelMap = useMemo(
+        () => buildTripSeatLabelMap({ tripSeats }),
+        [tripSeats],
+    );
 
+    // ── 4. Load travelers per booking ─────────────────────────────────────────
     const travelersQueries = useQueries({
         queries: bookingIds.map((bookingId) => ({
             queryKey: travelerKeys.byBooking(bookingId),
@@ -106,15 +95,17 @@ export function useTripManifest({
                 return unwrapTravelersList(res);
             },
             enabled: active,
-            staleTime: 30 * 1000,
+            staleTime: 30_000,
         })),
     });
 
+    // ── 5. Load payments (global list, matched by bookingId) ──────────────────
     const { data: payments = [], isLoading: paymentsLoading } = usePayments({
         limit: 300,
         enabled: active && bookingIds.length > 0,
     });
 
+    // ── 6. Load tickets per booking ───────────────────────────────────────────
     const ticketsQueries = useQueries({
         queries: bookingIds.map((bookingId) => ({
             queryKey: ticketKeys.byBooking(bookingId),
@@ -127,17 +118,23 @@ export function useTripManifest({
                 return [];
             },
             enabled: active,
-            staleTime: 30 * 1000,
+            staleTime: 30_000,
         })),
     });
 
+    // ── Build lookup maps ─────────────────────────────────────────────────────
     const travelersByBookingId = useMemo(() => {
         const map = {};
-        bookingIds.forEach((id, index) => {
-            map[id] = travelersQueries[index]?.data ?? [];
+        bookingIds.forEach((id, i) => {
+            // Also fall back to travelers already embedded in the booking object
+            const fetched = travelersQueries[i]?.data ?? [];
+            const embedded = tripBookings.find((b) => b.id === id)?.travelers
+                ?? tripBookings.find((b) => b.id === id)?.bookingTravelers
+                ?? [];
+            map[id] = fetched.length > 0 ? fetched : embedded;
         });
         return map;
-    }, [bookingIds, travelersQueries]);
+    }, [bookingIds, travelersQueries, tripBookings]);
 
     const paymentsByBookingId = useMemo(() => {
         const map = {};
@@ -146,17 +143,22 @@ export function useTripManifest({
             const bid = p.bookingId ?? p.booking?.id;
             if (bid && idSet.has(bid)) map[bid] = p;
         }
+        // Also use payments already embedded in bookings
+        for (const b of tripBookings) {
+            if (!map[b.id] && b.payment) map[b.id] = b.payment;
+        }
         return map;
-    }, [payments, bookingIds]);
+    }, [payments, bookingIds, tripBookings]);
 
     const ticketsByBookingId = useMemo(() => {
         const map = {};
-        bookingIds.forEach((id, index) => {
-            map[id] = ticketsQueries[index]?.data ?? [];
+        bookingIds.forEach((id, i) => {
+            map[id] = ticketsQueries[i]?.data ?? [];
         });
         return map;
     }, [bookingIds, ticketsQueries]);
 
+    // ── Build manifest rows ───────────────────────────────────────────────────
     const rows = useMemo(
         () => buildManifestRows(
             tripBookings,
@@ -170,22 +172,16 @@ export function useTripManifest({
 
     const bookedSeatCount = useMemo(() => countBookedSeatsFromRows(rows), [rows]);
 
-    const travelersLoading = travelersQueries.some((q) => q.isLoading || q.isFetching);
-    const ticketsLoading = ticketsQueries.some((q) => q.isLoading || q.isFetching);
-    const isLoading = tripBookingsQuery.isLoading || allTripBookingsQuery.isLoading
-        || travelersLoading || paymentsLoading || ticketsLoading;
+    const isLoading =
+        directQuery.isLoading
+        || travelersQueries.some((q) => q.isLoading)
+        || paymentsLoading
+        || ticketsQueries.some((q) => q.isLoading);
 
     const refetch = () => {
-        tripBookingsQuery.refetch();
-        allTripBookingsQuery.refetch();
-        travelersQueries.forEach((q) => q.refetch());
+        directQuery.refetch();
+        travelersQueries.forEach((q) => q.refetch?.());
     };
 
-    return {
-        rows,
-        tripBookings,
-        bookedSeatCount,
-        isLoading,
-        refetch,
-    };
+    return { rows, tripBookings, bookedSeatCount, isLoading, refetch };
 }

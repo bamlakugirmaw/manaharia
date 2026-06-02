@@ -1,294 +1,441 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
-import { Download, Search, Calendar, CreditCard, ChevronDown, X, Receipt } from 'lucide-react';
+import {
+    Search, Calendar, CreditCard, ChevronDown,
+    X, Receipt, TrendingUp, Users, DollarSign,
+} from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { usePayments } from '../../hooks/usePayments';
 import { useOperatorScope } from '../../hooks/useOperatorScope';
+import { useBookings } from '../../hooks/useBookings';
+import { usePayments } from '../../hooks/usePayments';
 import OperatorScopeBanner from '../../components/operator/OperatorScopeBanner';
+import { tripOrigin, tripDest } from '../../lib/tripHelpers';
 
-// ─── Map backend payment to display shape ─────────────────────────────────────
-function mapPayment(p) {
-    const statusMap = { SUCCESS: 'Completed', PENDING: 'Pending', FAILED: 'Failed' };
-    const bankMap   = { TELEBIRR: 'Telebirr', CBE: 'CBE', CHAPA: 'Chapa' };
+const PLATFORM_FEE = 0.05;
+const PAGE_SIZE = 10;
+
+const METHOD_LABEL = {
+    CHAPA: 'Chapa',
+    TELEBIRR: 'Telebirr',
+    SANTIM: 'Santim',
+    CBE: 'CBE Birr',
+    MANUAL: 'Manual / Cash',
+};
+
+const STATUS_CLASS = {
+    Completed: 'bg-green-100 text-green-700',
+    Pending:   'bg-orange-100 text-orange-700',
+    Failed:    'bg-red-100 text-red-700',
+};
+
+function fmtDate(iso) {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleDateString('en-US', {
+        month: 'short', day: '2-digit', year: 'numeric',
+    });
+}
+
+function fmtETB(n) {
+    return `ETB ${Math.round(n).toLocaleString()}`;
+}
+
+/** Build a display row from a confirmed booking + its payment. */
+function rowFromBooking(b) {
+    const payment = b.payment ?? (Array.isArray(b.payments) ? b.payments[0] : null) ?? {};
+    const gross   = Number(payment.amount ?? b.totalAmount ?? b.trip?.price ?? 0);
+    const net     = gross * (1 - PLATFORM_FEE);
+
+    const statusRaw = (payment.status ?? 'SUCCESS').toUpperCase();
+    const statusLabel = statusRaw === 'SUCCESS' || statusRaw === 'COMPLETED'
+        ? 'Completed'
+        : statusRaw === 'FAILED'
+            ? 'Failed'
+            : 'Pending';
+
+    const from = b.trip ? tripOrigin(b.trip) : '';
+    const to   = b.trip ? tripDest(b.trip)   : '';
+    const route = from && to ? `${from} → ${to}` : '—';
+
+    const passenger =
+        b.travelers?.[0]?.fullName
+        ?? b.bookingTravelers?.[0]?.fullName
+        ?? '—';
+
     return {
-        id:      p.id,
-        date:    p.createdAt
-            ? new Date(p.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-            : '—',
-        rawDate: p.createdAt ?? '',
-        amount:  p.amount ?? 0,
-        status:  statusMap[p.status] ?? p.status ?? 'Pending',
-        method:  p.method ?? '—',
-        bank:    bankMap[p.method] ?? p.method ?? '—',
-        account: '—',
+        id:          b.id,
+        paymentId:   payment.id ?? b.id,
+        reference:   b.bookingReference ?? b.id?.slice(0, 12),
+        date:        payment.paidAt ?? payment.updatedAt ?? b.updatedAt ?? b.createdAt ?? '',
+        dateDisplay: fmtDate(payment.paidAt ?? payment.updatedAt ?? b.updatedAt ?? b.createdAt),
+        gross,
+        net,
+        method:      METHOD_LABEL[payment.method] ?? payment.method ?? 'Chapa',
+        methodRaw:   payment.method ?? 'CHAPA',
+        status:      statusLabel,
+        route,
+        passenger,
+        transactionCode: payment.transactionCode ?? payment.gatewayReference ?? '—',
+        trip:        b.trip ?? null,
     };
 }
 
 export default function OperatorPayouts() {
-    const { bookings, scopeReady, bookingsQuery } = useOperatorScope({ limit: 500 });
-    const operatorBookingIds = useMemo(
-        () => new Set(bookings.map((b) => b.id).filter(Boolean)),
-        [bookings],
-    );
+    const { bookings, bookingsQuery, scopeReady, operatorId, operatorBusIds, operatorTripIds } = useOperatorScope({ limit: 200 });
 
-    const [searchTerm,      setSearchTerm]      = useState('');
-    const [startDate,       setStartDate]       = useState('');
-    const [endDate,         setEndDate]         = useState('');
-    const [showDatePicker,  setShowDatePicker]  = useState(false);
-    const [selectedStart,   setSelectedStart]   = useState({ month: 'may', day: 12 });
-    const [selectedEnd,     setSelectedEnd]     = useState({ month: 'june', day: 20 });
-    const [selectedPayout,  setSelectedPayout]  = useState(null);
-
-    const { data: rawPayments = [], isLoading: paymentsLoading } = usePayments({
-        limit: 200,
+    // Also fetch confirmed bookings directly (in case scope filter is too aggressive)
+    const { data: confirmedBookingsDirect = [], isLoading: confirmedLoading } = useBookings({
+        status: 'CONFIRMED',
+        limit: 100,
         enabled: scopeReady,
     });
-    const isLoading = paymentsLoading || bookingsQuery.isLoading;
-    const payments = useMemo(
-        () => rawPayments
-            .filter((p) => p.bookingId && operatorBookingIds.has(p.bookingId))
-            .map(mapPayment),
-        [rawPayments, operatorBookingIds],
-    );
 
-    // ── Filter logic ──────────────────────────────────────────────────────────
-    const filteredPayouts = useMemo(() => {
-        return payments.filter(p => {
-            const matchesSearch = p.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                p.amount.toString().includes(searchTerm);
-            const payoutDate = new Date(p.rawDate);
-            const start = startDate ? new Date(startDate) : null;
-            const end   = endDate   ? new Date(endDate)   : null;
-            let matchesDate = true;
-            if (start) matchesDate = matchesDate && payoutDate >= start;
-            if (end) {
-                const endOfDay = new Date(end);
-                endOfDay.setHours(23, 59, 59, 999);
-                matchesDate = matchesDate && payoutDate <= endOfDay;
+    // Also fetch successful payments directly so we can cross-reference
+    const { data: successPayments = [], isLoading: paymentsLoading } = usePayments({
+        status: 'SUCCESS',
+        limit: 100,
+        enabled: scopeReady,
+    });
+
+    const isLoading = bookingsQuery.isLoading || confirmedLoading;
+
+    // Build a merged deduplicated set of confirmed/paid bookings
+    const allPaidBookings = useMemo(() => {
+        const map = new Map();
+
+        // Add from useOperatorScope (already operator-scoped)
+        for (const b of (bookings ?? [])) {
+            const bs = (b.status ?? '').toUpperCase();
+            const payment = b.payment ?? (Array.isArray(b.payments) ? b.payments[0] : null);
+            const ps = (payment?.status ?? '').toUpperCase();
+            const isPaid = bs === 'CONFIRMED' || ps === 'SUCCESS' || ps === 'COMPLETED' || ps === 'PAID';
+            if (isPaid && b.id) map.set(b.id, b);
+        }
+
+        // Add from direct confirmed fetch
+        for (const b of confirmedBookingsDirect) {
+            if (b.id && !map.has(b.id)) map.set(b.id, b);
+        }
+
+        // Add bookings referenced by successful payments
+        for (const p of successPayments) {
+            const bid = p.bookingId ?? p.booking?.id;
+            if (bid && !map.has(bid)) {
+                // Create a minimal booking record from the payment
+                map.set(bid, {
+                    id: bid,
+                    status: 'CONFIRMED',
+                    payment: p,
+                    bookingReference: p.bookingReference ?? null,
+                    totalAmount: p.amount ?? 0,
+                    createdAt: p.createdAt,
+                    updatedAt: p.updatedAt,
+                });
             }
-            return matchesSearch && matchesDate;
+        }
+
+        return [...map.values()];
+    }, [bookings, confirmedBookingsDirect, successPayments]);
+
+    const [searchTerm,     setSearchTerm]     = useState('');
+    const [startDate,      setStartDate]      = useState('');
+    const [endDate,        setEndDate]        = useState('');
+    const [showDatePicker, setShowDatePicker] = useState(false);
+    const [selectedPayout, setSelectedPayout] = useState(null);
+    const [page,           setPage]           = useState(1);
+
+    // Build rows from all paid bookings
+    const rows = useMemo(() => {
+        return allPaidBookings
+            .map(rowFromBooking)
+            .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+    }, [allPaidBookings]);
+
+    // Summary stats
+    const totalGross = useMemo(() => rows.reduce((s, r) => s + r.gross, 0), [rows]);
+    const totalNet   = useMemo(() => rows.reduce((s, r) => s + r.net,   0), [rows]);
+    const totalFee   = totalGross - totalNet;
+
+    // Filter
+    const filtered = useMemo(() => {
+        const term = searchTerm.toLowerCase().trim();
+        return rows.filter((r) => {
+            const matchSearch = !term
+                || r.reference?.toLowerCase().includes(term)
+                || r.passenger?.toLowerCase().includes(term)
+                || r.route?.toLowerCase().includes(term)
+                || r.gross.toString().includes(term)
+                || r.method?.toLowerCase().includes(term);
+            const d = r.date ? new Date(r.date) : null;
+            const matchStart = !startDate || (d && d >= new Date(startDate));
+            const matchEnd   = !endDate   || (d && d <= new Date(endDate + 'T23:59:59'));
+            return matchSearch && matchStart && matchEnd;
         });
-    }, [payments, searchTerm, startDate, endDate]);
+    }, [rows, searchTerm, startDate, endDate]);
 
-    // ── Calendar helpers ──────────────────────────────────────────────────────
-    const handleDayClick = (month, day) => {
-        if (!selectedStart || (selectedStart && selectedEnd)) {
-            setSelectedStart({ month, day }); setSelectedEnd(null);
-        } else {
-            const isAfter = (month === 'june' && selectedStart.month === 'may') ||
-                (month === selectedStart.month && day >= selectedStart.day);
-            if (isAfter) setSelectedEnd({ month, day });
-            else { setSelectedStart({ month, day }); setSelectedEnd(null); }
-        }
-    };
-    const isDaySelected = (month, day) =>
-        (selectedStart?.month === month && selectedStart?.day === day) ||
-        (selectedEnd?.month === month && selectedEnd?.day === day);
-    const isDayHighlighted = (month, day) => {
-        if (!selectedStart || !selectedEnd) return false;
-        if (selectedStart.month === selectedEnd.month)
-            return month === selectedStart.month && day > selectedStart.day && day < selectedEnd.day;
-        if (month === 'may') return day > selectedStart.day;
-        if (month === 'june') return day < selectedEnd.day;
-        return false;
-    };
-    const formatDateDisplay = (d) => {
-        if (!d) return 'Select date';
-        return `${d.month === 'may' ? 'May' : 'June'} ${d.day}, 2025`;
-    };
-    const handleApply = () => {
-        if (selectedStart && selectedEnd) {
-            setStartDate(`2025-${selectedStart.month === 'may' ? '05' : '06'}-${String(selectedStart.day).padStart(2,'0')}`);
-            setEndDate(`2025-${selectedEnd.month === 'may' ? '05' : '06'}-${String(selectedEnd.day).padStart(2,'0')}`);
-        }
-        setShowDatePicker(false);
-    };
-
-    const statusClass = (s) =>
-        s === 'Completed' ? 'bg-green-100 text-green-700' :
-        s === 'Processing' ? 'bg-blue-100 text-blue-700' :
-        s === 'Failed' ? 'bg-red-100 text-red-700' :
-        'bg-orange-100 text-orange-700';
+    const totalPages  = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    const currentPage = Math.min(page, totalPages);
+    const pageRows    = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
     return (
         <div className="space-y-6">
             <OperatorScopeBanner />
-            <Card className="p-6 border-none shadow-sm space-y-6">
-                {/* Filters */}
-                <div className="flex flex-col space-y-4">
-                    <div className="flex flex-col md:flex-row gap-4 justify-between">
-                        <div className="relative w-full md:w-96">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                            <input type="text" placeholder="Search by ID or amount..."
-                                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
-                                value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-                        </div>
-                        <div className="flex gap-2 relative">
-                            <Button variant="outline"
-                                className={cn("flex items-center gap-2 border transition-all text-sm font-semibold rounded-lg px-4 py-2",
-                                    showDatePicker ? "border-primary text-primary bg-primary/5" : "border-gray-200 text-gray-600 hover:bg-gray-50")}
-                                onClick={() => setShowDatePicker(!showDatePicker)}>
-                                <Calendar size={16} />
-                                {startDate && endDate
-                                    ? `${new Date(startDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} - ${new Date(endDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}`
-                                    : 'Date Range'}
-                                <ChevronDown size={14} className={cn("transition-transform", showDatePicker && "rotate-180")} />
+
+            {/* Summary strip */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Card className="p-5 border-none shadow-sm flex items-center gap-4">
+                    <div className="p-3 rounded-xl bg-emerald-50 text-emerald-600"><DollarSign size={20} /></div>
+                    <div>
+                        <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide">Net Earnings</p>
+                        <p className="text-xl font-black text-gray-900 tabular-nums">{fmtETB(totalNet)}</p>
+                        <p className="text-[11px] text-gray-400 mt-0.5">After 5% platform fee</p>
+                    </div>
+                </Card>
+                <Card className="p-5 border-none shadow-sm flex items-center gap-4">
+                    <div className="p-3 rounded-xl bg-blue-50 text-blue-600"><TrendingUp size={20} /></div>
+                    <div>
+                        <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide">Gross Collected</p>
+                        <p className="text-xl font-black text-gray-900 tabular-nums">{fmtETB(totalGross)}</p>
+                        <p className="text-[11px] text-gray-400 mt-0.5">Platform fee: {fmtETB(totalFee)}</p>
+                    </div>
+                </Card>
+                <Card className="p-5 border-none shadow-sm flex items-center gap-4">
+                    <div className="p-3 rounded-xl bg-purple-50 text-purple-600"><Users size={20} /></div>
+                    <div>
+                        <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide">Transactions</p>
+                        <p className="text-xl font-black text-gray-900 tabular-nums">{rows.length}</p>
+                        <p className="text-[11px] text-gray-400 mt-0.5">Confirmed payments</p>
+                    </div>
+                </Card>
+            </div>
+
+            <Card className="p-6 border-none shadow-sm space-y-5">
+                {/* Filters row */}
+                <div className="flex flex-col md:flex-row gap-3 justify-between">
+                    <div className="relative w-full md:w-96">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                        <input
+                            type="text"
+                            placeholder="Search by passenger, route, reference or amount…"
+                            className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                            value={searchTerm}
+                            onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
+                        />
+                    </div>
+                    <div className="flex gap-2 items-center relative">
+                        <Button
+                            variant="outline"
+                            className={cn(
+                                'flex items-center gap-2 text-sm font-semibold rounded-xl px-4 py-2.5 h-auto',
+                                showDatePicker ? 'border-primary text-primary bg-primary/5' : 'border-gray-200 text-gray-600',
+                            )}
+                            onClick={() => setShowDatePicker((v) => !v)}
+                        >
+                            <Calendar size={15} />
+                            {startDate && endDate
+                                ? `${fmtDate(startDate)} – ${fmtDate(endDate)}`
+                                : 'Date Range'}
+                            <ChevronDown size={13} className={cn('transition-transform', showDatePicker && 'rotate-180')} />
+                        </Button>
+                        {(startDate || endDate) && (
+                            <Button
+                                variant="ghost" size="sm"
+                                onClick={() => { setStartDate(''); setEndDate(''); setPage(1); }}
+                                className="text-gray-400 hover:text-gray-600 px-2"
+                            >
+                                <X size={14} />
                             </Button>
-                            {(startDate || endDate) && (
-                                <Button variant="ghost" size="sm" className="text-gray-500"
-                                    onClick={() => { setStartDate(''); setEndDate(''); setSelectedStart({month:'may',day:12}); setSelectedEnd({month:'june',day:20}); }}>
-                                    Clear
-                                </Button>
-                            )}
-                            {showDatePicker && (
-                                <div className="absolute right-0 top-full mt-2 z-50 bg-white border border-gray-100 shadow-[0_20px_50px_rgba(0,0,0,0.15)] rounded-3xl p-6 flex flex-row gap-6 text-gray-800 w-[840px] animate-in fade-in slide-in-from-top-2 duration-200">
-                                    <div className="flex-1 flex flex-col gap-4">
-                                        <div className="flex flex-row justify-between items-center px-2">
-                                            <button type="button" className="p-1 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600">&lt;</button>
-                                            <div className="flex justify-around w-full">
-                                                <span className="font-bold text-sm text-gray-900 ml-12">May 2025</span>
-                                                <span className="font-bold text-sm text-gray-900 mr-12">June 2025</span>
-                                            </div>
-                                            <button type="button" className="p-1 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600">&gt;</button>
-                                        </div>
-                                        <div className="flex flex-row gap-6">
-                                            {[{month:'may',days:31,offset:4},{month:'june',days:30,offset:0}].map(({month,days,offset}) => (
-                                                <div key={month} className="flex-1 flex flex-col gap-2">
-                                                    <div className="grid grid-cols-7 text-center text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
-                                                        {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d=><span key={d}>{d}</span>)}
-                                                    </div>
-                                                    <div className="grid grid-cols-7 gap-y-1 text-xs text-center font-semibold">
-                                                        {Array.from({length:offset},(_,i)=><span key={`e${i}`} className="h-8"/>)}
-                                                        {Array.from({length:days},(_,i)=>{
-                                                            const day=i+1;
-                                                            const isSel=isDaySelected(month,day);
-                                                            const isHi=isDayHighlighted(month,day);
-                                                            return (
-                                                                <div key={`${month}-${day}`} className={cn("h-8 flex items-center justify-center relative",isHi&&"bg-blue-50 text-blue-600")}>
-                                                                    <button type="button" onClick={()=>handleDayClick(month,day)}
-                                                                        className={cn("h-8 w-8 flex items-center justify-center rounded-full transition-all focus:outline-none",
-                                                                            isSel?"bg-blue-600 text-white font-bold":"hover:bg-gray-100 text-gray-700")}>
-                                                                        {day}
-                                                                    </button>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
+                        )}
+                        {showDatePicker && (
+                            <div className="absolute right-0 top-full mt-2 z-50 bg-white border border-gray-100 shadow-2xl rounded-2xl p-5 flex gap-4 w-72 animate-in fade-in slide-in-from-top-2 duration-150">
+                                <div className="flex-1 space-y-3">
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">From</label>
+                                        <input
+                                            type="date" value={startDate}
+                                            onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
+                                            className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                        />
                                     </div>
-                                    <div className="w-52 border-l border-gray-100 pl-4 flex flex-col gap-4 text-left">
-                                        <h4 className="font-bold text-xs text-gray-900">Selected Range</h4>
-                                        <div className="space-y-3">
-                                            {[{label:'From',val:selectedStart},{label:'To',val:selectedEnd}].map(({label,val})=>(
-                                                <div key={label} className="space-y-1">
-                                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{label}</label>
-                                                    <div className="flex items-center justify-between border border-gray-200 rounded-lg p-2 bg-gray-50 text-xs font-semibold text-gray-700">
-                                                        <span>{formatDateDisplay(val)}</span>
-                                                        <Calendar size={14} className="text-gray-400" />
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                        <Button type="button" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs py-2.5 rounded-lg shadow-sm" onClick={handleApply}>Apply</Button>
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">To</label>
+                                        <input
+                                            type="date" value={endDate}
+                                            onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
+                                            className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                        />
                                     </div>
+                                    <Button
+                                        className="w-full h-9 text-xs font-bold"
+                                        onClick={() => setShowDatePicker(false)}
+                                    >
+                                        Apply
+                                    </Button>
                                 </div>
-                            )}
-                        </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 
                 {/* Table */}
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto rounded-2xl border border-gray-100">
                     <table className="w-full text-sm text-left">
-                        <thead className="text-xs text-gray-700 uppercase bg-gray-50/50 border-b border-gray-100">
+                        <thead className="text-[11px] text-gray-500 uppercase bg-gray-50/70 border-b border-gray-100 font-bold tracking-wider">
                             <tr>
-                                <th className="px-6 py-4 font-semibold">Payout ID</th>
-                                <th className="px-6 py-4 font-semibold">Date</th>
-                                <th className="px-6 py-4 font-semibold">Amount</th>
-                                <th className="px-6 py-4 font-semibold">Method</th>
-                                <th className="px-6 py-4 font-semibold">Status</th>
-                                <th className="px-6 py-4 font-semibold text-right">Actions</th>
+                                <th className="px-5 py-3.5">Reference</th>
+                                <th className="px-5 py-3.5">Passenger</th>
+                                <th className="px-5 py-3.5">Route</th>
+                                <th className="px-5 py-3.5">Date</th>
+                                <th className="px-5 py-3.5">Gross</th>
+                                <th className="px-5 py-3.5 text-emerald-700">Net (−5%)</th>
+                                <th className="px-5 py-3.5">Method</th>
+                                <th className="px-5 py-3.5">Status</th>
+                                <th className="px-5 py-3.5 text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {isLoading ? (
-                                <tr><td colSpan={6} className="px-6 py-10 text-center text-gray-400">
-                                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto" />
-                                </td></tr>
-                            ) : filteredPayouts.length > 0 ? filteredPayouts.map(payout => (
-                                <tr key={payout.id} className="hover:bg-gray-50/50 transition-colors">
-                                    <td className="px-6 py-4 font-medium text-gray-900 font-mono text-xs">{payout.id?.slice(0,16)}…</td>
-                                    <td className="px-6 py-4 text-gray-600">{payout.date}</td>
-                                    <td className="px-6 py-4 font-bold text-gray-900">ETB {payout.amount.toLocaleString()}</td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-2 text-gray-600">
-                                            <CreditCard size={14} className="text-gray-400" />
-                                            <span>{payout.bank}</span>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <Badge className={statusClass(payout.status)}>{payout.status}</Badge>
-                                    </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <Button variant="ghost" size="sm" className="text-primary hover:bg-blue-50" onClick={() => setSelectedPayout(payout)}>Details</Button>
+                                <tr>
+                                    <td colSpan={9} className="px-6 py-12 text-center">
+                                        <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-primary mx-auto" />
+                                        <p className="text-xs text-gray-400 mt-3">Loading payment history…</p>
                                     </td>
                                 </tr>
-                            )) : (
-                                <tr><td colSpan={6} className="px-6 py-10 text-center text-gray-500">No payouts found for the selected criteria.</td></tr>
-                            )}
+                            ) : pageRows.length === 0 ? (
+                                <tr>
+                                    <td colSpan={9} className="px-6 py-12 text-center text-gray-500 text-sm">
+                                        {rows.length === 0
+                                            ? 'No confirmed payments yet. Payments appear once a booking is confirmed.'
+                                            : 'No payments match the selected filters.'}
+                                    </td>
+                                </tr>
+                            ) : pageRows.map((r) => (
+                                <tr key={r.id} className="hover:bg-gray-50/50 transition-colors">
+                                    <td className="px-5 py-4 font-mono text-xs text-primary font-bold">
+                                        {r.reference}
+                                    </td>
+                                    <td className="px-5 py-4 font-medium text-gray-900">{r.passenger}</td>
+                                    <td className="px-5 py-4 text-xs text-gray-600">{r.route}</td>
+                                    <td className="px-5 py-4 text-gray-600 text-xs">{r.dateDisplay}</td>
+                                    <td className="px-5 py-4 text-gray-500 text-xs">{fmtETB(r.gross)}</td>
+                                    <td className="px-5 py-4 font-bold text-emerald-700">{fmtETB(r.net)}</td>
+                                    <td className="px-5 py-4">
+                                        <div className="flex items-center gap-1.5 text-gray-600 text-xs">
+                                            <CreditCard size={13} className="text-gray-400 shrink-0" />
+                                            {r.method}
+                                        </div>
+                                    </td>
+                                    <td className="px-5 py-4">
+                                        <Badge className={cn('text-[11px] font-bold px-2.5 py-1', STATUS_CLASS[r.status] ?? 'bg-gray-100 text-gray-600')}>
+                                            {r.status}
+                                        </Badge>
+                                    </td>
+                                    <td className="px-5 py-4 text-right">
+                                        <Button
+                                            variant="ghost" size="sm"
+                                            className="text-primary hover:bg-primary/5 text-xs font-bold"
+                                            onClick={() => setSelectedPayout(r)}
+                                        >
+                                            Details
+                                        </Button>
+                                    </td>
+                                </tr>
+                            ))}
                         </tbody>
                     </table>
                 </div>
 
                 {/* Pagination */}
-                <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                    <span className="text-sm text-gray-500">Showing {filteredPayouts.length} of {payments.length} payouts</span>
+                <div className="flex items-center justify-between pt-2">
+                    <span className="text-xs text-gray-500">
+                        Showing {filtered.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length} payments
+                    </span>
                     <div className="flex gap-2">
-                        <Button variant="outline" size="sm" disabled>Previous</Button>
-                        <Button variant="outline" size="sm" disabled>Next</Button>
+                        <Button
+                            variant="outline" size="sm"
+                            disabled={currentPage <= 1}
+                            onClick={() => setPage((p) => p - 1)}
+                        >
+                            Previous
+                        </Button>
+                        <Button
+                            variant="outline" size="sm"
+                            disabled={currentPage >= totalPages}
+                            onClick={() => setPage((p) => p + 1)}
+                        >
+                            Next
+                        </Button>
                     </div>
                 </div>
             </Card>
 
             {/* Detail Modal */}
             {selectedPayout && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-gray-100 animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-6">
+                <div
+                    className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                    onClick={() => setSelectedPayout(null)}
+                >
+                    <div
+                        className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl animate-in fade-in zoom-in-95 duration-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-5">
                             <div className="flex items-center gap-2">
-                                <Receipt className="text-gray-400" size={20} />
-                                <h3 className="font-bold text-lg text-gray-900">Payout Details</h3>
+                                <Receipt className="text-gray-400" size={18} />
+                                <h3 className="font-bold text-base text-gray-900">Payment Details</h3>
                             </div>
-                            <button onClick={() => setSelectedPayout(null)} className="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-lg transition-colors"><X size={20} /></button>
+                            <button
+                                onClick={() => setSelectedPayout(null)}
+                                className="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-lg"
+                            >
+                                <X size={18} />
+                            </button>
                         </div>
-                        <div className="text-center py-6 bg-gray-50 rounded-2xl mb-6 flex flex-col items-center justify-center">
-                            <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">Total Payout Amount</p>
-                            <h4 className="text-3xl font-extrabold text-gray-900 mb-3">ETB {selectedPayout.amount.toLocaleString()}</h4>
-                            <Badge className={statusClass(selectedPayout.status)}>{selectedPayout.status}</Badge>
+
+                        {/* Amount block */}
+                        <div className="bg-gray-50 rounded-2xl p-5 mb-5 text-center space-y-1">
+                            <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Gross Collected</p>
+                            <p className="text-3xl font-black text-gray-900">{fmtETB(selectedPayout.gross)}</p>
+                            <div className="flex items-center justify-center gap-2 pt-1">
+                                <Badge className={cn('text-[11px] font-bold px-2.5 py-1', STATUS_CLASS[selectedPayout.status] ?? 'bg-gray-100 text-gray-600')}>
+                                    {selectedPayout.status}
+                                </Badge>
+                            </div>
                         </div>
-                        <div className="space-y-4 text-sm mb-6">
+
+                        <div className="space-y-3 text-sm mb-5">
                             {[
-                                ['Payout ID',           selectedPayout.id],
-                                ['Date Initiated',      selectedPayout.date],
-                                ['Transfer Method',     selectedPayout.method],
-                                ['Bank/Wallet Provider',selectedPayout.bank],
-                                ['Account Details',     selectedPayout.account],
-                                ['Transaction Reference',`TXN-${selectedPayout.id?.slice(-8) ?? '—'}`],
+                                ['Booking Reference', selectedPayout.reference],
+                                ['Passenger',         selectedPayout.passenger],
+                                ['Route',             selectedPayout.route],
+                                ['Payment Date',      selectedPayout.dateDisplay],
+                                ['Payment Method',    selectedPayout.method],
+                                ['Transaction Code',  selectedPayout.transactionCode],
+                                ['Gross Amount',      fmtETB(selectedPayout.gross)],
+                                ['Platform Fee (5%)', `− ${fmtETB(selectedPayout.gross * PLATFORM_FEE)}`],
+                                ['Your Net Earnings', fmtETB(selectedPayout.net)],
                             ].map(([label, val]) => (
-                                <div key={label} className="flex justify-between items-center py-1">
-                                    <span className="text-gray-400 font-medium">{label}</span>
-                                    <span className="font-mono font-bold text-gray-900 text-xs">{val}</span>
+                                <div key={label} className="flex justify-between items-center py-0.5">
+                                    <span className="text-gray-400 text-xs font-medium">{label}</span>
+                                    <span className={cn(
+                                        'font-bold text-xs',
+                                        label === 'Your Net Earnings' ? 'text-emerald-700' :
+                                        label === 'Platform Fee (5%)' ? 'text-red-500' : 'text-gray-900',
+                                    )}>
+                                        {val}
+                                    </span>
                                 </div>
                             ))}
                         </div>
+
                         <div className="flex gap-3">
-                            <Button variant="outline" className="flex-1 flex items-center justify-center gap-2 py-2.5 font-bold text-xs" onClick={() => setSelectedPayout(null)}>Close</Button>
-                            <Button className="flex-1 bg-primary hover:bg-primary/95 text-white flex items-center justify-center gap-2 py-2.5 font-bold text-xs shadow-sm">
-                                <Download size={14} /> Download Receipt
+                            <Button
+                                variant="outline"
+                                className="flex-1 text-xs font-bold"
+                                onClick={() => setSelectedPayout(null)}
+                            >
+                                Close
                             </Button>
                         </div>
                     </div>

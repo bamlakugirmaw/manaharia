@@ -1,71 +1,177 @@
 import { useState, useMemo } from 'react';
+import { useQueries } from '@tanstack/react-query';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { Search, CreditCard, Wallet, Landmark, MoreHorizontal, User, Calendar } from 'lucide-react';
+import {
+    Search, CreditCard, Wallet, Landmark, User, Calendar,
+    Eye, CheckCircle, Clock, XCircle,
+} from 'lucide-react';
 import { cn } from '../../lib/utils';
 import DetailModal, { ModalDataRow } from '../../components/admin/DetailModal';
 import { usePayments } from '../../hooks/usePayments';
+import { bookingsApi } from '../../api/bookings.api';
+import { bookingKeys } from '../../hooks/useBookings';
 
 const METHOD_LABEL = { TELEBIRR: 'Telebirr', CBE: 'CBE Birr', CHAPA: 'Chapa' };
+const STATUS_MAP   = { SUCCESS: 'completed', PENDING: 'pending', FAILED: 'failed' };
 
-function normalisePaymentRow(p) {
-    const statusMap = { SUCCESS: 'completed', PENDING: 'pending', FAILED: 'failed' };
-    return {
-        id: p.id,
-        user: p.booking?.travelers?.[0]?.fullName ?? p.user?.fullName ?? p.userId ?? '—',
-        amount: `ETB ${(p.amount ?? 0).toLocaleString()}`,
-        method: METHOD_LABEL[p.method] ?? p.method ?? '—',
-        date: p.createdAt
-            ? new Date(p.createdAt).toLocaleString('en-US', {
-                month: 'short', day: 'numeric', year: 'numeric',
-                hour: '2-digit', minute: '2-digit',
-            })
-            : '—',
-        status: statusMap[p.status] ?? (p.status ?? '').toLowerCase(),
-        _raw: p,
-    };
+/** Extract the best user name from a booking object. */
+function userNameFromBooking(booking) {
+    if (!booking) return null;
+    return (
+        booking.user?.fullName
+        ?? booking.user?.name
+        ?? booking.travelers?.[0]?.fullName
+        ?? booking.bookingTravelers?.[0]?.fullName
+        ?? booking.user?.email
+        ?? null
+    );
+}
+
+function userEmailFromBooking(booking) {
+    if (!booking) return null;
+    return (
+        booking.user?.email
+        ?? booking.travelers?.[0]?.email
+        ?? null
+    );
+}
+
+function fmtDate(iso) {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleString('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+    });
 }
 
 export default function AdminPayments() {
-    const [searchQuery, setSearchQuery] = useState('');
-    const [methodFilter, setMethodFilter] = useState('all');
+    const [searchQuery,     setSearchQuery]     = useState('');
+    const [methodFilter,    setMethodFilter]    = useState('all');
     const [selectedPayment, setSelectedPayment] = useState(null);
-    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isModalOpen,     setIsModalOpen]     = useState(false);
 
-    const { data: rawPayments = [], isLoading, isError } = usePayments({ limit: 100 });
+    // Step 1: fetch the payment list
+    const { data: rawPayments = [], isLoading: paymentsLoading, isError } =
+        usePayments({ limit: 100 });
 
     const payments = useMemo(
-        () => (Array.isArray(rawPayments) ? rawPayments : []).map(normalisePaymentRow),
-        [rawPayments]
+        () => Array.isArray(rawPayments) ? rawPayments : [],
+        [rawPayments],
     );
 
-    const filteredPayments = payments.filter((payment) => {
-        const matchesSearch =
-            payment.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            String(payment.user).toLowerCase().includes(searchQuery.toLowerCase());
-
-        const matchesMethod = methodFilter === 'all' || payment.method === methodFilter;
-
-        return matchesSearch && matchesMethod;
+    // Step 2: for every payment that has a bookingId, fetch the booking in parallel
+    const bookingQueries = useQueries({
+        queries: payments.map((p) => ({
+            queryKey: bookingKeys.detail(p.bookingId),
+            queryFn: () => bookingsApi.getBookingById(p.bookingId),
+            enabled: !!p.bookingId,
+            staleTime: 5 * 60 * 1000,
+        })),
     });
 
+    // Step 3: build a bookingId → booking map from the parallel results
+    const bookingMap = useMemo(() => {
+        const map = {};
+        payments.forEach((p, i) => {
+            if (p.bookingId) {
+                map[p.bookingId] = bookingQueries[i]?.data ?? null;
+            }
+        });
+        return map;
+    }, [payments, bookingQueries]);
+
+    // Step 4: normalise each payment row, enriching with booking user data
+    const rows = useMemo(() => payments.map((p) => {
+        const booking = bookingMap[p.bookingId] ?? null;
+
+        const userName =
+            userNameFromBooking(booking)
+            ?? p.booking?.user?.fullName
+            ?? p.user?.fullName
+            ?? p.user?.name
+            ?? '—';
+
+        const userEmail =
+            userEmailFromBooking(booking)
+            ?? p.user?.email
+            ?? null;
+
+        const bookingRef =
+            booking?.bookingReference
+            ?? p.booking?.bookingReference
+            ?? (p.bookingId ? p.bookingId.slice(0, 8) : null);
+
+        return {
+            id:              p.id,
+            bookingId:       p.bookingId ?? null,
+            user:            userName,
+            userEmail,
+            bookingRef,
+            amount:          `ETB ${(p.amount ?? 0).toLocaleString()}`,
+            amountRaw:       p.amount ?? 0,
+            method:          METHOD_LABEL[p.method] ?? p.method ?? '—',
+            date:            fmtDate(p.createdAt),
+            status:          STATUS_MAP[p.status] ?? (p.status ?? '').toLowerCase(),
+            transactionCode: p.transactionCode ?? p.gatewayReference ?? '—',
+        };
+    }), [payments, bookingMap]);
+
+    const isLoading = paymentsLoading;
+
+    // Filters
+    const filtered = useMemo(() => {
+        const q = searchQuery.toLowerCase().trim();
+        return rows.filter((r) => {
+            const matchSearch =
+                !q
+                || r.id.toLowerCase().includes(q)
+                || r.user.toLowerCase().includes(q)
+                || (r.userEmail ?? '').toLowerCase().includes(q)
+                || (r.bookingRef ?? '').toLowerCase().includes(q);
+            const matchMethod = methodFilter === 'all' || r.method === methodFilter;
+            return matchSearch && matchMethod;
+        });
+    }, [rows, searchQuery, methodFilter]);
+
+    // Summary counts
+    const completedCount = useMemo(() => rows.filter((r) => r.status === 'completed').length, [rows]);
+    const pendingCount   = useMemo(() => rows.filter((r) => r.status === 'pending').length,   [rows]);
+    const totalVolume    = useMemo(() =>
+        rows.filter((r) => r.status === 'completed').reduce((s, r) => s + r.amountRaw, 0),
+        [rows],
+    );
+
     const getMethodIcon = (method) => {
-        switch (method) {
-            case 'Telebirr': return <Wallet size={14} className="text-blue-500" />;
-            case 'CBE Birr': return <Landmark size={14} className="text-purple-500" />;
-            case 'Chapa': return <CreditCard size={14} className="text-green-500" />;
-            default: return <CreditCard size={14} className="text-gray-500" />;
-        }
+        if (method === 'Telebirr') return <Wallet   size={14} className="text-blue-500"   />;
+        if (method === 'CBE Birr') return <Landmark size={14} className="text-purple-500" />;
+        return <CreditCard size={14} className="text-green-500" />;
     };
 
-    const handleViewPayment = (payment) => {
-        setSelectedPayment(payment);
-        setIsModalOpen(true);
+    const getStatusIcon = (status) => {
+        if (status === 'completed') return <CheckCircle size={13} className="text-green-600" />;
+        if (status === 'pending')   return <Clock       size={13} className="text-amber-500" />;
+        return <XCircle size={13} className="text-red-500" />;
     };
 
     return (
         <div className="space-y-6">
 
+            {/* Summary strip */}
+            <div className="grid grid-cols-3 gap-4">
+                {[
+                    { label: 'Completed',    value: completedCount,                        color: 'text-green-600' },
+                    { label: 'Pending',      value: pendingCount,                          color: 'text-amber-600' },
+                    { label: 'Total Volume', value: `ETB ${totalVolume.toLocaleString()}`, color: 'text-primary'   },
+                ].map(({ label, value, color }) => (
+                    <div key={label} className="bg-white rounded-xl border border-gray-100 shadow-sm px-5 py-4">
+                        <p className="text-xs text-gray-400 font-medium">{label}</p>
+                        <p className={cn('text-lg font-black tabular-nums mt-0.5', color)}>{value}</p>
+                    </div>
+                ))}
+            </div>
+
+            {/* Filters */}
             <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
                 <div className="relative w-full md:w-96">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
@@ -77,7 +183,6 @@ export default function AdminPayments() {
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
                 </div>
-
                 <div className="flex items-center gap-2 w-full md:w-auto">
                     <span className="text-sm text-gray-500 whitespace-nowrap">Method:</span>
                     <select
@@ -104,100 +209,145 @@ export default function AdminPayments() {
             )}
 
             {!isLoading && !isError && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                        <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 font-medium text-xs uppercase tracking-wider">
-                            <tr>
-                                <th className="px-6 py-4 font-bold">Transaction ID</th>
-                                <th className="px-6 py-4 font-bold">User</th>
-                                <th className="px-6 py-4 font-bold">Amount</th>
-                                <th className="px-6 py-4 font-bold">Method</th>
-                                <th className="px-6 py-4 font-bold">Date</th>
-                                <th className="px-6 py-4 font-bold">Status</th>
-                                <th className="px-6 py-4 font-bold text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                            {filteredPayments.map((payment) => (
-                                <tr key={payment.id} className="hover:bg-gray-50 transition-colors group">
-                                    <td className="px-6 py-4">
-                                        <span className="text-[10px] font-mono text-primary font-bold uppercase tracking-tighter">{payment.id}</span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500">
-                                                <User size={14} />
-                                            </div>
-                                            <span className="text-sm font-semibold text-gray-900">{payment.user}</span>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className="text-sm font-bold text-gray-900">{payment.amount}</span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                                            {getMethodIcon(payment.method)}
-                                            {payment.method}
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                                            <Calendar size={14} className="text-gray-400" />
-                                            {payment.date}
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <Badge
-                                            variant={
-                                                payment.status === 'completed' ? 'success' :
-                                                    payment.status === 'pending' ? 'blue' : 'destructive'
-                                            }
-                                            className="font-bold text-[10px] uppercase tracking-widest px-2 py-0.5"
-                                        >
-                                            {payment.status}
-                                        </Badge>
-                                    </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => handleViewPayment(payment)}
-                                            className="text-gray-400 hover:text-gray-600"
-                                        >
-                                            <MoreHorizontal size={16} />
-                                        </Button>
-                                    </td>
-                                </tr>
-                            ))}
-                            {filteredPayments.length === 0 && (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                            <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 text-xs uppercase tracking-wider">
                                 <tr>
-                                    <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
-                                        No payments found matching your criteria.
-                                    </td>
+                                    <th className="px-6 py-4 font-bold">Transaction ID</th>
+                                    <th className="px-6 py-4 font-bold">User</th>
+                                    <th className="px-6 py-4 font-bold">Amount</th>
+                                    <th className="px-6 py-4 font-bold">Method</th>
+                                    <th className="px-6 py-4 font-bold">Date</th>
+                                    <th className="px-6 py-4 font-bold">Status</th>
+                                    <th className="px-6 py-4 font-bold text-right">Actions</th>
                                 </tr>
-                            )}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                                {filtered.map((row) => (
+                                    <tr key={row.id} className="hover:bg-gray-50 transition-colors">
+                                        {/* Transaction ID */}
+                                        <td className="px-6 py-4">
+                                            <span className="text-[10px] font-mono text-primary font-bold uppercase tracking-tighter">
+                                                {row.id}
+                                            </span>
+                                            {row.bookingRef && (
+                                                <div className="text-[10px] text-gray-400 font-mono mt-0.5">
+                                                    Ref: {row.bookingRef}
+                                                </div>
+                                            )}
+                                        </td>
+
+                                        {/* User */}
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                                                    <User size={14} />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="text-sm font-semibold text-gray-900 truncate max-w-[180px]">
+                                                        {/* Show skeleton while booking is still loading */}
+                                                        {row.user === '—' && row.bookingId
+                                                            ? <span className="inline-block w-24 h-3 bg-gray-200 rounded animate-pulse" />
+                                                            : row.user
+                                                        }
+                                                    </p>
+                                                    {row.userEmail && (
+                                                        <p className="text-[10px] text-gray-400 truncate max-w-[180px]">
+                                                            {row.userEmail}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </td>
+
+                                        {/* Amount */}
+                                        <td className="px-6 py-4">
+                                            <span className="text-sm font-bold text-gray-900">{row.amount}</span>
+                                        </td>
+
+                                        {/* Method */}
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                                                {getMethodIcon(row.method)}
+                                                {row.method}
+                                            </div>
+                                        </td>
+
+                                        {/* Date */}
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                                                <Calendar size={14} className="text-gray-400" />
+                                                {row.date}
+                                            </div>
+                                        </td>
+
+                                        {/* Status */}
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-1.5">
+                                                {getStatusIcon(row.status)}
+                                                <Badge
+                                                    variant={
+                                                        row.status === 'completed' ? 'success' :
+                                                        row.status === 'pending'   ? 'blue'    : 'destructive'
+                                                    }
+                                                    className="font-bold text-[10px] uppercase tracking-widest px-2 py-0.5"
+                                                >
+                                                    {row.status}
+                                                </Badge>
+                                            </div>
+                                        </td>
+
+                                        {/* Actions */}
+                                        <td className="px-6 py-4 text-right">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => { setSelectedPayment(row); setIsModalOpen(true); }}
+                                                className="text-xs font-bold gap-1.5 h-8 px-3 border-gray-200 text-gray-700 hover:text-primary hover:border-primary"
+                                            >
+                                                <Eye size={13} />
+                                                View Details
+                                            </Button>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {filtered.length === 0 && (
+                                    <tr>
+                                        <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                                            No payments found matching your criteria.
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-            </div>
             )}
 
+            {/* Detail Modal */}
             {selectedPayment && (
                 <DetailModal
                     isOpen={isModalOpen}
                     onClose={() => setIsModalOpen(false)}
-                    title={`Payment ${selectedPayment.id}`}
+                    title={`Payment ${selectedPayment.id.slice(0, 18)}…`}
                     footer={
                         <Button variant="outline" onClick={() => setIsModalOpen(false)}>Close</Button>
                     }
                 >
                     <div className="space-y-4">
-                        <ModalDataRow label="User" value={selectedPayment.user} />
-                        <ModalDataRow label="Amount" value={selectedPayment.amount} />
-                        <ModalDataRow label="Method" value={selectedPayment.method} />
-                        <ModalDataRow label="Date" value={selectedPayment.date} />
-                        <ModalDataRow label="Status" value={selectedPayment.status} />
+                        <ModalDataRow label="User"             value={selectedPayment.user} />
+                        {selectedPayment.userEmail && (
+                            <ModalDataRow label="Email"        value={selectedPayment.userEmail} />
+                        )}
+                        {selectedPayment.bookingRef && (
+                            <ModalDataRow label="Booking Ref"  value={selectedPayment.bookingRef} />
+                        )}
+                        <ModalDataRow label="Amount"           value={selectedPayment.amount} />
+                        <ModalDataRow label="Method"           value={selectedPayment.method} />
+                        <ModalDataRow label="Date"             value={selectedPayment.date} />
+                        <ModalDataRow label="Status"           value={selectedPayment.status} />
+                        <ModalDataRow label="Transaction Code" value={selectedPayment.transactionCode} />
                     </div>
                 </DetailModal>
             )}

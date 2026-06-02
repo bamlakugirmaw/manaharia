@@ -11,7 +11,6 @@ import ProfileAvatar from '../components/profile/ProfileAvatar';
 // Sidebar Items for Traveller
 const TRAVELLER_NAV = [
     { name: 'My Bookings', href: '/traveller/bookings', icon: Ticket },
-    { name: 'Payment History', href: '/traveller/payments', icon: CreditCard },
     { name: 'Complaints', href: '/traveller/complaints', icon: MessageSquare },
     { name: 'Profile Settings', href: '/traveller/profile', icon: User },
 ];
@@ -33,7 +32,6 @@ const ADMIN_NAV = [
     { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
     { name: 'Manage Operators', href: '/admin/operators', icon: Bus },
     { name: 'Manage Users', href: '/admin/users', icon: Users },
-    { name: 'All Bookings', href: '/admin/bookings', icon: Ticket },
     { name: 'All Trips', href: '/admin/trips', icon: CalendarIcon },
     { name: 'Payment Logs', href: '/admin/payments', icon: CreditCard },
     { name: 'System Logs', href: '/admin/logs', icon: Activity },

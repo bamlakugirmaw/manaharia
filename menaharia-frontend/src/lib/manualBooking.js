@@ -1,8 +1,17 @@
 /**
- * Operator in-person booking — paid outside the app (cash / office).
+ * Operator in-person booking — paid in cash or at the office.
+ *
+ * Backend POST /v1/bookings/for-user accepts:
+ *   { tripId, userId, paymentMethod: 'CHAPA'|'TELEBIRR'|'SANTIM', travelers: [...] }
+ *
+ * Notes:
+ *  - `paymentStatus` is NOT accepted — the backend sets it internally.
+ *  - `MANUAL` is NOT a valid paymentMethod enum value.
+ *  - We use CHAPA as the method since it's the only supported gateway; the booking
+ *    is created in CONFIRMED state by the operator endpoint regardless of gateway.
  */
 
-export const MANUAL_PAYMENT_METHOD = 'MANUAL';
+export const MANUAL_PAYMENT_METHOD = 'CHAPA';
 
 /**
  * @param {{
@@ -30,8 +39,8 @@ export function buildManualBookingForUserPayload({
     return {
         tripId,
         userId,
-        paymentMethod: MANUAL_PAYMENT_METHOD,
-        paymentStatus: 'PAID',
+        paymentMethod: MANUAL_PAYMENT_METHOD,   // CHAPA — only accepted enum value
+        // paymentStatus is intentionally omitted — backend sets it internally
         travelers: [{
             tripSeatId,
             fullName: fullName.trim(),

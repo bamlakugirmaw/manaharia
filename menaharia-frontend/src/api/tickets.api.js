@@ -50,9 +50,21 @@ export const listTickets = (params = {}) => {
 export const getTicketById = (id) =>
     api.get(`/tickets/${id}`).then(unwrapEnvelope);
 
+/**
+ * Download the backend-generated PDF for a ticket.
+ * Returns a Blob (application/pdf).
+ * @param {string} ticketId
+ */
+export const getTicketPdf = (ticketId) =>
+    api.get(`/tickets/${ticketId}/pdf`, {
+        responseType: 'blob',
+        timeout: 30000,
+    }).then((res) => res.data);
+
 export const ticketsApi = {
     getTicketsByBooking,
     validateTicket,
     listTickets,
     getTicketById,
+    getTicketPdf,
 };

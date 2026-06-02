@@ -1,28 +1,43 @@
+import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
-import { Bus, TrendingUp, Calendar, CreditCard, Ticket, ArrowRight, Users, Star } from 'lucide-react';
+import { Bus, CreditCard, Ticket, Users, Star } from 'lucide-react';
 import { useOperatorRatings } from '../../hooks/useOperatorRatings';
 import StarRatingInput from '../../components/ratings/StarRatingInput';
 import { averageFromRatings } from '../../lib/ratingHelpers';
-import { isBookingVisibleOnOperatorManifest } from '../../lib/paymentSync';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { cn } from '../../lib/utils';
-import { useOperator, useOperatorDashboard } from '../../hooks/useOperators';
+import { useOperator } from '../../hooks/useOperators';
 import { useOperatorScope } from '../../hooks/useOperatorScope';
 import OperatorScopeBanner from '../../components/operator/OperatorScopeBanner';
+import { tripOrigin, tripDest } from '../../lib/tripHelpers';
+
+/** Platform fee deducted from each booking payment (5%). */
+const PLATFORM_FEE_RATE = 0.05;
+
+/** Net amount the operator receives after platform fee. */
+function netAmount(gross) {
+    return gross * (1 - PLATFORM_FEE_RATE);
+}
 
 export default function OperatorOverview() {
+    const navigate = useNavigate();
+
     const {
         operatorId,
-        bookings: bookingsResponse,
+        bookings,
         bookingsQuery,
-    } = useOperatorScope({ limit: 50 });
-    const bookingsLoading = bookingsQuery.isLoading;
+        trips,
+        tripsQuery,
+    } = useOperatorScope({ limit: 200 });
 
-    // GET /v1/operators/:id/dashboard
-    const { data: dashData, isLoading: dashLoading } = useOperatorDashboard(operatorId);
+    const bookingsLoading = bookingsQuery.isLoading;
+    const tripsLoading   = tripsQuery.isLoading;
+
     const { data: operatorRecord } = useOperator(operatorId);
     const operatorProfile = operatorRecord?.data ?? operatorRecord;
+
     const { data: recentReviews = [], isLoading: reviewsLoading } = useOperatorRatings({
         operatorId,
         limit: 5,
@@ -31,153 +46,212 @@ export default function OperatorOverview() {
     const reviewAverage = averageFromRatings(recentReviews);
     const displayOperatorRating = operatorProfile?.rating ?? reviewAverage;
 
-    const recentBookings = (() => {
-        const raw = Array.isArray(bookingsResponse) ? bookingsResponse : [];
-        return raw
-            .filter((b) => {
-                const payment = b.payment ?? (Array.isArray(b.payments) ? b.payments[0] : null);
-                return isBookingVisibleOnOperatorManifest(b, payment);
-            })
-            .slice(0, 5)
-            .map(b => ({
-                id:        b.id,
-                passenger: b.travelers?.[0]?.fullName ?? '—',
-                route:     `${b.trip?.from ?? b.trip?.route?.origin ?? ''} → ${b.trip?.to ?? b.trip?.route?.destination ?? ''}`,
-                date:      b.trip?.departureTime ?? '—',
-                amount:    `${(b.payment?.amount ?? b.trip?.price ?? 0).toLocaleString()} ETB`,
-                status:    (b.status ?? 'pending').toLowerCase(),
+    // ── Compute KPIs from real data ───────────────────────────────────────────
+    const stats = useMemo(() => {
+        const confirmedBookings = (bookings ?? []).filter((b) => {
+            const bs = (b.status ?? '').toUpperCase();
+            const payment = b.payment ?? (Array.isArray(b.payments) ? b.payments[0] : null);
+            const ps = (payment?.status ?? '').toUpperCase();
+            return bs === 'CONFIRMED'
+                || ps === 'SUCCESS'
+                || ps === 'COMPLETED'
+                || ps === 'PAID';
+        });
+
+        // Total gross revenue from confirmed bookings
+        const grossRevenue = confirmedBookings.reduce((sum, b) => {
+            const amt = b.payment?.amount ?? b.totalAmount ?? b.trip?.price ?? 0;
+            return sum + Number(amt);
+        }, 0);
+
+        // Net revenue after 5% platform fee
+        const netRevenue = netAmount(grossRevenue);
+
+        // Active (CONFIRMED) booking count
+        const activeBookings = confirmedBookings.length;
+
+        // Scheduled trips — count all trips owned by this operator
+        const scheduledTrips = (trips ?? []).length;
+
+        // Unique passengers from confirmed bookings
+        const passengerSet = new Set();
+        for (const b of confirmedBookings) {
+            const travelers = b.travelers ?? b.bookingTravelers ?? [];
+            for (const t of travelers) {
+                if (t.id) passengerSet.add(t.id);
+                else if (t.phone) passengerSet.add(t.phone);
+            }
+            // At minimum count the booking itself as 1 passenger
+            if (passengerSet.size === 0 || travelers.length === 0) {
+                passengerSet.add(b.id);
+            }
+        }
+        const totalPassengers = passengerSet.size || activeBookings;
+
+        // Revenue trend: group confirmed bookings by week day label
+        const dayMap = {};
+        const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        for (const b of confirmedBookings) {
+            const d = new Date(b.createdAt || b.trip?.date || Date.now());
+            const label = dayLabels[d.getDay()];
+            const amt = b.payment?.amount ?? b.totalAmount ?? b.trip?.price ?? 0;
+            dayMap[label] = (dayMap[label] ?? 0) + netAmount(Number(amt));
+        }
+        // Only show days that have data; if none, return empty
+        const revenueData = Object.entries(dayMap).map(([name, revenue]) => ({
+            name,
+            revenue: Math.round(revenue),
+        }));
+
+        // Top routes by booking count
+        const routeMap = {};
+        for (const b of confirmedBookings) {
+            const from = b.trip ? tripOrigin(b.trip) : '';
+            const to   = b.trip ? tripDest(b.trip) : '';
+            if (!from || !to) continue;
+            const key = `${from} → ${to}`;
+            routeMap[key] = (routeMap[key] ?? 0) + 1;
+        }
+        const totalForRoutes = Object.values(routeMap).reduce((s, n) => s + n, 0) || 1;
+        const topRoutes = Object.entries(routeMap)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 3)
+            .map(([name, count]) => ({
+                name,
+                occupancy: Math.round((count / totalForRoutes) * 100),
             }));
-    })();
 
-    const revenueData = dashData?.dailyRevenue ?? dashData?.weeklyRevenue ?? [];
+        // Recent bookings for table (last 5)
+        const recentBookings = confirmedBookings
+            .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+            .slice(0, 5)
+            .map((b) => {
+                const gross = b.payment?.amount ?? b.totalAmount ?? b.trip?.price ?? 0;
+                return {
+                    id:        b.id,
+                    passenger: b.travelers?.[0]?.fullName ?? b.bookingTravelers?.[0]?.fullName ?? '—',
+                    route:     b.trip
+                        ? `${tripOrigin(b.trip)} → ${tripDest(b.trip)}`
+                        : b.bookingReference ?? '—',
+                    date:      b.createdAt
+                        ? new Date(b.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                        : '—',
+                    gross:     Number(gross),
+                    net:       netAmount(Number(gross)),
+                    status:    (b.status ?? 'pending').toLowerCase(),
+                    reference: b.bookingReference ?? b.id?.slice(0, 8),
+                };
+            });
 
-    // KPI values — use API data when available, show '—' while loading
+        return { netRevenue, grossRevenue, activeBookings, scheduledTrips, totalPassengers, revenueData, topRoutes, recentBookings };
+    }, [bookings, trips]);
+
+    const loading = bookingsLoading || tripsLoading;
+
     const kpis = [
         {
-            title: 'Total Revenue',
-            value: dashLoading ? '—' : (dashData?.totalRevenue?.toLocaleString() ?? '—'),
-            unit: 'ETB',
-            growth: dashData?.revenueGrowth ?? '+0%',
-            icon: CreditCard,
-            color: 'text-emerald-600',
-            bg: 'bg-emerald-50',
+            title:    'Total Revenue',
+            value:    loading ? '—' : `ETB ${Math.round(stats.netRevenue).toLocaleString()}`,
+            subtitle: loading ? '' : `Gross ETB ${Math.round(stats.grossRevenue).toLocaleString()} · 5% fee deducted`,
+            icon:     CreditCard,
+            color:    'text-emerald-600',
+            bg:       'bg-emerald-50',
         },
         {
-            title: 'Active Bookings',
-            value: dashLoading ? '—' : (dashData?.activeBookings ?? '—'),
-            growth: dashData?.bookingsGrowth ?? '+0%',
-            icon: Ticket,
-            color: 'text-blue-600',
-            bg: 'bg-blue-50',
+            title:    'Active Bookings',
+            value:    loading ? '—' : stats.activeBookings.toString(),
+            subtitle: 'Confirmed & paid',
+            icon:     Ticket,
+            color:    'text-blue-600',
+            bg:       'bg-blue-50',
         },
         {
-            title: 'Scheduled Trips',
-            value: dashLoading ? '—' : (dashData?.scheduledTrips ?? '—'),
-            growth: dashData?.tripsGrowth ?? '+0%',
-            icon: Bus,
-            color: 'text-orange-600',
-            bg: 'bg-orange-50',
+            title:    'Scheduled Trips',
+            value:    loading ? '—' : stats.scheduledTrips.toString(),
+            subtitle: 'Upcoming departures',
+            icon:     Bus,
+            color:    'text-orange-600',
+            bg:       'bg-orange-50',
         },
         {
-            title: 'Passengers',
-            value: dashLoading ? '—' : (dashData?.totalPassengers?.toLocaleString() ?? '—'),
-            growth: dashData?.passengersGrowth ?? '+0%',
-            icon: Users,
-            color: 'text-purple-600',
-            bg: 'bg-purple-50',
+            title:    'Passengers',
+            value:    loading ? '—' : stats.totalPassengers.toString(),
+            subtitle: 'From confirmed bookings',
+            icon:     Users,
+            color:    'text-purple-600',
+            bg:       'bg-purple-50',
         },
     ];
 
     return (
         <div className="space-y-8">
             <OperatorScopeBanner />
+
             {/* KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {kpis.map((kpi, idx) => (
-                    <Card key={idx} className="p-6 border-none shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+                    <Card key={idx} className="p-6 border-none shadow-sm hover:shadow-md transition-shadow">
                         <div className="flex justify-between items-start">
-                            <div>
+                            <div className="min-w-0 flex-1 pr-2">
                                 <p className="text-sm font-medium text-gray-500">{kpi.title}</p>
-                                <h3 className="text-2xl font-bold mt-1">
-                                    {kpi.unit && <span className="text-sm text-gray-400 mr-1">{kpi.unit}</span>}
-                                    {kpi.value}
-                                </h3>
+                                <h3 className="text-2xl font-bold mt-1 tabular-nums">{kpi.value}</h3>
+                                {kpi.subtitle && (
+                                    <p className="text-[11px] text-gray-400 mt-1 leading-tight">{kpi.subtitle}</p>
+                                )}
                             </div>
-                            <div className={cn('p-3 rounded-xl', kpi.bg, kpi.color)}>
+                            <div className={cn('p-3 rounded-xl shrink-0', kpi.bg, kpi.color)}>
                                 <kpi.icon size={22} />
                             </div>
-                        </div>
-                        <div className="mt-4 flex items-center gap-2">
-                            <span className={cn('text-xs font-bold px-1.5 py-0.5 rounded',
-                                String(kpi.growth).startsWith('+') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')}>
-                                {kpi.growth}
-                            </span>
-                            <span className="text-xs text-gray-400">from last month</span>
                         </div>
                     </Card>
                 ))}
             </div>
 
-            {/* Charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-[400px]">
-                <Card className="lg:col-span-2 p-6 border-none shadow-sm flex flex-col h-full">
+            {/* Charts — Revenue Trend full width */}
+            <div className="h-[400px]">
+                <Card className="p-6 border-none shadow-sm flex flex-col h-full">
                     <div className="flex justify-between items-center mb-6">
                         <div>
                             <h3 className="font-bold text-lg">Revenue Trend</h3>
-                            <p className="text-sm text-gray-500">Weekly revenue performance</p>
+                            <p className="text-sm text-gray-500">Net weekly revenue (after 5% fee)</p>
                         </div>
-                        <Button variant="ghost" size="sm" className="text-primary hover:bg-primary/5">View Report</Button>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-primary hover:bg-primary/5"
+                            onClick={() => navigate('/operator/reports')}
+                        >
+                            View Report
+                        </Button>
                     </div>
                     <div className="flex-1 w-full min-h-0">
-                        {revenueData.length === 0 && !dashLoading ? (
-                            <p className="text-sm text-gray-400 text-center py-16">No revenue trend data yet.</p>
+                        {stats.revenueData.length === 0 && !loading ? (
+                            <p className="text-sm text-gray-400 text-center py-16">
+                                No revenue data yet. Revenue appears once bookings are confirmed.
+                            </p>
                         ) : (
-                        <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={revenueData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                                <defs>
-                                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#0EA5E9" stopOpacity={0.1} />
-                                        <stop offset="95%" stopColor="#0EA5E9" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid vertical={false} stroke="#f1f5f9" />
-                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} dy={10} />
-                                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
-                                <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }} cursor={{ stroke: '#0EA5E9', strokeWidth: 2, strokeDasharray: '5 5' }} />
-                                <Area type="monotone" dataKey="revenue" stroke="#0EA5E9" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
-                            </AreaChart>
-                        </ResponsiveContainer>
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={stats.revenueData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                    <defs>
+                                        <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%"  stopColor="#0EA5E9" stopOpacity={0.15} />
+                                            <stop offset="95%" stopColor="#0EA5E9" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid vertical={false} stroke="#f1f5f9" />
+                                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} dy={10} />
+                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }}
+                                        tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                                    <Tooltip
+                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+                                        cursor={{ stroke: '#0EA5E9', strokeWidth: 2, strokeDasharray: '5 5' }}
+                                        formatter={(value) => [`ETB ${value.toLocaleString()}`, 'Net Revenue']}
+                                    />
+                                    <Area type="monotone" dataKey="revenue" stroke="#0EA5E9" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
+                                </AreaChart>
+                            </ResponsiveContainer>
                         )}
                     </div>
-                </Card>
-
-                {/* Top Routes */}
-                <Card className="p-6 border-none shadow-sm flex flex-col h-full bg-white text-gray-900 border border-gray-100">
-                    <h3 className="font-bold text-lg mb-1">Top Routes</h3>
-                    <p className="text-gray-500 text-sm mb-6">Highest occupancy lines</p>
-                    <div className="space-y-6 flex-1">
-                        {(dashData?.topRoutes ?? []).length === 0 && !dashLoading && (
-                            <p className="text-sm text-gray-400 text-center py-8">No route occupancy data yet.</p>
-                        )}
-                        {(dashData?.topRoutes ?? []).map((route, i) => {
-                            const colors = ['bg-emerald-500', 'bg-blue-500', 'bg-orange-500'];
-                            const textColors = ['text-emerald-400', 'text-blue-400', 'text-orange-400'];
-                            return (
-                                <div key={i} className="space-y-2">
-                                    <div className="flex justify-between text-sm">
-                                        <span className="font-medium">{route.name}</span>
-                                        <span className={cn('font-bold', textColors[i % 3])}>{route.occupancy}%</span>
-                                    </div>
-                                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                                        <div className={cn('h-full rounded-full', colors[i % 3])} style={{ width: `${route.occupancy}%` }} />
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                    <Button className="w-full bg-primary/10 hover:bg-primary/20 text-primary border-none mt-auto">
-                        Manage Routes <ArrowRight size={16} className="ml-2" />
-                    </Button>
                 </Card>
             </div>
 
@@ -210,7 +284,9 @@ export default function OperatorOverview() {
                 {reviewsLoading ? (
                     <p className="text-sm text-gray-400 text-center py-6">Loading reviews…</p>
                 ) : recentReviews.length === 0 ? (
-                    <p className="text-sm text-gray-400 text-center py-6">No reviews yet. Ratings appear after travellers complete paid trips.</p>
+                    <p className="text-sm text-gray-400 text-center py-6">
+                        No reviews yet. Ratings appear after travellers complete paid trips.
+                    </p>
                 ) : (
                     <ul className="divide-y divide-gray-100 border border-gray-100 rounded-2xl overflow-hidden">
                         {recentReviews.map((r) => (
@@ -231,40 +307,49 @@ export default function OperatorOverview() {
             {/* Recent Bookings */}
             <Card className="p-6 border-none shadow-sm overflow-hidden">
                 <div className="flex justify-between items-center mb-6">
-                    <h3 className="font-bold text-lg">Recent Bookings</h3>
-                    <Button variant="ghost" size="sm">View All</Button>
+                    <div>
+                        <h3 className="font-bold text-lg">Recent Confirmed Bookings</h3>
+                        <p className="text-xs text-gray-400 mt-0.5">Net amounts shown after 5% platform fee</p>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => navigate('/operator/bookings')}>
+                        View All
+                    </Button>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
                         <thead className="text-gray-500 border-b border-gray-100">
                             <tr>
-                                <th className="pb-3 font-medium pl-2">Booking ID</th>
+                                <th className="pb-3 font-medium pl-2">Reference</th>
                                 <th className="pb-3 font-medium">Passenger</th>
                                 <th className="pb-3 font-medium">Route</th>
                                 <th className="pb-3 font-medium">Date</th>
-                                <th className="pb-3 font-medium">Amount</th>
+                                <th className="pb-3 font-medium">Gross</th>
+                                <th className="pb-3 font-medium text-emerald-700">Net (−5%)</th>
                                 <th className="pb-3 font-medium">Status</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
-                            {(bookingsLoading ? [] : recentBookings).map(booking => (
-                                <tr key={booking.id} className="hover:bg-gray-50/50">
-                                    <td className="py-4 pl-2 font-medium text-primary text-xs font-mono">{booking.id}</td>
-                                    <td className="py-4 font-medium">{booking.passenger}</td>
-                                    <td className="py-4 text-gray-500">{booking.route}</td>
-                                    <td className="py-4 text-gray-500">{booking.date}</td>
-                                    <td className="py-4 font-bold">{booking.amount}</td>
+                            {loading ? (
+                                <tr><td colSpan={7} className="py-8 text-center text-gray-400 text-sm">Loading…</td></tr>
+                            ) : stats.recentBookings.length === 0 ? (
+                                <tr><td colSpan={7} className="py-8 text-center text-gray-400 text-sm">No confirmed bookings yet.</td></tr>
+                            ) : stats.recentBookings.map((b) => (
+                                <tr key={b.id} className="hover:bg-gray-50/50">
+                                    <td className="py-4 pl-2 font-mono text-xs text-primary">{b.reference}</td>
+                                    <td className="py-4 font-medium">{b.passenger}</td>
+                                    <td className="py-4 text-gray-500 text-xs">{b.route}</td>
+                                    <td className="py-4 text-gray-500 text-xs">{b.date}</td>
+                                    <td className="py-4 text-gray-500 text-xs">ETB {b.gross.toLocaleString()}</td>
+                                    <td className="py-4 font-bold text-emerald-700 text-xs">
+                                        ETB {Math.round(b.net).toLocaleString()}
+                                    </td>
                                     <td className="py-4">
-                                        <span className={cn('px-2.5 py-1 rounded-full text-xs font-bold capitalize',
-                                            booking.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700')}>
-                                            {booking.status}
+                                        <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">
+                                            Confirmed
                                         </span>
                                     </td>
                                 </tr>
                             ))}
-                            {!bookingsLoading && recentBookings.length === 0 && (
-                                <tr><td colSpan={6} className="py-8 text-center text-gray-400 text-sm">No recent bookings</td></tr>
-                            )}
                         </tbody>
                     </table>
                 </div>
